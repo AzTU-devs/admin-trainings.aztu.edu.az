@@ -1,0 +1,19 @@
+services:
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Point at the Spring Boot gateway. In prod this is typically a relative
+        # /api path proxied by an upstream ingress.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    image: aztu-portal-admin:latest
+    container_name: aztu-portal-admin
+    ports:
+      - "${PORT:-8081}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+.git
+.github
+*.log
+.DS_Store
+.vscode
+.idea
+coverage
+.env.local
+*.local
+Dockerfile
+docker-compose.yml
+README.md
+PHASES.md
