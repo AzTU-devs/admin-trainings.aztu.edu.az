@@ -4,13 +4,13 @@ import type { Student } from "@features/students/types";
 
 interface ListStudentsArgs extends PageRequest {
   search?: string;
-  courseId?: number;
+  courseId?: string;
 }
 
 export const studentsApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     listMyStudents: build.query<ApiPage<Student>, ListStudentsArgs | void>({
-      query: (params) => ({ url: "/tutor/students", method: "GET", params: params ?? undefined }),
+      query: (params) => ({ url: "/portal/tutor/students", method: "GET", params: params ?? undefined }),
       providesTags: (res) =>
         res
           ? [...res.content.map((s) => ({ type: "Student" as const, id: s.id })), { type: "Student" as const, id: "LIST" }]

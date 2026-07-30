@@ -1,5 +1,5 @@
 export interface VideoAsset {
-  id: number;
+  id: string;
   title: string;
   filename: string;
   url: string;
@@ -7,7 +7,7 @@ export interface VideoAsset {
   durationSeconds: number;
   sizeBytes: number;
   status: "UPLOADING" | "PROCESSING" | "READY" | "FAILED";
-  courseId?: number;
-  lessonId?: number;
+  courseId?: string;
+  lessonId?: string;
   uploadedAt: string;
 }

@@ -6,22 +6,31 @@ import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
 import { Badge } from "@shared/components/ui/Badge";
+import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
 import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
-import { useBrowseCoursesQuery } from "@features/courses/api/coursesApi";
+import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
+import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
 import { ROUTES } from "@shared/constants/routes";
 
+type StatusFilter = "ALL" | CourseStatus;
+
 /**
- * NOTE: the backend has no "list my courses" endpoint yet, only the public
- * catalog (PUBLISHED only). This page browses the public catalog as a stand-in.
- * See GAP_REPORT.md → `GET /api/portal/courses` (list own) is pending.
+ * Tutor's own courses (all statuses) — backed by `GET /api/portal/courses`,
+ * optionally filtered by `?status=`.
  */
 export default function CoursesListPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
-  const { data, isFetching } = useBrowseCoursesQuery({ page, size: 10 });
+  const [status, setStatus] = useState<StatusFilter>("ALL");
+
+  const { data, isFetching } = useListMyCoursesQuery({
+    page,
+    size: 10,
+    status: status === "ALL" ? undefined : status,
+  });
 
   const filtered = useMemo(() => {
     const rows = data?.content ?? [];
@@ -56,8 +65,8 @@ export default function CoursesListPage() {
   return (
     <>
       <PageHeader
-        title="Courses"
-        description="Browse the published catalog. (Listing your own drafts needs a backend endpoint — see gap report.)"
+        title="My courses"
+        description="Every course you've created, across all statuses."
         actions={
           <Button leftIcon={<Plus className="size-4" />} onClick={() => navigate(ROUTES.tutorCourseNew)}>
             New course
@@ -65,20 +74,39 @@ export default function CoursesListPage() {
         }
       />
 
-      <Input
-        placeholder="Filter by title…"
-        leftIcon={<Search className="size-4" />}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="sm:max-w-sm mb-4"
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <Tabs
+          value={status}
+          onValueChange={(v) => {
+            setStatus(v as StatusFilter);
+            setPage(0);
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="ALL">All</TabsTrigger>
+            <TabsTrigger value={COURSE_STATUS.DRAFT}>Draft</TabsTrigger>
+            <TabsTrigger value={COURSE_STATUS.IN_REVIEW}>In review</TabsTrigger>
+            <TabsTrigger value={COURSE_STATUS.PUBLISHED}>Published</TabsTrigger>
+            <TabsTrigger value={COURSE_STATUS.REJECTED}>Rejected</TabsTrigger>
+            <TabsTrigger value={COURSE_STATUS.ARCHIVED}>Archived</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Input
+          placeholder="Filter by title…"
+          leftIcon={<Search className="size-4" />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="sm:max-w-xs sm:ml-auto"
+        />
+      </div>
 
       <DataTable<CourseSummaryDto>
         data={filtered}
         columns={columns}
         isLoading={isFetching}
-        emptyTitle="No published courses"
-        emptyDescription="Create a course and submit it for review to see it here once published."
+        emptyTitle="No courses yet"
+        emptyDescription="Create your first course and submit it for review."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         onRowClick={(row) => navigate(ROUTES.tutorCourseEdit(row.slug))}

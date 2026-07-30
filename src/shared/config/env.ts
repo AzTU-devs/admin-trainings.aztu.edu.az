@@ -56,3 +56,33 @@ export const env = {
     darkMode: bool("VITE_ENABLE_DARK_MODE", true),
   },
 } as const;
+
+/**
+ * Resolve a backend-supplied path against the API base origin.
+ *
+ * The backend returns root-relative URLs (e.g. `/api/videos/{id}/content`,
+ * `/api/media/{id}/content`). When the API runs on a different origin/port than
+ * the admin app (`VITE_API_BASE_URL` is absolute), those paths must be prefixed
+ * with the backend origin so requests/media hit the API and not the admin app.
+ *
+ * - Absolute inputs (`http(s)://…`) are returned unchanged.
+ * - When the API base is itself relative (e.g. `/api`, same origin), the input
+ *   is returned unchanged.
+ * - When the API base is absolute, a root-relative input is resolved against
+ *   that origin.
+ */
+export function resolveApiUrl(path: string | undefined | null): string {
+  if (!path) return "";
+  // Already absolute (protocol-qualified) — nothing to do.
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const base = env.api.baseUrl;
+  // Relative API base ⇒ same origin as the app ⇒ leave the path as-is.
+  if (!/^https?:\/\//i.test(base)) return path;
+
+  try {
+    return new URL(path, new URL(base).origin).toString();
+  } catch {
+    return path;
+  }
+}

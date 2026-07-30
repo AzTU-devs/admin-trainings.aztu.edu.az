@@ -1,9 +1,9 @@
 import type { Role } from "@shared/constants/roles";
 
-export type UserStatus = "ACTIVE" | "DISABLED" | "PENDING";
+export type UserStatus = "ACTIVE" | "DISABLED" | "PENDING" | "LOCKED";
 
 export interface AdminUser {
-  id: number;
+  id: string;
   email: string;
   fullName: string;
   phone?: string;

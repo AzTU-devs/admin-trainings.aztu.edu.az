@@ -9,6 +9,14 @@ export interface LoginRequest {
   rememberMe?: boolean;
 }
 
+/** Mirror of backend `PUT /api/auth/me` body. */
+export interface UpdateMeRequest {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  locale?: string;
+}
+
 /* ───────────────── backend DTOs (raw, before unwrapping) ───────────────── */
 
 /** Mirror of backend `UserDto`. */

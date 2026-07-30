@@ -6,9 +6,11 @@ import { ROLES } from "@shared/constants/roles";
 import { ROUTES } from "@shared/constants/routes";
 import {
   SignInPage,
+  ForgotPasswordPage,
   ForbiddenPage,
   NotFoundPage,
 } from "@features/auth";
+import { ProfilePage, SettingsPage } from "@features/profile";
 import DashboardPage from "@features/dashboard/pages/DashboardPage";
 import {
   CoursesListPage,
@@ -53,6 +55,7 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path={ROUTES.signIn} element={<SignInPage />} />
+        <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
         <Route path={ROUTES.unauthorized} element={<ForbiddenPage />} />
         <Route path={ROUTES.notFound} element={<NotFoundPage />} />
 
@@ -98,9 +101,9 @@ export default function App() {
               <Route path="/super/security" element={<SecurityPage />} />
             </Route>
 
-            {/* Shared authenticated pages (placeholders until Phase 9) */}
-            <Route path={ROUTES.profile} element={<ComingSoon area="Profile" />} />
-            <Route path={ROUTES.settings} element={<ComingSoon area="Settings" />} />
+            {/* Shared authenticated pages */}
+            <Route path={ROUTES.profile} element={<ProfilePage />} />
+            <Route path={ROUTES.settings} element={<SettingsPage />} />
             <Route path={ROUTES.notifications} element={<NotificationsPage />} />
           </Route>
         </Route>
@@ -109,19 +112,5 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
-  );
-}
-
-function ComingSoon({ area }: { area: string }) {
-  return (
-    <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark p-12 text-center">
-      <p className="text-xs uppercase tracking-[0.18em] text-aztu-gold-600 dark:text-aztu-gold-400 font-semibold mb-2">
-        Coming soon
-      </p>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{area}</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        This section will be built in a later phase.
-      </p>
-    </div>
   );
 }

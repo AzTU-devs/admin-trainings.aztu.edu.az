@@ -125,6 +125,8 @@ export interface CreateCourseRequest {
   requirements?: string;
   learningOutcomes?: string;
   syllabus?: string;
+  thumbnailMediaId?: UUID;
+  trailerMediaId?: UUID;
   courseType: CourseType;
   level: CourseLevel;
   language: string;

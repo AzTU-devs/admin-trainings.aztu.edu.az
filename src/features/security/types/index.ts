@@ -12,10 +12,10 @@ export type SecurityEventKind =
 export type SecuritySeverity = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export interface SecurityEvent {
-  id: number;
+  id: string;
   kind: SecurityEventKind;
   severity: SecuritySeverity;
-  actorId?: number;
+  actorId?: string;
   actorEmail?: string;
   ipAddress?: string;
   countryCode?: string;

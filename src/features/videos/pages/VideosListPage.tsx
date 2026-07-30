@@ -14,6 +14,8 @@ import {
   DialogTitle,
 } from "@shared/components/ui/Dialog";
 import { VideoUploader } from "@shared/components/upload/VideoUploader";
+import { resolveApiUrl } from "@shared/config/env";
+import { appStorage, STORAGE_KEYS } from "@lib/storage";
 import {
   useCompleteVideoUploadMutation,
   useInitVideoUploadMutation,
@@ -34,15 +36,22 @@ export default function VideosListPage() {
   const [completeUpload] = useCompleteVideoUploadMutation();
 
   /**
-   * Real chunked upload to a presigned URL. The server hands us a target URL
-   * via /videos/init; we PUT the file directly with progress tracking.
+   * Upload the raw bytes to the URL returned by /videos/init. Despite being
+   * called "uploadUrl" this is the authenticated `PUT /api/videos/{id}/content`
+   * endpoint — NOT an anonymous presigned URL — so we must attach the same
+   * Bearer token the axios httpClient uses, plus a `video/*` Content-Type.
    */
   const uploadFile = async (file: File, onProgress: (pct: number) => void, signal: AbortSignal): Promise<string> => {
     const { uploadUrl, videoId } = await initUpload({ filename: file.name, sizeBytes: file.size, mime: file.type }).unwrap();
 
+    // `uploadUrl` is root-relative (e.g. "/api/videos/{id}/content"); resolve it
+    // against the API base origin so the PUT reaches the backend, not this app.
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("PUT", uploadUrl);
+      xhr.open("PUT", resolveApiUrl(uploadUrl));
+      xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+      const token = appStorage.get<string>(STORAGE_KEYS.accessToken);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress((e.loaded / e.total) * 100);
       xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`)));
       xhr.onerror = () => reject(new Error("Network error"));
@@ -52,7 +61,7 @@ export default function VideosListPage() {
     });
 
     const asset = await completeUpload({ videoId, title: file.name }).unwrap();
-    return asset.url;
+    return resolveApiUrl(asset.url);
   };
 
   return (
@@ -79,9 +88,9 @@ export default function VideosListPage() {
             <Card key={v.id}>
               <div className="aspect-video bg-black rounded-t-2xl overflow-hidden">
                 {v.thumbnailUrl ? (
-                  <img src={v.thumbnailUrl} alt="" className="size-full object-cover" />
+                  <img src={resolveApiUrl(v.thumbnailUrl)} alt="" className="size-full object-cover" />
                 ) : (
-                  <video src={v.url} className="size-full object-cover" />
+                  <video src={resolveApiUrl(v.url)} className="size-full object-cover" />
                 )}
               </div>
               <CardContent>

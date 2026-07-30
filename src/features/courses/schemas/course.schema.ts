@@ -24,8 +24,9 @@ export const courseSchema = z.object({
   free: z.boolean(),
   price: z.number().min(0, "Price must be ≥ 0"),
   currency: z.string().length(3, "3-letter code (e.g. AZN)"),
-  // comma/space separated UUIDs in the form, parsed to array on submit
   categoryIds: z.array(z.string().uuid("Must be a UUID")).min(1, "At least one category"),
+  thumbnailMediaId: z.string().uuid().optional(),
+  trailerMediaId: z.string().uuid().optional(),
 });
 
 export type CourseFormValues = z.infer<typeof courseSchema>;

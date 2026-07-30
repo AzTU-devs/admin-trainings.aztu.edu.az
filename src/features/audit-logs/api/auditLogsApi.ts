@@ -5,7 +5,7 @@ import type { AuditAction, AuditLogEntry } from "@features/audit-logs/types";
 interface ListArgs extends PageRequest {
   search?: string;
   action?: AuditAction;
-  actorId?: number;
+  actorId?: string;
   resourceType?: string;
   from?: string;
   to?: string;
@@ -17,7 +17,7 @@ export const auditLogsApi = baseApi.injectEndpoints({
       query: (params) => ({ url: "/super/audit-logs", method: "GET", params: params ?? undefined }),
       providesTags: [{ type: "AuditLog", id: "LIST" }],
     }),
-    getAuditLog: build.query<AuditLogEntry, number>({
+    getAuditLog: build.query<AuditLogEntry, string>({
       query: (id) => ({ url: `/super/audit-logs/${id}`, method: "GET" }),
       providesTags: (_r, _e, id) => [{ type: "AuditLog", id }],
     }),

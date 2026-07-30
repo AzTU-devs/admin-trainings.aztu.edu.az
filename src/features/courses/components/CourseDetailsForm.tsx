@@ -14,6 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@shared/components/ui/Select";
+import { ImageUploader } from "@shared/components/upload/ImageUploader";
+import { VideoUploader } from "@shared/components/upload/VideoUploader";
+import { useUploadMediaMutation, mediaContentUrl } from "@shared/api/mediaApi";
+import { CategoryMultiSelect } from "@features/courses/components/CategoryMultiSelect";
 import { courseSchema, type CourseFormValues } from "@features/courses/schemas/course.schema";
 import { COURSE_LEVEL, COURSE_TYPE } from "@shared/types/lms";
 import type { CourseDto } from "@features/courses/types";
@@ -28,6 +32,8 @@ interface Props {
 }
 
 export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save" }: Props) {
+  const [uploadMedia] = useUploadMediaMutation();
+
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
     defaultValues: {
@@ -45,10 +51,31 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       price: initial?.price ?? 0,
       currency: initial?.currency ?? "AZN",
       categoryIds: initial?.categoryIds ?? [],
+      thumbnailMediaId: initial?.thumbnailMediaId,
+      trailerMediaId: initial?.trailerMediaId,
     },
   });
 
   const isFree = form.watch("free");
+  const thumbnailMediaId = form.watch("thumbnailMediaId");
+  const trailerMediaId = form.watch("trailerMediaId");
+
+  const uploadAnd = async (file: File, field: "thumbnailMediaId" | "trailerMediaId") => {
+    try {
+      const media = await uploadMedia(file).unwrap();
+      form.setValue(field, media.id, { shouldDirty: true });
+      toast.success("Uploaded");
+    } catch {
+      toast.error("Upload failed");
+    }
+  };
+
+  // VideoUploader expects an uploader that returns a URL; reuse the media upload.
+  const trailerUploader = async (file: File): Promise<string> => {
+    const media = await uploadMedia(file).unwrap();
+    form.setValue("trailerMediaId", media.id, { shouldDirty: true });
+    return mediaContentUrl(media.id);
+  };
 
   const handle = async (values: CourseFormValues) => {
     try {
@@ -128,19 +155,42 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         </FormField>
         <FormField<CourseFormValues>
           name="categoryIds"
-          label="Category IDs"
+          label="Categories"
           required
-          description="Comma-separated category UUIDs (a real picker arrives with the category-select task)."
+          description="Pick one or more categories."
           className="md:col-span-2"
         >
           {({ field, invalid }) => (
-            <Input
-              value={(field.value as string[]).join(", ")}
+            <CategoryMultiSelect
+              value={(field.value as string[]) ?? []}
+              onChange={field.onChange}
               invalid={invalid}
-              onChange={(e) =>
-                field.onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
-              }
-              placeholder="e.g. 7c9e6679-7425-40de-944b-e07fc1f90ae7"
+            />
+          )}
+        </FormField>
+      </FormSection>
+
+      <FormSection title="Media">
+        <FormField<CourseFormValues> name="thumbnailMediaId" label="Cover image">
+          {() => (
+            <ImageUploader
+              value={thumbnailMediaId ? mediaContentUrl(thumbnailMediaId) : null}
+              onChange={(file) => {
+                if (file) void uploadAnd(file, "thumbnailMediaId");
+                else form.setValue("thumbnailMediaId", undefined, { shouldDirty: true });
+              }}
+              aspect="video"
+            />
+          )}
+        </FormField>
+        <FormField<CourseFormValues> name="trailerMediaId" label="Trailer video">
+          {() => (
+            <VideoUploader
+              value={trailerMediaId ? mediaContentUrl(trailerMediaId) : null}
+              uploader={trailerUploader}
+              onChange={(file) => {
+                if (!file) form.setValue("trailerMediaId", undefined, { shouldDirty: true });
+              }}
             />
           )}
         </FormField>

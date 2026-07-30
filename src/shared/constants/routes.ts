@@ -20,6 +20,7 @@ export const ROUTES = {
   tutorRoomRequests: "/tutor/room-requests",
   tutorRooms: "/tutor/rooms",
   tutorApprovals: "/tutor/approvals",
+  tutorVideos: "/tutor/videos",
 
   // Admin
   adminTutors: "/admin/tutors",

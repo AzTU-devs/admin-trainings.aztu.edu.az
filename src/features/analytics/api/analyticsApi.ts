@@ -6,9 +6,9 @@ export interface AnalyticsOverview {
   publishedCourses: number;
   enrollmentsThisMonth: number;
   enrollmentsTrend: { date: string; count: number }[];
-  topCourses: { id: number; title: string; enrolledCount: number }[];
-  topCategories: { id: number; name: string; courseCount: number }[];
-  roomUtilization: { roomId: number; roomName: string; utilizationPct: number }[];
+  topCourses: { id: string; title: string; enrolledCount: number }[];
+  topCategories: { id: string; name: string; courseCount: number }[];
+  roomUtilization: { roomId: string; roomName: string; utilizationPct: number }[];
 }
 
 export const analyticsApi = baseApi.injectEndpoints({

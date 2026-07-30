@@ -22,7 +22,7 @@ export const securityApi = baseApi.injectEndpoints({
     blockIp: build.mutation<void, { ipAddress: string; reason?: string }>({
       query: (body) => ({ url: "/super/security/block-ip", method: "POST", data: body }),
     }),
-    unlockAccount: build.mutation<void, number>({
+    unlockAccount: build.mutation<void, string>({
       query: (userId) => ({ url: `/super/security/unlock/${userId}`, method: "POST" }),
     }),
   }),

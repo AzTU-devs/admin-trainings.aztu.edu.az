@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, Search, ShieldOff, Trash2 } from "lucide-react";
+import { LockOpen, Pencil, Plus, Search, ShieldOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
@@ -26,8 +26,10 @@ import {
   useDeleteUserMutation,
   useListUsersQuery,
   useSetUserStatusMutation,
+  useUnlockUserMutation,
   useUpdateUserMutation,
 } from "@features/users/api/usersApi";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
 import {
   userSchema,
   type UserFormValues,
@@ -35,10 +37,11 @@ import {
 import type { AdminUser, UserStatus } from "@features/users/types";
 import { ALL_ROLES, type Role } from "@shared/constants/roles";
 
-const TONE: Record<UserStatus, "success" | "warning" | "neutral"> = {
+const TONE: Record<UserStatus, "success" | "warning" | "neutral" | "danger"> = {
   ACTIVE: "success",
   PENDING: "warning",
   DISABLED: "neutral",
+  LOCKED: "danger",
 };
 
 export default function UsersPage() {
@@ -46,13 +49,15 @@ export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
-  const [delId, setDelId] = useState<number | null>(null);
+  const [delId, setDelId] = useState<string | null>(null);
 
+  const { isSuperAdmin } = usePermissions();
   const { data, isFetching } = useListUsersQuery({ page, size: 10, search: search || undefined });
   const [createUser] = useCreateUserMutation();
   const [updateUser] = useUpdateUserMutation();
   const [setStatus] = useSetUserStatusMutation();
   const [deleteUser] = useDeleteUserMutation();
+  const [unlockUser] = useUnlockUserMutation();
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -96,6 +101,19 @@ export default function UsersPage() {
         header: "",
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
+            {isSuperAdmin && row.original.status === "LOCKED" && (
+              <Button variant="ghost" size="icon" aria-label="Unlock" onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await unlockUser(row.original.id).unwrap();
+                  toast.success("Account unlocked");
+                } catch {
+                  toast.error("Could not unlock account");
+                }
+              }}>
+                <LockOpen className="size-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" aria-label="Disable" onClick={async (e) => {
               e.stopPropagation();
               const next = row.original.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
@@ -113,7 +131,7 @@ export default function UsersPage() {
         ),
       },
     ],
-    [setStatus],
+    [setStatus, unlockUser, isSuperAdmin],
   );
 
   return (

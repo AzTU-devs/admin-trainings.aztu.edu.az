@@ -12,7 +12,17 @@ export const roomRequestsApi = baseApi.injectEndpoints({
     /** Tutor creates a booking — backend `POST /api/portal/room-bookings`. */
     createRoomBooking: build.mutation<RoomBookingDto, BookingCreateRequest>({
       query: (body) => ({ url: "/portal/room-bookings", method: "POST", data: body }),
-      invalidatesTags: [{ type: "RoomRequest", id: "ADMIN-LIST" }],
+      invalidatesTags: [{ type: "RoomRequest", id: "ADMIN-LIST" }, { type: "RoomRequest", id: "MINE" }],
+    }),
+    /** Tutor's own bookings (history) — backend `GET /api/portal/room-bookings/mine`. */
+    listMyRoomBookings: build.query<ApiPage<RoomBookingDto>, PageRequest | void>({
+      query: (params) => ({ url: "/portal/room-bookings/mine", method: "GET", params: params ?? undefined }),
+      providesTags: [{ type: "RoomRequest", id: "MINE" }],
+    }),
+    /** Tutor cancels one of their bookings — backend `DELETE /api/portal/room-bookings/{id}`. */
+    cancelRoomBooking: build.mutation<void, UUID>({
+      query: (id) => ({ url: `/portal/room-bookings/${id}`, method: "DELETE" }),
+      invalidatesTags: [{ type: "RoomRequest", id: "MINE" }, { type: "RoomRequest", id: "ADMIN-LIST" }],
     }),
     /** Admin queue — backend `GET /api/portal/room-bookings/admin`. */
     listAdminRoomBookings: build.query<ApiPage<RoomBookingDto>, AdminListArgs | void>({
@@ -30,6 +40,8 @@ export const roomRequestsApi = baseApi.injectEndpoints({
 
 export const {
   useCreateRoomBookingMutation,
+  useListMyRoomBookingsQuery,
+  useCancelRoomBookingMutation,
   useListAdminRoomBookingsQuery,
   useDecideRoomBookingMutation,
 } = roomRequestsApi;

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
-import { Card, CardContent } from "@shared/components/ui/Card";
-import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { DataTable } from "@shared/components/tables/DataTable";
+import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -17,30 +18,87 @@ import {
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { Input } from "@shared/components/ui/Input";
-import { useCreateRoomBookingMutation } from "@features/room-requests/api/roomRequestsApi";
+import { RoomRequestStatusBadge } from "@features/room-requests/components/RoomRequestStatusBadge";
+import {
+  useCancelRoomBookingMutation,
+  useCreateRoomBookingMutation,
+  useListMyRoomBookingsQuery,
+} from "@features/room-requests/api/roomRequestsApi";
+import type { RoomBookingDto } from "@features/room-requests/types";
+import { BOOKING_STATUS } from "@shared/types/lms";
 import {
   roomBookingSchema,
   type RoomBookingFormValues,
 } from "@features/room-requests/schemas/roomRequest.schema";
 
 /**
- * Tutors can CREATE a room booking (`POST /api/portal/room-bookings`).
- * There's no "list my bookings" or "cancel" endpoint yet — see GAP_REPORT.md.
+ * Tutors create room bookings (`POST /api/portal/room-bookings`), see their
+ * history (`GET /api/portal/room-bookings/mine`) and cancel pending/approved
+ * ones (`DELETE /api/portal/room-bookings/{id}`).
  */
 export default function TutorRoomRequestsPage() {
   const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [toCancel, setToCancel] = useState<RoomBookingDto | null>(null);
+
+  const { data, isFetching } = useListMyRoomBookingsQuery({ page, size: 10 });
   const [createBooking] = useCreateRoomBookingMutation();
+  const [cancelBooking] = useCancelRoomBookingMutation();
 
   const form = useForm<RoomBookingFormValues>({
     resolver: zodResolver(roomBookingSchema),
     defaultValues: { roomId: "", offlineCourseId: "", startsAt: "", endsAt: "", recurrenceRule: "" },
   });
 
+  const fmt = (iso: string) => new Date(iso).toLocaleString();
+
+  const columns = useMemo<ColumnDef<RoomBookingDto>[]>(
+    () => [
+      {
+        header: "Room",
+        cell: ({ row }) => (
+          <span className="font-medium text-gray-900 dark:text-white">{row.original.roomName}</span>
+        ),
+      },
+      { header: "Starts", cell: ({ row }) => <span className="text-sm">{fmt(row.original.startsAt)}</span> },
+      { header: "Ends", cell: ({ row }) => <span className="text-sm">{fmt(row.original.endsAt)}</span> },
+      {
+        header: "Fee",
+        cell: ({ row }) => `${row.original.totalFee} ${row.original.currency}`,
+      },
+      { header: "Status", cell: ({ row }) => <RoomRequestStatusBadge status={row.original.status} /> },
+      {
+        header: "",
+        id: "actions",
+        cell: ({ row }) => {
+          const cancellable =
+            row.original.status === BOOKING_STATUS.PENDING ||
+            row.original.status === BOOKING_STATUS.APPROVED;
+          if (!cancellable) return null;
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Trash2 className="size-4" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                setToCancel(row.original);
+              }}
+            >
+              Cancel
+            </Button>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
   return (
     <>
       <PageHeader
         title="Room bookings"
-        description="Request a classroom for an offline session."
+        description="Request a classroom for an offline session and track your bookings."
         actions={
           <Button leftIcon={<Plus className="size-4" />} onClick={() => setOpen(true)}>
             New booking
@@ -48,14 +106,16 @@ export default function TutorRoomRequestsPage() {
         }
       />
 
-      <Card>
-        <CardContent className="pt-5">
-          <EmptyState
-            title="Your booking history isn't available yet"
-            description="The backend exposes booking creation and the admin queue, but no per-tutor booking list. Create a booking with the button above; an admin reviews it. (Listing endpoint is in the gap report.)"
-          />
-        </CardContent>
-      </Card>
+      <DataTable<RoomBookingDto>
+        data={data?.content ?? []}
+        columns={columns}
+        isLoading={isFetching}
+        emptyTitle="No bookings yet"
+        emptyDescription="Request a classroom with the button above; an admin reviews it."
+        pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
+        onPageChange={setPage}
+        getRowId={(row) => row.id}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
@@ -105,6 +165,26 @@ export default function TutorRoomRequestsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!toCancel}
+        onOpenChange={(o) => !o && setToCancel(null)}
+        title="Cancel this booking?"
+        description={toCancel ? `${toCancel.roomName} · ${fmt(toCancel.startsAt)}` : undefined}
+        confirmLabel="Cancel booking"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={async () => {
+          if (!toCancel) return;
+          try {
+            await cancelBooking(toCancel.id).unwrap();
+            toast.success("Booking cancelled");
+            setToCancel(null);
+          } catch {
+            toast.error("Could not cancel booking");
+          }
+        }}
+      />
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useAuth } from "@features/auth/hooks/useAuth";
 import { usePermissions } from "@features/auth/hooks/usePermissions";
@@ -8,14 +9,42 @@ import {
   GraduationCap,
   TrendingUp,
   Users,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@shared/lib/cn";
+import { ROUTES } from "@shared/constants/routes";
+import {
+  useGetAdminDashboardQuery,
+  useGetTutorDashboardQuery,
+} from "@features/dashboard/api/dashboardApi";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const { isTutor, isStaff } = usePermissions();
+  const navigate = useNavigate();
   const firstName = user?.fullName?.split(" ")[0] ?? "there";
+
+  // Tutors get the tutor counters; pure staff (admin/super without tutor role)
+  // get the admin counters. Skip the call that doesn't apply to this role.
+  const tutor = useGetTutorDashboardQuery(undefined, { skip: !isTutor });
+  const admin = useGetAdminDashboardQuery(undefined, { skip: !isStaff || isTutor });
+
+  const num = (n?: number) => (n ?? 0).toLocaleString();
+
+  const tutorQuick = [
+    { label: "Create new course", to: ROUTES.tutorCourseNew },
+    { label: "Upload lesson video", to: ROUTES.tutorVideos },
+    { label: "Request a classroom", to: ROUTES.tutorRoomRequests },
+    { label: "View enrollments", to: ROUTES.tutorEnrollments },
+  ];
+  const staffQuick = [
+    { label: "Review pending tutors", to: ROUTES.adminTutors },
+    { label: "Approve room requests", to: ROUTES.adminRoomRequests },
+    { label: "Add a new room", to: ROUTES.adminRooms },
+    { label: "Open analytics", to: ROUTES.adminAnalytics },
+  ];
+  const quick = isTutor ? tutorQuick : staffQuick;
 
   return (
     <>
@@ -28,18 +57,18 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {isTutor && (
           <>
-            <StatCard label="My courses" value="12" delta="+2 this month" Icon={BookOpen} accent="brand" />
-            <StatCard label="Enrolled students" value="284" delta="+18 this week" Icon={Users} accent="gold" />
-            <StatCard label="Pending approvals" value="3" delta="awaiting review" Icon={ClipboardCheck} accent="warning" />
-            <StatCard label="Upcoming sessions" value="7" delta="next 7 days" Icon={GraduationCap} accent="success" />
+            <StatCard label="My courses" value={num(tutor.data?.courses)} delta={`${num(tutor.data?.publishedCourses)} published`} Icon={BookOpen} accent="brand" loading={tutor.isLoading} />
+            <StatCard label="Enrolled students" value={num(tutor.data?.students)} Icon={Users} accent="gold" loading={tutor.isLoading} />
+            <StatCard label="Courses in review" value={num(tutor.data?.coursesInReview)} delta="awaiting approval" Icon={ClipboardCheck} accent="warning" loading={tutor.isLoading} />
+            <StatCard label="Approved bookings" value={num(tutor.data?.approvedBookings)} delta="classroom sessions" Icon={GraduationCap} accent="success" loading={tutor.isLoading} />
           </>
         )}
         {isStaff && !isTutor && (
           <>
-            <StatCard label="Active tutors" value="86" delta="+4 this month" Icon={GraduationCap} accent="brand" />
-            <StatCard label="Courses pending moderation" value="11" delta="awaiting review" Icon={BookOpen} accent="warning" />
-            <StatCard label="Rooms in use" value="42 / 60" delta="70% utilization" Icon={DoorOpen} accent="gold" />
-            <StatCard label="Monthly enrollments" value="1,248" delta="+12% MoM" Icon={TrendingUp} accent="success" />
+            <StatCard label="Total users" value={num(admin.data?.totalUsers)} delta={`${num(admin.data?.pendingTutorApprovals)} tutors pending`} Icon={UserCog} accent="brand" loading={admin.isLoading} />
+            <StatCard label="Courses pending review" value={num(admin.data?.pendingCourseReviews)} delta={`${num(admin.data?.publishedCourses)} published`} Icon={BookOpen} accent="warning" loading={admin.isLoading} />
+            <StatCard label="Rooms" value={num(admin.data?.totalRooms)} delta={`${num(admin.data?.pendingRoomRequests)} requests pending`} Icon={DoorOpen} accent="gold" loading={admin.isLoading} />
+            <StatCard label="Total enrollments" value={num(admin.data?.totalEnrollments)} Icon={TrendingUp} accent="success" loading={admin.isLoading} />
           </>
         )}
       </div>
@@ -50,9 +79,13 @@ export default function DashboardPage() {
         </Panel>
         <Panel title="Quick actions" description="Common tasks">
           <ul className="space-y-2">
-            {(isTutor ? TUTOR_QUICK : STAFF_QUICK).map((q) => (
+            {quick.map((q) => (
               <li key={q.label}>
-                <button className="w-full text-left rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 border border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => navigate(q.to)}
+                  className="w-full text-left rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 border border-gray-100 dark:border-gray-800"
+                >
                   {q.label}
                 </button>
               </li>
@@ -64,19 +97,6 @@ export default function DashboardPage() {
   );
 }
 
-const TUTOR_QUICK = [
-  { label: "Create new course" },
-  { label: "Upload lesson video" },
-  { label: "Request a classroom" },
-  { label: "View enrollments" },
-];
-const STAFF_QUICK = [
-  { label: "Review pending tutors" },
-  { label: "Approve room requests" },
-  { label: "Add a new room" },
-  { label: "Open analytics" },
-];
-
 type Accent = "brand" | "gold" | "warning" | "success";
 
 function StatCard({
@@ -85,12 +105,14 @@ function StatCard({
   delta,
   Icon,
   accent,
+  loading,
 }: {
   label: string;
   value: string;
   delta?: string;
   Icon: LucideIcon;
   accent: Accent;
+  loading?: boolean;
 }) {
   const accents: Record<Accent, string> = {
     brand: "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300",
@@ -106,8 +128,12 @@ function StatCard({
           <Icon className="size-5" />
         </span>
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-      {delta && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{delta}</p>}
+      {loading ? (
+        <div className="h-8 w-16 rounded bg-gray-100 dark:bg-white/5 animate-pulse" />
+      ) : (
+        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+      )}
+      {delta && !loading && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{delta}</p>}
     </div>
   );
 }

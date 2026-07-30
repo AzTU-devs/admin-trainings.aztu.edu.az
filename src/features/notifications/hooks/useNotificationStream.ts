@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Client, type IMessage } from "@stomp/stompjs";
 import { toast } from "sonner";
 import { env } from "@shared/config/env";
 import { appStorage, STORAGE_KEYS } from "@lib/storage";
@@ -6,26 +7,28 @@ import { useAppDispatch } from "@lib/redux/hooks";
 import { notificationsApi } from "@features/notifications/api/notificationsApi";
 
 /**
- * Subscribes to the server-sent-events notification stream and invalidates the
- * RTK Query caches so the bell + list refresh in real time. No-op when the
- * feature flag is off. Falls back gracefully if EventSource isn't available.
+ * Real-time notifications over STOMP-on-WebSocket.
  *
- * The backend is expected to expose `GET /notifications/stream` (SSE) emitting
- * `notification` events whose payload is a JSON `Notification`.
+ * The backend exposes a plain WebSocket STOMP endpoint at `/ws` (sibling of the
+ * `/api` REST prefix), authenticates the STOMP CONNECT frame via an
+ * `Authorization: Bearer <jwt>` header, and pushes new notifications to the
+ * per-user destination `/user/queue/notifications`.
+ *
+ * On each message we toast the title and invalidate the notification RTK Query
+ * caches so the bell + list refresh. Gated behind the `wsNotifications` flag.
  */
 export function useNotificationStream() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
     if (!env.features.wsNotifications) return;
-    if (typeof EventSource === "undefined") return;
+    if (typeof WebSocket === "undefined") return;
 
     const token = appStorage.get<string>(STORAGE_KEYS.accessToken);
     if (!token) return;
 
-    // EventSource can't set Authorization headers; pass token as query param.
-    const url = `${env.api.baseUrl}/notifications/stream?access_token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url, { withCredentials: true });
+    const brokerURL = resolveWsUrl(env.api.baseUrl);
+    if (!brokerURL) return;
 
     const refresh = () => {
       dispatch(
@@ -36,24 +39,50 @@ export function useNotificationStream() {
       );
     };
 
-    const onNotification = (e: MessageEvent) => {
-      refresh();
-      try {
-        const data = JSON.parse(e.data) as { title?: string };
-        if (data.title) toast(data.title, { description: "New notification" });
-      } catch {
-        /* non-JSON heartbeat — ignore */
-      }
-    };
+    const client = new Client({
+      brokerURL,
+      // STOMP CONNECT auth — the backend reads this header on the CONNECT frame.
+      connectHeaders: { Authorization: `Bearer ${token}` },
+      reconnectDelay: 5_000,
+      heartbeatIncoming: 10_000,
+      heartbeatOutgoing: 10_000,
+      onConnect: () => {
+        client.subscribe("/user/queue/notifications", (message: IMessage) => {
+          refresh();
+          try {
+            const data = JSON.parse(message.body) as { title?: string };
+            if (data.title) toast(data.title, { description: "New notification" });
+          } catch {
+            /* non-JSON frame — ignore */
+          }
+        });
+      },
+      // Swallow STOMP/WS errors; the client auto-reconnects.
+      onStompError: () => {},
+      onWebSocketError: () => {},
+    });
 
-    es.addEventListener("notification", onNotification as EventListener);
-    es.onerror = () => {
-      // Browser auto-reconnects; nothing to do. Avoid noisy logs.
-    };
+    client.activate();
 
     return () => {
-      es.removeEventListener("notification", onNotification as EventListener);
-      es.close();
+      void client.deactivate();
     };
   }, [dispatch]);
+}
+
+/**
+ * Derive the STOMP WebSocket URL from the REST base URL.
+ * `/ws` lives at the server root (not under `/api`), so strip a trailing `/api`
+ * and swap the http(s) scheme for ws(s).
+ */
+function resolveWsUrl(apiBaseUrl: string): string | null {
+  try {
+    // Resolve relative bases (e.g. "/api") against the current origin.
+    const base = new URL(apiBaseUrl, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    const path = base.pathname.replace(/\/+$/, "").replace(/\/api$/, "");
+    const wsProtocol = base.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${base.host}${path}/ws`;
+  } catch {
+    return null;
+  }
 }

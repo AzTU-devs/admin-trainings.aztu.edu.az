@@ -11,14 +11,14 @@ export const videosApi = baseApi.injectEndpoints({
           ? [...res.content.map((v) => ({ type: "Video" as const, id: v.id })), { type: "Video" as const, id: "LIST" }]
           : [{ type: "Video", id: "LIST" }],
     }),
-    initVideoUpload: build.mutation<{ uploadUrl: string; videoId: number }, { filename: string; sizeBytes: number; mime: string }>({
+    initVideoUpload: build.mutation<{ uploadUrl: string; videoId: string }, { filename: string; sizeBytes: number; mime: string }>({
       query: (body) => ({ url: "/videos/init", method: "POST", data: body }),
     }),
-    completeVideoUpload: build.mutation<VideoAsset, { videoId: number; title?: string }>({
+    completeVideoUpload: build.mutation<VideoAsset, { videoId: string; title?: string }>({
       query: ({ videoId, ...body }) => ({ url: `/videos/${videoId}/complete`, method: "POST", data: body }),
       invalidatesTags: [{ type: "Video", id: "LIST" }],
     }),
-    deleteVideo: build.mutation<void, number>({
+    deleteVideo: build.mutation<void, string>({
       query: (id) => ({ url: `/videos/${id}`, method: "DELETE" }),
       invalidatesTags: [{ type: "Video", id: "LIST" }],
     }),

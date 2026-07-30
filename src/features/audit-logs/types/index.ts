@@ -11,13 +11,13 @@ export type AuditAction =
   | "OTHER";
 
 export interface AuditLogEntry {
-  id: number;
-  actorId: number;
-  actorName: string;
-  actorEmail: string;
+  id: string;
+  actorId?: string;
+  actorName?: string;
+  actorEmail?: string;
   action: AuditAction;
   resourceType: string;
-  resourceId?: string | number;
+  resourceId?: string;
   ipAddress?: string;
   userAgent?: string;
   changes?: Record<string, { from: unknown; to: unknown }>;
