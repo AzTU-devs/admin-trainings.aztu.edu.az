@@ -90,7 +90,7 @@ function SidebarHeader({ collapsed, onClose }: { collapsed: boolean; onClose: ()
       )}
     >
       <NavLink to="/dashboard" className="flex items-center gap-2.5">
-        <img src="/images/logo/logo-icon.svg" alt="AzTU" className="size-9 shrink-0" />
+        <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-9 shrink-0 object-contain dark:brightness-0 dark:invert" />
         {!collapsed && (
           <div className="leading-tight">
             <p className="text-sm font-bold text-brand-700 dark:text-white">AzTU Portal</p>

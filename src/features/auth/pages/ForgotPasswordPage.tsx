@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-6">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-8">
-            <img src="/images/logo/logo-icon.svg" alt="AzTU" className="size-10" />
+            <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-10 object-contain dark:brightness-0 dark:invert" />
             <div>
               <p className="text-base font-bold text-brand-700 dark:text-white">AzTU Portal</p>
               <p className="text-[10px] text-gray-500 tracking-[0.2em] uppercase">Azerbaijan Technical University</p>

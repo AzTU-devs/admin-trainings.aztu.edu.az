@@ -305,26 +305,30 @@ const AppSidebar: React.FC = () => {
       >
         <Link to="/">
           {isExpanded || isHovered || isMobileOpen ? (
-            <>
+            // Mark + wordmark lockup, mirroring the public site's Logo component.
+            // The mark is navy, so it is inverted to white in dark mode.
+            <span className="inline-flex items-center gap-2">
               <img
-                className="dark:hidden"
-                src="/images/logo/logo.svg"
-                alt="Logo"
-                width={150}
-                height={40}
+                className="size-9 object-contain dark:brightness-0 dark:invert"
+                src="/images/logo/aztu-logo-mark.png"
+                alt="AzTU"
+                width={36}
+                height={36}
               />
-              <img
-                className="hidden dark:block"
-                src="/images/logo/logo-dark.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
+              <span className="flex flex-col leading-none">
+                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+                  AZTU
+                </span>
+                <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
+                  Portal
+                </span>
+              </span>
+            </span>
           ) : (
             <img
-              src="/images/logo/logo-icon.svg"
-              alt="Logo"
+              className="size-8 object-contain dark:brightness-0 dark:invert"
+              src="/images/logo/aztu-logo-mark.png"
+              alt="AzTU"
               width={32}
               height={32}
             />

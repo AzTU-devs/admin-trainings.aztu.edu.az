@@ -72,7 +72,7 @@ export default function SignInPage() {
           <div className="absolute -bottom-32 -left-32 size-[28rem] rounded-full bg-brand-400/10 blur-3xl" />
 
           <div className="relative z-10 flex items-center gap-3">
-            <img src="/images/logo/logo-icon.svg" alt="AzTU" className="size-12" />
+            <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-12 object-contain dark:brightness-0 dark:invert" />
             <div>
               <p className="text-lg font-bold tracking-wide">AzTU Portal</p>
               <p className="text-xs text-aztu-gold-200/90 tracking-[0.2em] uppercase">
@@ -100,7 +100,7 @@ export default function SignInPage() {
         <div className="flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-md">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/images/logo/logo-icon.svg" alt="AzTU" className="size-10" />
+              <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-10 object-contain dark:brightness-0 dark:invert" />
               <div>
                 <p className="text-base font-bold text-brand-700 dark:text-white">AzTU Portal</p>
                 <p className="text-[10px] text-gray-500 tracking-[0.2em] uppercase">Azerbaijan Technical University</p>
