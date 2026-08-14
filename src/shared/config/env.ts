@@ -43,8 +43,12 @@ export const env = {
   auth: {
     storage: str("VITE_AUTH_TOKEN_STORAGE", "localStorage") as TokenStorage,
     refreshBeforeExpiryS: num("VITE_REFRESH_BEFORE_EXPIRY_S", 60),
-    /** DEV ONLY — skips ProtectedRoute and injects a synthetic super-user. */
-    bypass: bool("VITE_AUTH_BYPASS", false),
+    /**
+     * DEV ONLY — skips ProtectedRoute and injects a synthetic super-user.
+     * Hard-pinned to false in production builds so a stray VITE_AUTH_BYPASS=true
+     * in a deploy environment can never ship an unauthenticated SUPER_ADMIN.
+     */
+    bypass: import.meta.env.PROD ? false : bool("VITE_AUTH_BYPASS", false),
   },
   uploads: {
     maxImageMb: num("VITE_UPLOAD_MAX_IMAGE_MB", 10),

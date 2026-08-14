@@ -8,7 +8,9 @@ dist-ssr
 .vscode
 .idea
 coverage
+.env
 .env.local
+.env.*.local
 *.local
 Dockerfile
 docker-compose.yml
