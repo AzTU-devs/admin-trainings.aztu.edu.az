@@ -1,0 +1,52 @@
+# Production stack for the admin/tutor portal.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Differs from docker-compose.yml (which publishes a bridged port) in one way
+# that matters: host networking, so UFW actually governs the port. Ports
+# published the normal way bypass UFW entirely — Docker inserts rules into
+# DOCKER-USER, evaluated ahead of UFW's INPUT chain, so `ufw deny 8081` would
+# leave the port reachable. Under host networking nginx binds like any other
+# host process and `ufw allow/deny 8081` behaves as expected.
+#
+# nginx listens on 8081 directly (see nginx/nginx.conf) since there is no port
+# mapping to translate 80 to 8081.
+#
+# This is a static SPA: every VITE_* is inlined into the bundle at build time,
+# so changing one requires `up -d --build`, never just a restart.
+
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # The browser calls this directly, so it must be an address the user's
+        # machine can reach — not localhost, and not a container name.
+        #
+        # The committed .env.production default of /api assumes an ingress
+        # proxying /api to the backend on this same origin. Without one, set
+        # the absolute backend URL in .env, e.g.
+        #   VITE_API_BASE_URL=http://10.0.34.31:8080/api
+        # and make sure that origin is in the backend's CORS_ALLOWED_ORIGINS.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+
+    image: eduplatform-admin:prod
+    container_name: eduplatform-admin
+    restart: unless-stopped
+
+    # See note above. `ports:` is ignored under host networking.
+    network_mode: host
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

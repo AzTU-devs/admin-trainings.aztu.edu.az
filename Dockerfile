@@ -27,10 +27,11 @@ RUN nginx -t
 # Static assets from the build stage.
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# The nginx master runs as root to bind :80 and drops workers to the `nginx` user
-# (stock behaviour of this image). Nothing app-specific runs privileged.
-EXPOSE 80
+# The nginx master runs as root and drops workers to the `nginx` user (stock
+# behaviour of this image). Nothing app-specific runs privileged.
+# Port is 8081 to match nginx/nginx.conf — see the note there on host networking.
+EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost/healthz || exit 1
+  CMD wget -qO- http://127.0.0.1:8081/healthz || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
