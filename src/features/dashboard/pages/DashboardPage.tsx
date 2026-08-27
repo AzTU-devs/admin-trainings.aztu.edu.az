@@ -10,9 +10,9 @@ import {
   TrendingUp,
   Users,
   UserCog,
-  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@shared/lib/cn";
+import { StatCard } from "@shared/components/data-display/StatCard";
 import { ROUTES } from "@shared/constants/routes";
 import {
   useGetAdminDashboardQuery,
@@ -94,47 +94,6 @@ export default function DashboardPage() {
         </Panel>
       </div>
     </>
-  );
-}
-
-type Accent = "brand" | "gold" | "warning" | "success";
-
-function StatCard({
-  label,
-  value,
-  delta,
-  Icon,
-  accent,
-  loading,
-}: {
-  label: string;
-  value: string;
-  delta?: string;
-  Icon: LucideIcon;
-  accent: Accent;
-  loading?: boolean;
-}) {
-  const accents: Record<Accent, string> = {
-    brand: "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300",
-    gold: "bg-aztu-gold-100 text-aztu-gold-700 dark:bg-aztu-gold-500/10 dark:text-aztu-gold-300",
-    warning: "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300",
-    success: "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-300",
-  };
-  return (
-    <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark p-5">
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-        <span className={cn("size-10 rounded-xl inline-flex items-center justify-center", accents[accent])}>
-          <Icon className="size-5" />
-        </span>
-      </div>
-      {loading ? (
-        <div className="h-8 w-16 rounded bg-gray-100 dark:bg-white/5 animate-pulse" />
-      ) : (
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-      )}
-      {delta && !loading && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{delta}</p>}
-    </div>
   );
 }
 

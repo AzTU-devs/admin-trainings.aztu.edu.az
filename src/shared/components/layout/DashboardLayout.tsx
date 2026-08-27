@@ -16,6 +16,12 @@ import { useNotificationStream } from "@features/notifications/hooks/useNotifica
  *
  * Sidebar is fixed; the main column shifts via left-padding so the layout
  * remains scrollable without resize jank when the sidebar collapses.
+ *
+ * `overflow-x-clip` on the content column matters: without it a page that
+ * renders something wider than the viewport (a table that escapes its scroll
+ * container, a long unbroken string) makes the document scroll sideways, and
+ * the sticky header — sized to the viewport — stops short of the content's
+ * right edge. Clipping keeps the bar spanning the full column at every width.
  */
 export function DashboardLayout() {
   const collapsed = useAppSelector((s) => s.ui.sidebarCollapsed);
@@ -26,12 +32,12 @@ export function DashboardLayout() {
       <Sidebar />
       <div
         className={cn(
-          "transition-[padding-left] duration-300 ease-in-out",
+          "min-w-0 overflow-x-clip transition-[padding-left] duration-300 ease-in-out",
           collapsed ? "lg:pl-[84px]" : "lg:pl-[272px]",
         )}
       >
         <Header />
-        <main className="px-4 sm:px-6 lg:px-8 py-6">
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
           <Outlet />
         </main>
       </div>

@@ -18,10 +18,12 @@ interface Props {
   deltaTone?: "neutral" | "up" | "down";
   Icon: LucideIcon;
   accent?: Accent;
+  /** Renders a placeholder bar in place of the value while the query is in flight. */
+  loading?: boolean;
   className?: string;
 }
 
-export function StatCard({ label, value, delta, deltaTone = "neutral", Icon, accent = "brand", className }: Props) {
+export function StatCard({ label, value, delta, deltaTone = "neutral", Icon, accent = "brand", loading, className }: Props) {
   return (
     <div className={cn("rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark p-5", className)}>
       <div className="flex items-start justify-between mb-3">
@@ -30,8 +32,12 @@ export function StatCard({ label, value, delta, deltaTone = "neutral", Icon, acc
           <Icon className="size-5" />
         </span>
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-      {delta && (
+      {loading ? (
+        <div className="h-8 w-16 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+      ) : (
+        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+      )}
+      {delta && !loading && (
         <p
           className={cn(
             "mt-1 text-xs",

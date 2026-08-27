@@ -27,8 +27,7 @@
       "@app/*": ["./src/app/*"],
       "@features/*": ["./src/features/*"],
       "@shared/*": ["./src/shared/*"],
-      "@lib/*": ["./src/lib/*"],
-      "@legacy/*": ["./src/*"]
+      "@lib/*": ["./src/lib/*"]
     }
   },
   "include": ["src"]

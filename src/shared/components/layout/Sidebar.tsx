@@ -12,6 +12,7 @@ import {
   type MenuItem,
 } from "@shared/components/navigation/menu";
 import { usePermissions } from "@features/auth/hooks/usePermissions";
+import { Logo } from "./Logo";
 
 export function Sidebar() {
   const dispatch = useAppDispatch();
@@ -89,16 +90,8 @@ function SidebarHeader({ collapsed, onClose }: { collapsed: boolean; onClose: ()
         collapsed ? "justify-center" : "justify-between",
       )}
     >
-      <NavLink to="/dashboard" className="flex items-center gap-2.5">
-        <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-9 shrink-0 object-contain dark:brightness-0 dark:invert" />
-        {!collapsed && (
-          <div className="leading-tight">
-            <p className="text-sm font-bold text-brand-700 dark:text-white">AzTU Portal</p>
-            <p className="text-[9px] tracking-[0.18em] uppercase text-gray-500 dark:text-gray-400">
-              Az. Technical Uni.
-            </p>
-          </div>
-        )}
+      <NavLink to="/dashboard" className="min-w-0">
+        <Logo showText={!collapsed} />
       </NavLink>
       <button
         type="button"

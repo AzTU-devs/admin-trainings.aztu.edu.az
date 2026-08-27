@@ -9,6 +9,21 @@
     <title>AzTU Portal</title>
   </head>
   <body class="dark:bg-gray-900">
+    <script>
+      // Apply the persisted theme before first paint. Without this the class is
+      // only set once React mounts, so a dark-mode session flashes a white page.
+      (function () {
+        try {
+          var raw = localStorage.getItem("aztu.ui.theme") ||
+                    sessionStorage.getItem("aztu.ui.theme");
+          var mode = raw ? JSON.parse(raw) : "system";
+          if (mode === "dark" || (mode === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) { /* storage blocked — fall back to light */ }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

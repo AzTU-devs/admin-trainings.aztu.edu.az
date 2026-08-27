@@ -1,61 +1,92 @@
+import { useCallback, useEffect, useRef } from "react";
 import { Menu, Search } from "lucide-react";
-import { useAppDispatch, useAppSelector } from "@lib/redux/hooks";
+import { NavLink } from "react-router";
+import { useAppDispatch } from "@lib/redux/hooks";
 import { setMobileSidebarOpen } from "@lib/redux/uiSlice";
+import { ROUTES } from "@shared/constants/routes";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
+import { Logo } from "./Logo";
 import { NotificationBell } from "@features/notifications/components/NotificationBell";
 
+/**
+ * Top bar of the authenticated shell.
+ *
+ * The <header> is full-bleed across the content column; an inner container
+ * carries the same padding and max-width as <main>, so the bar spans the whole
+ * width while its controls stay aligned with the page content beneath it.
+ */
 export function Header() {
   const dispatch = useAppDispatch();
-  const collapsed = useAppSelector((s) => s.ui.sidebarCollapsed);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const focusSearch = useCallback(() => {
+    searchRef.current?.focus();
+  }, []);
+
+  // The ⌘K hint rendered in the field has to actually do something.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        focusSearch();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusSearch]);
 
   return (
-    <header
-      className="sticky top-0 z-30 h-16 flex items-center gap-3 px-4 sm:px-6 bg-white/80 dark:bg-gray-dark/80 backdrop-blur border-b border-gray-200 dark:border-gray-800 transition-[margin-left] duration-300 ease-in-out"
-      style={{ marginLeft: 0 }}
-      data-collapsed={collapsed}
-    >
-      <button
-        type="button"
-        onClick={() => dispatch(setMobileSidebarOpen(true))}
-        aria-label="Open menu"
-        className="lg:hidden size-10 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 inline-flex items-center justify-center"
-      >
-        <Menu className="size-5" />
-      </button>
-
-      <div className="hidden md:flex flex-1 max-w-md">
-        <SearchBox />
-      </div>
-      <div className="md:hidden flex-1" />
-
-      <div className="flex items-center gap-1.5">
+    <header className="sticky top-0 z-30 w-full border-b border-gray-200 bg-white/85 backdrop-blur-md dark:border-gray-800 dark:bg-gray-dark/85">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-2 px-4 sm:gap-3 sm:px-6 lg:px-8">
         <button
           type="button"
-          aria-label="Search"
-          className="md:hidden size-10 rounded-xl text-gray-500 hover:text-brand-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/5 inline-flex items-center justify-center"
+          onClick={() => dispatch(setMobileSidebarOpen(true))}
+          aria-label="Open menu"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 lg:hidden dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white"
         >
-          <Search className="size-5" />
+          <Menu className="size-5" />
         </button>
-        <NotificationBell />
-        <ThemeToggle compact />
-        <span className="hidden md:block h-8 w-px bg-gray-200 dark:bg-gray-800 mx-1" />
-        <UserMenu />
+
+        {/* The sidebar is off-canvas below lg, so the bar carries the brand there. */}
+        <NavLink to={ROUTES.dashboard} className="shrink-0 lg:hidden">
+          <Logo showText={false} />
+        </NavLink>
+
+        <div className="hidden min-w-0 flex-1 md:flex">
+          <SearchBox inputRef={searchRef} />
+        </div>
+        <div className="flex-1 md:hidden" />
+
+        <div className="flex shrink-0 items-center gap-1">
+          <NotificationBell />
+          <ThemeToggle compact />
+          <span className="mx-1 hidden h-8 w-px bg-gray-200 md:block dark:bg-gray-800" />
+          <UserMenu />
+        </div>
+      </div>
+
+      {/* Below md the field moves to its own row rather than being hidden behind
+          a magnifier button that had nowhere to open a search UI. */}
+      <div className="border-t border-gray-100 px-4 pb-2.5 pt-1 md:hidden dark:border-gray-800">
+        <SearchBox />
       </div>
     </header>
   );
 }
 
-function SearchBox() {
+function SearchBox({ inputRef }: { inputRef?: React.Ref<HTMLInputElement> }) {
   return (
-    <label className="relative w-full">
-      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+    <label className="relative w-full max-w-xl">
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
       <input
+        ref={inputRef}
         type="search"
         placeholder="Search courses, students, rooms…"
-        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/5 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:bg-white dark:focus:bg-gray-dark focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 transition-shadow"
+        aria-label="Search the portal"
+        className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-14 text-sm text-gray-900 transition-shadow placeholder:text-gray-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/15 dark:border-gray-800 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-gray-dark"
       />
-      <kbd className="hidden lg:inline-flex absolute right-2.5 top-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-dark px-1.5 py-0.5 text-[10px] font-mono text-gray-500 dark:text-gray-400">
+      <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-gray-500 lg:inline-flex dark:border-gray-700 dark:bg-gray-dark dark:text-gray-400">
         ⌘K
       </kbd>
     </label>

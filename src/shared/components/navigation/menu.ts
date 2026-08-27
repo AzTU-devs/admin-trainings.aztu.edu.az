@@ -14,6 +14,7 @@ import {
   Gavel,
   BarChart3,
   Bell,
+  Megaphone,
   ScrollText,
   Activity,
   Network,
@@ -100,7 +101,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: "room-requests-tutor",
-        label: "Room requests",
+        label: "My room requests",
         icon: CalendarClock,
         path: ROUTES.tutorRoomRequests,
         roles: [ROLES.TUTOR],
@@ -110,6 +111,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "Approvals",
         icon: ShieldCheck,
         path: ROUTES.tutorApprovals,
+        roles: [ROLES.TUTOR],
+      },
+      {
+        id: "videos",
+        label: "Video library",
+        icon: Video,
+        path: ROUTES.tutorVideos,
         roles: [ROLES.TUTOR],
       },
     ],
@@ -141,7 +149,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: "room-requests-admin",
-        label: "Room requests",
+        label: "Booking requests",
         icon: CalendarClock,
         path: ROUTES.adminRoomRequests,
         roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
@@ -158,6 +166,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "Users",
         icon: UserCog,
         path: ROUTES.adminUsers,
+        roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+      },
+      {
+        id: "admin-notifications",
+        label: "Broadcasts",
+        icon: Megaphone,
+        path: ROUTES.adminNotifications,
         roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
       },
       {
@@ -207,19 +222,6 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: Lock,
         path: ROUTES.superSecurity,
         roles: [ROLES.SUPER_ADMIN],
-      },
-    ],
-  },
-  {
-    id: "media",
-    label: "Media",
-    items: [
-      {
-        id: "videos",
-        label: "Video library",
-        icon: Video,
-        path: "/tutor/videos",
-        roles: [ROLES.TUTOR],
       },
     ],
   },

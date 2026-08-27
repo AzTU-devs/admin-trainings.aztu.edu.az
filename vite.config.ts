@@ -21,7 +21,18 @@ export default defineConfig({
       "@features": path.resolve(__dirname, "src/features"),
       "@shared": path.resolve(__dirname, "src/shared"),
       "@lib": path.resolve(__dirname, "src/lib"),
-      "@legacy": path.resolve(__dirname, "src"),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the long-lived framework code out of the app chunk so a routine
+        // app deploy does not invalidate React/Redux in every user's cache.
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router"],
+          "vendor-redux": ["@reduxjs/toolkit", "react-redux"],
+        },
+      },
     },
   },
   server: {

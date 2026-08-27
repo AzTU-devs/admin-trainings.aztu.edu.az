@@ -47,6 +47,7 @@ export function DataTable<TData>({
   className,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const isEmpty = !isLoading && data.length === 0;
 
   const table = useReactTable<TData>({
     data,
@@ -68,7 +69,9 @@ export function DataTable<TData>({
     <div className={cn("rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark overflow-hidden", className)}>
       <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-white/5">
+          {/* Column headers over an empty body read as a broken table, so they
+              are dropped while there is nothing to label. */}
+          <thead hidden={isEmpty} className="bg-gray-50 dark:bg-white/5">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-gray-200 dark:border-gray-800">
                 {hg.headers.map((h) => {
@@ -101,13 +104,13 @@ export function DataTable<TData>({
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-16 text-center">
+                <td colSpan={Math.max(columns.length, 1)} className="px-4 py-16 text-center">
                   <Spinner className="mx-auto" />
                 </td>
               </tr>
-            ) : table.getRowModel().rows.length === 0 ? (
+            ) : isEmpty ? (
               <tr>
-                <td colSpan={columns.length} className="p-6">
+                <td colSpan={Math.max(columns.length, 1)} className="p-6">
                   <EmptyState title={emptyTitle} description={emptyDescription} />
                 </td>
               </tr>
