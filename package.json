@@ -70,5 +70,10 @@
     "vite": "^6.1.0",
     "vite-plugin-svgr": "^4.3.0",
     "vitest": "^4.1.7"
+  },
+  "overrides": {
+    "react-helmet-async": {
+      "react": "^16.8.0 || ^17 || ^18 || ^19"
+    }
   }
 }
