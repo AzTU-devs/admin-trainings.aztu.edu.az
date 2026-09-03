@@ -8,6 +8,23 @@ docker build --build-arg VITE_API_BASE_URL=https://api.example.com/api \
 docker run -p 8081:80 eduplatform-admin:latest
 ```
 
+## The SPA needs `/api` proxied — or login returns 405
+
+`VITE_API_BASE_URL` defaults to `/api`, so the app calls the backend
+**same-origin**. `nginx/nginx.conf` therefore proxies `/api/` to the backend on
+loopback (`127.0.0.1:8080`, reachable because both containers use
+`network_mode: host`).
+
+Without that proxy block the request falls through to the SPA history fallback,
+nginx tries to answer a `POST /api/auth/login` with `index.html`, and static
+files do not accept POST — so **login fails with 405 Method Not Allowed**, which
+is easy to misread as a routing bug in the app.
+
+If the backend's `SERVER_PORT` is not 8080, change the `proxy_pass` line in
+`nginx/nginx.conf`. If instead you point `VITE_API_BASE_URL` at an absolute
+backend origin, the proxy is unused and the backend's `CORS_ALLOWED_ORIGINS`
+must then include this app's origin.
+
 ## Build-time env only
 
 This is a static SPA: **every** `VITE_*` value is inlined at build time. There is

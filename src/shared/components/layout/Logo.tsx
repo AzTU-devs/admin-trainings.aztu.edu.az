@@ -1,10 +1,15 @@
 import { cn } from "@shared/lib/cn";
 
 /**
- * The AzTU portal lockup. Uses the purpose-built SVG mark (navy shield, gold
- * device) which reads correctly on both light and dark surfaces — unlike the
- * raster mark, which is a navy glyph baked onto an opaque white canvas and
- * therefore turns into a solid block under any invert/brightness filter.
+ * The AzTU portal lockup.
+ *
+ * Two files, both the university's own mark trimmed to the glyph and put on
+ * transparency: navy for light surfaces, white for dark. The supplied source
+ * art is dark-on-white with an opaque background, so it cannot be tinted with a
+ * filter — an inverted copy turns the whole plate into a solid block.
+ *
+ * Both are rendered and one is hidden by the `dark` class, so the correct mark
+ * is on screen at first paint with no JavaScript involved.
  */
 export function Logo({
   showText = true,
@@ -15,13 +20,19 @@ export function Logo({
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <img
-        src="/images/logo/logo-icon.svg"
-        alt=""
-        width={36}
-        height={36}
-        className="size-9 shrink-0"
-      />
+      <span className="relative block h-9 w-[19px] shrink-0">
+        <img
+          src="/images/logo/aztu-mark.png"
+          alt="AzTU"
+          className="absolute inset-0 size-full object-contain dark:hidden"
+        />
+        <img
+          src="/images/logo/aztu-mark-white.png"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 hidden size-full object-contain dark:block"
+        />
+      </span>
       {showText && (
         <span className="leading-tight">
           <span className="block text-sm font-bold text-brand-700 dark:text-white">

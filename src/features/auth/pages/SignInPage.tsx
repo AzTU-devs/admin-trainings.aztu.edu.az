@@ -13,6 +13,7 @@ import { authSuccess } from "@features/auth/store/authSlice";
 import { useAuth } from "@features/auth/hooks/useAuth";
 import { cn } from "@shared/lib/cn";
 import { ROUTES } from "@shared/constants/routes";
+import { Logo } from "@shared/components/layout/Logo";
 import type { NormalizedError } from "@lib/axios/httpClient";
 
 export default function SignInPage() {
@@ -72,7 +73,7 @@ export default function SignInPage() {
           <div className="absolute -bottom-32 -left-32 size-[28rem] rounded-full bg-brand-400/10 blur-3xl" />
 
           <div className="relative z-10 flex items-center gap-3">
-            <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-12 object-contain dark:brightness-0 dark:invert" />
+            <img src="/images/logo/aztu-mark-white.png" alt="AzTU" className="h-12 w-[25px] shrink-0 object-contain" />
             <div>
               <p className="text-lg font-bold tracking-wide">AzTU Portal</p>
               <p className="text-xs text-aztu-gold-200/90 tracking-[0.2em] uppercase">
@@ -100,7 +101,7 @@ export default function SignInPage() {
         <div className="flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-md">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-10 object-contain dark:brightness-0 dark:invert" />
+              <Logo showText={false} />
               <div>
                 <p className="text-base font-bold text-brand-700 dark:text-white">AzTU Portal</p>
                 <p className="text-[10px] text-gray-500 tracking-[0.2em] uppercase">Azerbaijan Technical University</p>

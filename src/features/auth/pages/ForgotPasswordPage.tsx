@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, MailCheck, Send } from "lucide-react";
 import { cn } from "@shared/lib/cn";
 import { ROUTES } from "@shared/constants/routes";
 import { useForgotPasswordMutation } from "@features/auth/api/authApi";
+import { Logo } from "@shared/components/layout/Logo";
 
 /**
  * Honest password-reset request page. Posts the email to
@@ -39,7 +40,7 @@ export default function ForgotPasswordPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-6">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-8">
-            <img src="/images/logo/aztu-logo-mark.png" alt="AzTU" className="size-10 object-contain dark:brightness-0 dark:invert" />
+            <Logo showText={false} />
             <div>
               <p className="text-base font-bold text-brand-700 dark:text-white">AzTU Portal</p>
               <p className="text-[10px] text-gray-500 tracking-[0.2em] uppercase">Azerbaijan Technical University</p>
