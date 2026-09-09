@@ -135,6 +135,33 @@ export interface CreateCourseRequest {
   currency: string;
   categoryIds: UUID[];
   tagIds?: UUID[];
+  /** Required when `courseType` is OFFLINE; rejected when it is ONLINE. */
+  offlineDetails?: OfflineDetailsRequest;
+  /** Optional for ONLINE; rejected when the course is OFFLINE. */
+  onlineDetails?: OnlineDetailsRequest;
 }
 
-export type UpdateCourseRequest = Partial<Omit<CreateCourseRequest, "slug">>;
+/** Write shape — `totalVideoSeconds` is derived from the lessons server-side. */
+export interface OnlineDetailsRequest {
+  hasCertificate: boolean;
+  dripEnabled: boolean;
+}
+
+/** Write shape — `enrolledCount` is owned by the server. */
+export interface OfflineDetailsRequest {
+  startDate?: string;
+  endDate?: string;
+  weeklyHours?: number;
+  totalHours?: number;
+  studentLimit?: number;
+  city?: string;
+  addressLine?: string;
+}
+
+/**
+ * The backend's UpdateCourseRequest has no `courseType` — a course's type is
+ * fixed at creation — but it does accept the type-specific detail blocks.
+ */
+export type UpdateCourseRequest = Partial<
+  Omit<CreateCourseRequest, "slug" | "courseType">
+>;

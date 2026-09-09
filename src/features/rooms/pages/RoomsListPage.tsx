@@ -38,6 +38,7 @@ import {
 } from "@features/rooms/api/roomsApi";
 import { roomSchema, type RoomFormValues } from "@features/rooms/schemas/room.schema";
 import type { RoomDto } from "@features/rooms/types";
+import type { NormalizedError } from "@lib/axios/httpClient";
 import { ROOM_STATUS } from "@shared/types/lms";
 
 export default function RoomsListPage() {
@@ -146,8 +147,17 @@ export default function RoomsListPage() {
                 else await createRoom(values).unwrap();
                 toast.success("Saved");
                 setOpen(false);
-              } catch {
-                toast.error("Save failed");
+              } catch (e) {
+                // A bare "Save failed" hides why: a duplicate room number and
+                // a rejected image both looked identical. Surface the server's
+                // message, and pin field errors to their inputs.
+                const err = e as NormalizedError;
+                if (err.fieldErrors) {
+                  for (const [k, v] of Object.entries(err.fieldErrors)) {
+                    form.setError(k as keyof RoomFormValues, { message: v });
+                  }
+                }
+                toast.error(err.message || "Save failed");
               }
             }}
           >
@@ -217,8 +227,12 @@ export default function RoomsListPage() {
         destructive
         onConfirm={async () => {
           if (!delId) return;
-          await deleteRoom(delId).unwrap();
-          toast.success("Deleted");
+          try {
+            await deleteRoom(delId).unwrap();
+            toast.success("Deleted");
+          } catch (e) {
+            toast.error((e as NormalizedError).message || "Could not delete the room");
+          }
         }}
       />
     </>

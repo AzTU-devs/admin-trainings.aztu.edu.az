@@ -34,8 +34,7 @@ export function FormField<TFieldValues extends FieldValues>({
   className,
   children,
 }: FormFieldProps<TFieldValues>) {
-  const { control, formState } = useFormContext<TFieldValues>();
-  const error = (formState.errors[name as string] as { message?: string } | undefined)?.message;
+  const { control } = useFormContext<TFieldValues>();
   const id = `field-${name}`;
 
   return (
@@ -45,19 +44,27 @@ export function FormField<TFieldValues extends FieldValues>({
           {label}
         </Label>
       )}
+      {/* The message comes from `fieldState`, not `formState.errors[name]`:
+          the latter is a flat lookup and misses dotted paths such as
+          `offlineDetails.startDate`, so nested errors never reached the UI. */}
       <Controller
         control={control}
         name={name}
-        render={({ field, fieldState }) =>
-          <>{children({ field, invalid: !!fieldState.error, id })}</>
-        }
+        render={({ field, fieldState }) => {
+          const error = fieldState.error?.message;
+          return (
+            <>
+              {children({ field, invalid: !!fieldState.error, id })}
+              {description && !error && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+              )}
+              {error && (
+                <p className="text-xs text-error-600 dark:text-error-400">{error}</p>
+              )}
+            </>
+          );
+        }}
       />
-      {description && !error && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-      )}
-      {error && (
-        <p className="text-xs text-error-600 dark:text-error-400">{error}</p>
-      )}
     </div>
   );
 }

@@ -53,10 +53,25 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       categoryIds: initial?.categoryIds ?? [],
       thumbnailMediaId: initial?.thumbnailMediaId,
       trailerMediaId: initial?.trailerMediaId,
+      onlineDetails: {
+        hasCertificate: initial?.onlineDetails?.hasCertificate ?? false,
+        dripEnabled: initial?.onlineDetails?.dripEnabled ?? false,
+      },
+      offlineDetails: {
+        startDate: initial?.offlineDetails?.startDate ?? "",
+        endDate: initial?.offlineDetails?.endDate ?? "",
+        weeklyHours: initial?.offlineDetails?.weeklyHours,
+        totalHours: initial?.offlineDetails?.totalHours,
+        studentLimit: initial?.offlineDetails?.studentLimit ?? 20,
+        city: initial?.offlineDetails?.city ?? "",
+        addressLine: initial?.offlineDetails?.addressLine ?? "",
+      },
     },
   });
 
   const isFree = form.watch("free");
+  const courseType = form.watch("courseType");
+  const isOffline = courseType === COURSE_TYPE.OFFLINE;
   const thumbnailMediaId = form.watch("thumbnailMediaId");
   const trailerMediaId = form.watch("trailerMediaId");
 
@@ -78,8 +93,25 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
   };
 
   const handle = async (values: CourseFormValues) => {
+    // The backend rejects an ONLINE course that carries offline details and
+    // requires them for an OFFLINE one, so only the matching block is sent.
+    // Blank optional strings are dropped rather than posted as "".
+    const offline = values.offlineDetails;
+    const payload: CourseFormValues = {
+      ...values,
+      onlineDetails: values.courseType === COURSE_TYPE.ONLINE ? values.onlineDetails : undefined,
+      offlineDetails:
+        values.courseType === COURSE_TYPE.OFFLINE && offline
+          ? {
+              ...offline,
+              city: offline.city?.trim() || undefined,
+              addressLine: offline.addressLine?.trim() || undefined,
+            }
+          : undefined,
+    };
+
     try {
-      await onSubmit(values);
+      await onSubmit(payload);
       toast.success("Saved");
     } catch (e) {
       const err = e as NormalizedError;
@@ -126,9 +158,14 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       </FormSection>
 
       <FormSection title="Classification">
-        <FormField<CourseFormValues> name="courseType" label="Type" required>
+        <FormField<CourseFormValues>
+          name="courseType"
+          label="Type"
+          required
+          description={editing ? "Type can't be changed after creation." : undefined}
+        >
           {({ field, invalid }) => (
-            <Select value={field.value as string} onValueChange={field.onChange}>
+            <Select value={field.value as string} onValueChange={field.onChange} disabled={editing}>
               <SelectTrigger invalid={invalid}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={COURSE_TYPE.ONLINE}>Online</SelectItem>
@@ -169,6 +206,105 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           )}
         </FormField>
       </FormSection>
+
+      {isOffline ? (
+        <FormSection title="Offline schedule">
+          <FormField<CourseFormValues> name="offlineDetails.startDate" label="Start date" required>
+            {({ field, invalid }) => (
+              <Input type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            )}
+          </FormField>
+          <FormField<CourseFormValues> name="offlineDetails.endDate" label="End date" required>
+            {({ field, invalid }) => (
+              <Input type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            )}
+          </FormField>
+          <FormField<CourseFormValues>
+            name="offlineDetails.studentLimit"
+            label="Seat limit"
+            required
+            description="How many students can enrol in this cohort."
+          >
+            {({ field, invalid }) => (
+              <Input
+                type="number"
+                min={1}
+                {...field}
+                value={(field.value as number) ?? ""}
+                invalid={invalid}
+                onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+              />
+            )}
+          </FormField>
+          <FormField<CourseFormValues> name="offlineDetails.weeklyHours" label="Hours per week">
+            {({ field, invalid }) => (
+              <Input
+                type="number"
+                step="0.5"
+                min={0}
+                {...field}
+                value={(field.value as number) ?? ""}
+                invalid={invalid}
+                onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+              />
+            )}
+          </FormField>
+          <FormField<CourseFormValues> name="offlineDetails.totalHours" label="Total hours">
+            {({ field, invalid }) => (
+              <Input
+                type="number"
+                step="0.5"
+                min={0}
+                {...field}
+                value={(field.value as number) ?? ""}
+                invalid={invalid}
+                onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+              />
+            )}
+          </FormField>
+          <FormField<CourseFormValues> name="offlineDetails.city" label="City">
+            {({ field, invalid }) => (
+              <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            )}
+          </FormField>
+          <FormField<CourseFormValues>
+            name="offlineDetails.addressLine"
+            label="Address"
+            className="md:col-span-2"
+          >
+            {({ field, invalid }) => (
+              <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            )}
+          </FormField>
+        </FormSection>
+      ) : (
+        <FormSection title="Online options">
+          <FormField<CourseFormValues> name="onlineDetails.hasCertificate" label="Certificate on completion">
+            {({ field }) => (
+              <div className="flex h-10 items-center gap-2">
+                <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {field.value ? "Issued" : "Not issued"}
+                </span>
+              </div>
+            )}
+          </FormField>
+          <FormField<CourseFormValues>
+            name="onlineDetails.dripEnabled"
+            label="Drip content"
+            description="Release lessons on a schedule instead of all at once."
+          >
+            {({ field }) => (
+              <div className="flex h-10 items-center gap-2">
+                <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {field.value ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+            )}
+          </FormField>
+        </FormSection>
+      )}
 
       <FormSection title="Media">
         <FormField<CourseFormValues> name="thumbnailMediaId" label="Cover image">
