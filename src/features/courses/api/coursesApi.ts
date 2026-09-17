@@ -14,6 +14,8 @@ interface BrowseArgs extends PageRequest {
 
 interface MyCoursesArgs extends PageRequest {
   status?: CourseStatus;
+  /** Free text over title, subtitle and slug, matched server-side across every page. */
+  q?: string;
 }
 
 interface ModerationArgs extends PageRequest {

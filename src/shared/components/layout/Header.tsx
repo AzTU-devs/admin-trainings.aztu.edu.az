@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Menu, Search } from "lucide-react";
-import { NavLink } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { useAppDispatch } from "@lib/redux/hooks";
 import { setMobileSidebarOpen } from "@lib/redux/uiSlice";
 import { ROUTES } from "@shared/constants/routes";
@@ -75,20 +75,42 @@ export function Header() {
   );
 }
 
+/**
+ * Submits to the course list's server-side search (`?q=`).
+ *
+ * It used to be an uncontrolled input with no form and no handler, so typing into
+ * it and pressing Enter did nothing at all. Courses are the only entity with a
+ * free-text endpoint today, so that is where this goes and what the placeholder
+ * now says — it previously promised students and rooms too. Widening it back out
+ * means giving students and rooms a `q` parameter first, then dispatching on the
+ * match type here.
+ */
 function SearchBox({ inputRef }: { inputRef?: React.Ref<HTMLInputElement> }) {
+  const navigate = useNavigate();
+
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const q = new FormData(e.currentTarget).get("q");
+    const term = typeof q === "string" ? q.trim() : "";
+    // An empty submit goes to the unfiltered list rather than nowhere, which is
+    // what clearing the field and pressing Enter is asking for.
+    navigate(term ? `${ROUTES.tutorCourses}?q=${encodeURIComponent(term)}` : ROUTES.tutorCourses);
+  };
+
   return (
-    <label className="relative w-full max-w-xl">
+    <form onSubmit={submit} role="search" className="relative w-full max-w-xl">
       <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
       <input
         ref={inputRef}
         type="search"
-        placeholder="Search courses, students, rooms…"
-        aria-label="Search the portal"
+        name="q"
+        placeholder="Search courses…"
+        aria-label="Search courses"
         className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-14 text-sm text-gray-900 transition-shadow placeholder:text-gray-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/15 dark:border-gray-800 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-gray-dark"
       />
       <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-gray-500 lg:inline-flex dark:border-gray-700 dark:bg-gray-dark dark:text-gray-400">
         ⌘K
       </kbd>
-    </label>
+    </form>
   );
 }

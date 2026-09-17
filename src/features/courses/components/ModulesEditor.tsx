@@ -13,6 +13,14 @@ import { Checkbox } from "@shared/components/ui/Checkbox";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { Label } from "@shared/components/ui/Label";
 import { FileDropzone } from "@shared/components/forms/FileDropzone";
+import {
+  ANY_MEDIA_ACCEPT,
+  DOCUMENT_ACCEPT,
+  DOCUMENT_FORMATS_LABEL,
+  VIDEO_ACCEPT,
+  VIDEO_FORMATS_LABEL,
+} from "@shared/components/upload/uploadConstraints";
+import { env } from "@shared/config/env";
 import type { LessonContentType } from "@shared/types/lms";
 import {
   Dialog,
@@ -47,25 +55,45 @@ import {
 
 const CONTENT_TYPES = Object.values(LESSON_CONTENT_TYPE);
 
-/** Restrict the dropzone's accepted file types to the lesson's content type. */
-function acceptFor(contentType: LessonContentType): Accept | undefined {
+/**
+ * Restrict the dropzone to the types the API will actually store for this lesson.
+ *
+ * `video/*` and an open picker were both wider than the server: the API accepts
+ * only MP4/WebM/MOV, only PDF for documents, and never SVG or anything
+ * executable. A picker that offers more does not upload more — it just moves the
+ * refusal to after the transfer. See uploadConstraints.
+ */
+function acceptFor(contentType: LessonContentType): Accept {
   switch (contentType) {
     case "VIDEO":
-      return { "video/*": [] };
+      return VIDEO_ACCEPT;
     case "PDF":
-      return { "application/pdf": [".pdf"] };
+      return DOCUMENT_ACCEPT;
     default:
-      return undefined; // TEXT / QUIZ / LIVE_SESSION — allow any attachment
+      return ANY_MEDIA_ACCEPT; // TEXT / QUIZ / LIVE_SESSION — any storable attachment
   }
 }
 
+/**
+ * Per-kind size caps, read from config rather than written in prose: the hint used
+ * to promise "up to 100MB" for every kind, which matched no limit on either side
+ * (the real ceilings are 512 MB video, 25 MB PDF, 10 MB image).
+ */
 const ACCEPT_HINT: Record<LessonContentType, string> = {
-  VIDEO: "Video file (e.g. MP4), up to 100MB",
-  PDF: "PDF document, up to 100MB",
-  TEXT: "Any supporting file, up to 100MB",
-  QUIZ: "Any supporting file, up to 100MB",
-  LIVE_SESSION: "Any supporting file, up to 100MB",
+  VIDEO: `${VIDEO_FORMATS_LABEL}, up to ${env.uploads.maxVideoMb} MB`,
+  PDF: `${DOCUMENT_FORMATS_LABEL} document, up to ${env.uploads.maxDocumentMb} MB`,
+  TEXT: anyMediaHint(),
+  QUIZ: anyMediaHint(),
+  LIVE_SESSION: anyMediaHint(),
 };
+
+function anyMediaHint(): string {
+  return (
+    `Image up to ${env.uploads.maxImageMb} MB, ` +
+    `PDF up to ${env.uploads.maxDocumentMb} MB, ` +
+    `or video up to ${env.uploads.maxVideoMb} MB`
+  );
+}
 
 type ModuleDialogState = { open: boolean; editing: ModuleDto | null };
 type LessonDialogState = { open: boolean; moduleId: UUID; lessonCount: number; editing: LessonDto | null };

@@ -34,21 +34,24 @@ const authSlice = createSlice({
       state.status = "loading";
       state.error = null;
     },
+    /**
+     * The refresh token is intentionally absent: the API returns one in the login body
+     * but the portal ignores it and relies on the httpOnly `ep_portal_rt` cookie, so
+     * nothing here can leak a 30-day credential to a script on this origin.
+     */
     authSuccess(
       state,
       action: PayloadAction<{
         user: AuthUser;
         accessToken: string;
-        refreshToken?: string;
       }>,
     ) {
-      const { user, accessToken, refreshToken } = action.payload;
+      const { user, accessToken } = action.payload;
       state.user = user;
       state.accessToken = accessToken;
       state.status = "authenticated";
       state.error = null;
       appStorage.set(STORAGE_KEYS.accessToken, accessToken);
-      if (refreshToken) appStorage.set(STORAGE_KEYS.refreshToken, refreshToken);
       appStorage.set(STORAGE_KEYS.user, user);
     },
     authFailed(state, action: PayloadAction<string>) {
@@ -61,7 +64,6 @@ const authSlice = createSlice({
       state.status = "unauthenticated";
       state.error = null;
       appStorage.remove(STORAGE_KEYS.accessToken);
-      appStorage.remove(STORAGE_KEYS.refreshToken);
       appStorage.remove(STORAGE_KEYS.user);
     },
     userUpdated(state, action: PayloadAction<Partial<AuthUser>>) {

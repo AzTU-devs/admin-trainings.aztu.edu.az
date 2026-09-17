@@ -15,13 +15,21 @@ RUN npm run build
 # ─────────────────────────── Stage 2: serve ───────────────────────────
 FROM nginx:1.27-alpine AS runtime
 
-# SPA-aware nginx config (history fallback, gzip, security headers).
+# SPA-aware nginx config (history fallback, gzip, /api + /ws proxy, security
+# headers).
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
-# Snippet goes OUTSIDE conf.d — the stock nginx.conf globs `conf.d/*.conf` into the
-# http context, which would load the header list a second time at the wrong level.
-COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+# Snippets go OUTSIDE conf.d — the stock nginx.conf globs `conf.d/*.conf` into the
+# http context, which would load the header lists a second time at the wrong
+# level. All three are needed: nginx.conf includes security-headers.conf (SPA)
+# and api-headers.conf (the /api/ proxy), and each of those includes
+# security-headers-common.conf.
+COPY nginx/security-headers-common.conf \
+     nginx/security-headers.conf \
+     nginx/api-headers.conf \
+     /etc/nginx/snippets/
 
-# Fail the build on a malformed config rather than at container start.
+# Fail the build on a malformed config rather than at container start. This also
+# catches a missing snippet, since `include` resolves at parse time.
 RUN nginx -t
 
 # Static assets from the build stage.

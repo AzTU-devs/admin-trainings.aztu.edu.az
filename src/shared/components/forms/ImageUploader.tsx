@@ -5,6 +5,12 @@ import { toast } from "sonner";
 import { cn } from "@shared/lib/cn";
 import { useUploadMediaMutation } from "@shared/api/mediaApi";
 import { MediaImage } from "@shared/components/ui/MediaImage";
+import {
+  IMAGE_ACCEPT,
+  IMAGE_FORMATS_LABEL,
+  validateImageFile,
+} from "@shared/components/upload/uploadConstraints";
+import { env } from "@shared/config/env";
 import type { UUID } from "@shared/types/lms";
 
 interface ImageUploaderProps {
@@ -25,6 +31,19 @@ export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploa
   const onDrop = useCallback(
     async (accepted: File[]) => {
       if (accepted.length === 0) return;
+
+      // Size is checked here rather than by the dropzone so an oversized file is
+      // named in the message. Dropping the whole batch on one bad file is
+      // deliberate: uploading three of four images and reporting a failure leaves
+      // the caller unsure which ids it now holds.
+      const tooBig = accepted
+        .map((f) => validateImageFile(f, env.uploads.maxImageMb))
+        .find((msg): msg is string => msg !== null);
+      if (tooBig) {
+        toast.error(tooBig);
+        return;
+      }
+
       try {
         const uploaded = await Promise.all(accepted.map((f) => uploadMedia(f).unwrap()));
         onChange([...value, ...uploaded.map((m) => m.id)]);
@@ -36,11 +55,19 @@ export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploa
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { "image/*": [] },
+    // The API's allowlist, not `image/*`: SVG is an XML document that can carry a
+    // script and stored media is served under this portal's own origin, so the
+    // server refuses it. Offering it here only delays the rejection.
+    accept: IMAGE_ACCEPT,
     multiple: true,
     disabled: disabled || isLoading,
     onDrop,
-    onDropRejected: () => toast.error("Only image files are accepted"),
+    onDropRejected: (rejections) =>
+      toast.error(
+        rejections[0]?.file
+          ? `${rejections[0].file.name} is not a supported image. Use ${IMAGE_FORMATS_LABEL}.`
+          : `Only images are accepted. Use ${IMAGE_FORMATS_LABEL}.`,
+      ),
   });
 
   const remove = (id: UUID) => onChange(value.filter((v) => v !== id));

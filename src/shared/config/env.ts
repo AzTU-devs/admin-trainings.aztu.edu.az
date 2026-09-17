@@ -41,7 +41,10 @@ export const env = {
     timeoutMs: num("VITE_API_TIMEOUT_MS", 30_000),
   },
   auth: {
-    storage: str("VITE_AUTH_TOKEN_STORAGE", "localStorage") as TokenStorage,
+    // sessionStorage is the fallback, not localStorage: if the variable is ever
+    // missing from a build environment the access token must die with the tab
+    // rather than silently start persisting on disk on the SUPER_ADMIN surface.
+    storage: str("VITE_AUTH_TOKEN_STORAGE", "sessionStorage") as TokenStorage,
     refreshBeforeExpiryS: num("VITE_REFRESH_BEFORE_EXPIRY_S", 60),
     /**
      * DEV ONLY — skips ProtectedRoute and injects a synthetic super-user.
@@ -50,10 +53,17 @@ export const env = {
      */
     bypass: import.meta.env.PROD ? false : bool("VITE_AUTH_BYPASS", false),
   },
+  /**
+   * Client-side pre-checks only — the server enforces the real ceilings. The
+   * defaults mirror the backend's `app.uploads.max-*-mb` and nginx's
+   * `client_max_body_size`, so all three agree even if a build environment
+   * forgets the variables. Raising one here without raising the other two just
+   * moves the failure from an instant message to a late, opaque 413.
+   */
   uploads: {
     maxImageMb: num("VITE_UPLOAD_MAX_IMAGE_MB", 10),
-    maxVideoMb: num("VITE_UPLOAD_MAX_VIDEO_MB", 2048),
-    chunkSizeMb: num("VITE_UPLOAD_CHUNK_SIZE_MB", 5),
+    maxVideoMb: num("VITE_UPLOAD_MAX_VIDEO_MB", 512),
+    maxDocumentMb: num("VITE_UPLOAD_MAX_DOCUMENT_MB", 25),
   },
   features: {
     wsNotifications: bool("VITE_ENABLE_WS_NOTIFICATIONS", true),

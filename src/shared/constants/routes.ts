@@ -14,7 +14,6 @@ export const ROUTES = {
   tutorCourses: "/tutor/courses",
   tutorCourseNew: "/tutor/courses/new",
   tutorCourseEdit: (id: string | number = ":id") => `/tutor/courses/${id}`,
-  tutorTrainings: "/tutor/trainings",
   tutorEnrollments: "/tutor/enrollments",
   tutorStudents: "/tutor/students",
   tutorRoomRequests: "/tutor/room-requests",

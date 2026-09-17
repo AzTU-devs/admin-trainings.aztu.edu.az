@@ -72,13 +72,6 @@ export const MENU_GROUPS: MenuGroup[] = [
         roles: [ROLES.TUTOR],
       },
       {
-        id: "trainings",
-        label: "Trainings",
-        icon: GraduationCap,
-        path: ROUTES.tutorTrainings,
-        roles: [ROLES.TUTOR],
-      },
-      {
         id: "enrollments",
         label: "Enrollments",
         icon: ClipboardCheck,

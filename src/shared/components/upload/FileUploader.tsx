@@ -17,8 +17,12 @@ interface FileUploaderProps {
 }
 
 /**
- * Generic drag-and-drop file picker. Controlled — owner manages the list and
- * actual upload (e.g. via TUS, multipart, or a presigned URL).
+ * Generic drag-and-drop file picker for an arbitrary `accept` map. Controlled:
+ * it hands the caller a list of Files and never transfers anything itself.
+ *
+ * It carries no allowlist of its own, so a caller that uploads to the media API
+ * must pass an `accept` from `uploadConstraints` — a browser wildcard such as
+ * `image/*` would offer types the API refuses (see that module on SVG).
  */
 export function FileUploader({
   value = [],

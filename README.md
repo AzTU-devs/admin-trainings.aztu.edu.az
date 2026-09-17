@@ -1,14 +1,30 @@
 # AzTU Portal — Admin & Tutor Frontend
 
-Frontend for the **Azerbaijan Technical University (AzTU)** LMS portal.
+Staff frontend for the **Azerbaijan Technical University (AzTU)** LMS. Students never see
+this app: they use the public site at `trainings.aztu.edu.az`. The backend is the Spring Boot
+API at `api-trainings.aztu.edu.az`.
 
-Used by three roles:
+Three roles share one build, and the sidebar is filtered per role from a single typed menu
+spec ([src/shared/components/navigation/menu.ts](src/shared/components/navigation/menu.ts)):
 
-- **TUTOR** — manage courses, trainings, videos, modules, enrollments, students, request rooms
-- **ADMIN** — approve tutors, manage rooms / categories / pricing, approve room requests, moderate courses, dashboards, manage notifications
-- **SUPER_ADMIN** — audit logs, system monitoring, API logs, security
+- **TUTOR** — courses (online and offline), modules & lessons, the video library, enrollments,
+  own students, room browsing and booking requests, own approval status
+- **ADMIN** — tutor approvals, rooms, room pricing rules, booking requests, categories, users,
+  course moderation, analytics, notification broadcasts
+- **SUPER_ADMIN** — everything an admin sees, plus audit logs, API logs, security monitoring
+  and system health
 
-The backend is **Spring Boot**.
+There is **no separate "Trainings" module**. Offline delivery is a course with
+`courseType=OFFLINE` and an `offlineDetails` block (dates, weekly and total hours, student
+limit, city, address), edited on the normal course pages.
+
+Three companion documents are kept current and are worth reading before planning work:
+
+| Document | What it answers |
+| --- | --- |
+| [GAP_REPORT.md](./GAP_REPORT.md) | Which endpoints exist, which screens use them, and what is genuinely still missing |
+| [PHASES.md](./PHASES.md) | What is built, per phase, with the unfinished lines left unticked |
+| [DEPLOY.md](./DEPLOY.md) | Docker build, the nginx `/api` proxy, TLS expectations, upload body limits |
 
 ---
 
@@ -16,18 +32,20 @@ The backend is **Spring Boot**.
 
 | Concern              | Library                                              |
 | -------------------- | ---------------------------------------------------- |
-| Build                | Vite                                                 |
+| Build                | Vite 6                                               |
 | Framework            | React 19 + TypeScript                                |
 | Styling              | Tailwind CSS v4 + AzTU theme tokens                  |
-| Primitives           | Radix UI + CVA (hand-rolled shadcn-style)            |
+| Primitives           | Radix UI + CVA (hand-rolled, shadcn-style)           |
 | Routing              | React Router v7                                      |
-| Server state         | RTK Query                                            |
+| Server state         | RTK Query (axios baseQuery)                          |
 | Client state         | Redux Toolkit                                        |
-| HTTP                 | Axios (interceptors: auth, refresh, error normalize) |
+| HTTP                 | Axios (interceptors: auth, silent refresh, error normalization) |
 | Forms                | react-hook-form + zod                                |
 | Tables               | TanStack Table v8                                    |
+| Realtime             | STOMP over WebSocket (notifications)                 |
 | Notifications        | sonner                                               |
 | Icons                | lucide-react                                         |
+| Tests                | Vitest + Testing Library                             |
 
 ---
 
@@ -36,20 +54,24 @@ The backend is **Spring Boot**.
 ```
 src/
   app/                    # composition root
-    providers/            # Redux, RTK Query, Theme, Toaster, ErrorBoundary
-    router/               # AppRouter, route guards
+    providers/            # Redux, Helmet, Toaster, ErrorBoundary, auth bootstrap
+    router/               # ProtectedRoute, RoleGuard (the route table lives in App.tsx)
   features/               # business modules — one folder per capability
-    auth/  dashboard/  courses/  trainings/  videos/
-    enrollments/  students/  rooms/  room-requests/
-    categories/  users/  tutors/  moderation/  analytics/
-    notifications/  audit-logs/  system-monitoring/
-    api-logs/  security/
+    analytics/  api-logs/  audit-logs/  auth/  categories/  courses/
+    dashboard/  enrollments/  moderation/  notifications/  profile/
+    room-requests/  rooms/  security/  students/  system-monitoring/
+    tutors/  users/  videos/
   shared/                 # cross-feature primitives (no business logic)
-    components/{ui,layout,feedback,forms,tables,upload,charts,navigation,data-display}
-    hooks/  lib/  utils/  constants/  types/  config/
-  lib/                    # 3rd-party config
+    api/  config/  constants/  lib/  types/
+    components/{ui,layout,forms,upload,tables,navigation,feedback,data-display}
+  lib/                    # 3rd-party wiring
     axios/  query/  redux/  storage/
+  test/                   # Vitest setup
 ```
+
+A feature folder holds only what that feature needs: `api/` (RTK Query endpoints), `pages/`,
+and `components/`, `schemas/`, `types/`, `hooks/`, `store/` where they apply. Anything two
+features would both want belongs in `shared/`.
 
 ### Path aliases
 
@@ -71,7 +93,8 @@ src/
 | `brand-500`        | `#1a5ba5` | hover / focus                    |
 | `aztu-gold-500`    | `#c8a951` | accent (badges, highlights)      |
 
-Defined in [src/index.css](src/index.css).
+Full ramps are defined as Tailwind v4 theme tokens in [src/index.css](src/index.css). Use the
+token classes (`bg-brand-700`, `text-aztu-gold-500`), never a raw hex.
 
 ---
 
@@ -79,38 +102,53 @@ Defined in [src/index.css](src/index.css).
 
 | File                | Purpose                            |
 | ------------------- | ---------------------------------- |
-| `.env.example`      | template (committed)               |
+| `.env.example`      | template, with the reasoning per variable (committed) |
 | `.env.development`  | dev defaults (committed)           |
 | `.env.production`   | prod defaults (committed)          |
-| `.env.local`        | machine secrets (gitignored)       |
+| `.env.local`        | machine overrides (gitignored)     |
 
-Access only through the typed loader: `import { env } from "@shared/config/env"`.
+Read env only through the typed loader: `import { env } from "@shared/config/env"`. Every
+default and coercion lives there, so a variable missing from a build environment becomes a
+documented fallback rather than `undefined` deep inside a component.
 
----
+Two things about these files are deliberate rather than incidental:
 
-## Build phases
+- **Nothing here is a secret.** Every `VITE_*` value is inlined into the browser bundle at
+  build time and is readable by anyone who loads the app.
+- **The access token lives in `sessionStorage`** (`VITE_AUTH_TOKEN_STORAGE`), so it dies with
+  the tab. The refresh token is never in web storage at all — the API keeps it in an httpOnly
+  cookie and `httpClient` refreshes against that.
 
-This project is being built in phases. See [PHASES.md](./PHASES.md).
+### Upload ceilings
 
-- **Phase 1 — Foundation & Branding** *(current)*
-- Phase 2 — Core Infrastructure (axios, RTK, RTK Query, error boundary)
-- Phase 3 — Auth & RBAC
-- Phase 4 — Modern Layout & Navigation
-- Phase 5 — Reusable Primitives (DataTable, FormField, Modal, Uploaders)
-- Phase 6 — Tutor Module
-- Phase 7 — Admin Module
-- Phase 8 — Super Admin Module
-- Phase 9 — Notifications
-- Phase 10 — DX / Ops (Docker, CI, Husky, Vitest)
+`VITE_UPLOAD_MAX_IMAGE_MB` (10) and `VITE_UPLOAD_MAX_VIDEO_MB` (512) are **client-side
+pre-checks** so an oversized or unsupported file is refused instantly instead of after a long
+upload and an opaque 413. The real enforcement is the API's `app.uploads.max-*-mb` plus its
+signature-based allowlist, and nginx's `client_max_body_size 550m` sits above both. Raising one
+of the three without the others just moves where the failure happens — see the upload section
+of [GAP_REPORT.md](./GAP_REPORT.md).
+
+The picker's accepted types mirror the API allowlist exactly
+([src/shared/components/upload/uploadConstraints.ts](src/shared/components/upload/uploadConstraints.ts)):
+JPEG, PNG, GIF, WebP, AVIF for images and MP4, WebM, QuickTime for video. SVG is excluded on
+both sides, because it is an XML document that can carry a script and stored media is served
+under the portal's own origin.
 
 ---
 
 ## Scripts
 
 ```bash
-npm run dev         # vite dev server
-npm run build       # tsc -b && vite build
-npm run typecheck   # tsc -b --noEmit
-npm run lint        # eslint .
-npm run preview     # serve built dist/
+npm run dev          # vite dev server
+npm run build        # tsc -b && vite build
+npm run typecheck    # tsc -b --noEmit
+npm run lint         # eslint .
+npm run format       # prettier --write .
+npm run test         # vitest (watch)
+npm run test:ci      # vitest --run
+npm run preview      # serve built dist/
 ```
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs typecheck · lint · test · build
+on every push and pull request to `main`/`develop`, then builds the Docker image on push.
+`lint-staged` is configured but Husky is not installed, so nothing currently runs pre-commit.

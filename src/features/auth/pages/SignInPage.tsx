@@ -33,7 +33,7 @@ export default function SignInPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { email: "", password: "" },
   });
 
   if (isAuthenticated) return <Navigate to={from} replace />;
@@ -41,13 +41,7 @@ export default function SignInPage() {
   const onSubmit = async (values: LoginFormValues) => {
     try {
       const res = await login(values).unwrap();
-      dispatch(
-        authSuccess({
-          user: res.user,
-          accessToken: res.accessToken,
-          refreshToken: res.refreshToken,
-        }),
-      );
+      dispatch(authSuccess({ user: res.user, accessToken: res.accessToken }));
       toast.success(`Welcome back, ${res.user.fullName.split(" ")[0]}`);
       navigate(from, { replace: true });
     } catch (err) {
@@ -146,15 +140,10 @@ export default function SignInPage() {
                 </div>
               </Field>
 
-              <div className="flex items-center justify-between text-sm">
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    className="size-4 rounded border-gray-300 text-brand-700 focus:ring-brand-500"
-                    {...register("rememberMe")}
-                  />
-                  <span className="text-gray-600 dark:text-gray-400">Remember me</span>
-                </label>
+              {/* No "remember me": the session is deliberately tab-scoped — the access
+                  token lives in sessionStorage and the refresh cookie is not readable
+                  here, so a checkbox promising a persisted login would be a lie. */}
+              <div className="flex items-center justify-end text-sm">
                 <Link
                   to={ROUTES.forgotPassword}
                   className="text-brand-700 dark:text-brand-300 font-medium hover:underline"

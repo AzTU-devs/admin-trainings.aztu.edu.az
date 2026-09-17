@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { Plus, Search } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
@@ -13,31 +13,50 @@ import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
 import { ROUTES } from "@shared/constants/routes";
+import { useDebouncedValue } from "@shared/lib/useDebouncedValue";
 
 type StatusFilter = "ALL" | CourseStatus;
 
 /**
- * Tutor's own courses (all statuses) — backed by `GET /api/portal/courses`,
- * optionally filtered by `?status=`.
+ * Tutor's own courses (all statuses) — backed by `GET /api/portal/courses`.
+ * Both the status tabs and the search box are server-side filters (`?status=`,
+ * `?q=`), so they narrow the whole result set rather than the current page.
  */
 export default function CoursesListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") ?? "";
+
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(urlQuery);
   const [status, setStatus] = useState<StatusFilter>("ALL");
+
+  // The header's search box navigates here with ?q=. Adopting it in an effect
+  // rather than only as useState's initial value matters when this page is
+  // already mounted: a second search from the header changes the URL without
+  // remounting, and initial state would ignore it.
+  useEffect(() => {
+    setSearch(urlQuery);
+    setPage(0);
+  }, [urlQuery]);
+
+  // Debounced, because the query goes to the server on every change. Searching
+  // in the browser instead would only ever look at the ten rows on this page,
+  // so a tutor past page one could not find a course by name.
+  const debouncedSearch = useDebouncedValue(search, 300);
 
   const { data, isFetching } = useListMyCoursesQuery({
     page,
     size: 10,
     status: status === "ALL" ? undefined : status,
+    q: debouncedSearch.trim() || undefined,
   });
 
-  const filtered = useMemo(() => {
-    const rows = data?.content ?? [];
-    if (!search) return rows;
-    const q = search.toLowerCase();
-    return rows.filter((c) => c.title.toLowerCase().includes(q));
-  }, [data, search]);
+  const rows = data?.content ?? [];
+
+  // Drives the empty state's wording: "no courses yet" is wrong and discouraging
+  // when the tutor has plenty and simply mistyped a search.
+  const activeFilter = debouncedSearch.trim().length > 0 || status !== "ALL";
 
   const columns = useMemo<ColumnDef<CourseSummaryDto>[]>(
     () => [
@@ -93,20 +112,27 @@ export default function CoursesListPage() {
         </Tabs>
 
         <Input
-          placeholder="Filter by title…"
+          placeholder="Search title, subtitle or slug…"
           leftIcon={<Search className="size-4" />}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(0);
+          }}
           className="sm:max-w-xs sm:ml-auto"
         />
       </div>
 
       <DataTable<CourseSummaryDto>
-        data={filtered}
+        data={rows}
         columns={columns}
         isLoading={isFetching}
-        emptyTitle="No courses yet"
-        emptyDescription="Create your first course and submit it for review."
+        emptyTitle={activeFilter ? "No matching courses" : "No courses yet"}
+        emptyDescription={
+          activeFilter
+            ? "No course matches this search and status. Try a different term."
+            : "Create your first course and submit it for review."
+        }
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         onRowClick={(row) => navigate(ROUTES.tutorCourseEdit(row.slug))}

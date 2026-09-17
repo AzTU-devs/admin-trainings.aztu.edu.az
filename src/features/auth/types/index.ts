@@ -6,7 +6,6 @@ export type { AuthUser };
 export interface LoginRequest {
   email: string;
   password: string;
-  rememberMe?: boolean;
 }
 
 /** Mirror of backend `PUT /api/auth/me` body. */
@@ -34,7 +33,11 @@ export interface BackendUserDto {
   permissions?: string[];
 }
 
-/** Mirror of backend `AuthTokens`. */
+/**
+ * Mirror of backend `AuthTokens`. `refreshToken` is part of the response (the public
+ * site's BFF reads it from there) but the portal never touches it — the API also sets
+ * it as the httpOnly `ep_portal_rt` cookie, which is the portal's only copy.
+ */
 export interface BackendAuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -49,7 +52,6 @@ export interface BackendAuthTokens {
 export interface LoginResult {
   user: AuthUser;
   accessToken: string;
-  refreshToken: string;
 }
 
 /** Maps a backend UserDto into the app's AuthUser shape. */

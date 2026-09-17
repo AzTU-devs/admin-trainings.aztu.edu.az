@@ -49,7 +49,6 @@ const axiosBaseQuery =
 
 export const TAGS = [
   "Course",
-  "Training",
   "Module",
   "Lesson",
   "Video",

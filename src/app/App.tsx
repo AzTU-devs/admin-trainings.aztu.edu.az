@@ -21,7 +21,6 @@ const CoursesListPage = lazy(() => import("@features/courses/pages/CoursesListPa
 const CourseNewPage = lazy(() => import("@features/courses/pages/CourseNewPage"));
 const CourseEditPage = lazy(() => import("@features/courses/pages/CourseEditPage"));
 const ApprovalsPage = lazy(() => import("@features/courses/pages/ApprovalsPage"));
-const TrainingsListPage = lazy(() => import("@features/trainings/pages/TrainingsListPage"));
 const EnrollmentsListPage = lazy(() => import("@features/enrollments/pages/EnrollmentsListPage"));
 const StudentsListPage = lazy(() => import("@features/students/pages/StudentsListPage"));
 const TutorRoomRequestsPage = lazy(() => import("@features/room-requests/pages/TutorRoomRequestsPage"));
@@ -88,7 +87,6 @@ export default function App() {
                 <Route path={ROUTES.tutorCourses} element={<CoursesListPage />} />
                 <Route path={ROUTES.tutorCourseNew} element={<CourseNewPage />} />
                 <Route path={ROUTES.tutorCourseEdit()} element={<CourseEditPage />} />
-                <Route path={ROUTES.tutorTrainings} element={<TrainingsListPage />} />
                 <Route path={ROUTES.tutorEnrollments} element={<EnrollmentsListPage />} />
                 <Route path={ROUTES.tutorStudents} element={<StudentsListPage />} />
                 <Route path={ROUTES.tutorRooms} element={<BrowseRoomsPage />} />

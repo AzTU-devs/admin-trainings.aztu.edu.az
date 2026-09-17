@@ -10,10 +10,13 @@
 # host process and `ufw allow/deny 8081` behaves as expected.
 #
 # nginx listens on 8081 directly (see nginx/nginx.conf) since there is no port
-# mapping to translate 80 to 8081.
+# mapping to translate 80 to 8081. It speaks plain HTTP: nothing in this repo
+# terminates TLS — see the "TLS / reverse proxy" section of DEPLOY.md.
 #
 # This is a static SPA: every VITE_* is inlined into the bundle at build time,
-# so changing one requires `up -d --build`, never just a restart.
+# so changing one requires `up -d --build`, never just a restart. That includes
+# VITE_UPLOAD_MAX_VIDEO_MB, which must stay in step with the backend's
+# UPLOAD_MAX_VIDEO_MB and with client_max_body_size in nginx/nginx.conf.
 
 services:
   admin:
@@ -37,6 +40,12 @@ services:
 
     # See note above. `ports:` is ignored under host networking.
     network_mode: host
+
+    # nginx drops its workers from root to the `nginx` user by calling setuid,
+    # which no_new_privs does not touch — but it does close the setuid-binary
+    # escalation path if anything else in the image is ever exec'd.
+    security_opt:
+      - no-new-privileges:true
 
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]

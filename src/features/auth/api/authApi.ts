@@ -1,5 +1,4 @@
 import { baseApi } from "@lib/query/baseApi";
-import { appStorage, STORAGE_KEYS } from "@lib/storage";
 import {
   toAuthUser,
   type BackendAuthTokens,
@@ -19,19 +18,24 @@ export const authApi = baseApi.injectEndpoints({
         data: { email: body.email, password: body.password },
         skipAuth: true,
       }),
+      // res.refreshToken is dropped on purpose — see BackendAuthTokens.
       transformResponse: (res: BackendAuthTokens): LoginResult => ({
         user: toAuthUser(res.user),
         accessToken: res.accessToken,
-        refreshToken: res.refreshToken,
       }),
       invalidatesTags: ["Me"],
     }),
 
+    /**
+     * Sends no token: the API reads it from the `ep_portal_rt` cookie (httpClient is
+     * credentialed) and clears that cookie in the same response, so the server-side
+     * revocation and the browser-side cleanup cannot drift apart.
+     */
     logout: build.mutation<void, void>({
       query: () => ({
         url: "/auth/logout",
         method: "POST",
-        data: { refreshToken: appStorage.get<string>(STORAGE_KEYS.refreshToken) },
+        data: {},
       }),
     }),
 
