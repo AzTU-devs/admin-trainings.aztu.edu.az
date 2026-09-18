@@ -38,7 +38,7 @@ must then include this app's origin.
 
 The notification stream is STOMP over WebSocket. The SPA derives its URL from
 `VITE_API_BASE_URL` by stripping the trailing `/api`, so with the same-origin
-default it connects to `wss://admin-trainings.aztu.edu.az/ws` — **the server
+default it connects to `wss://dashboard-trainings.aztu.edu.az/ws` — **the server
 root, not under `/api`**. `nginx/nginx.conf` has a dedicated `location /ws`
 block for it.
 
@@ -49,7 +49,7 @@ swallows WebSocket errors and reconnects forever:
   `index.html` with a 200, and never upgrades.
 - **This origin missing from the backend's `CORS_ALLOWED_ORIGINS`** — Spring
   origin-checks the WebSocket handshake against that same list even though REST
-  needs no CORS entry here. Add `https://admin-trainings.aztu.edu.az` to
+  needs no CORS entry here. Add `https://dashboard-trainings.aztu.edu.az` to
   `CORS_ALLOWED_ORIGINS` in the API's `.env`.
 
 ## Upload sizes: three numbers that must agree
@@ -113,7 +113,7 @@ token storage, feature flags. See [.env.example](.env.example) for the full list
 **Nothing in this repo terminates TLS.** The container listens on plain HTTP on
 `8081` under host networking. Something in front of it — the university's
 ingress, or an nginx/Caddy on this host — has to serve
-`https://admin-trainings.aztu.edu.az` and proxy to `127.0.0.1:8081`.
+`https://dashboard-trainings.aztu.edu.az` and proxy to `127.0.0.1:8081`.
 
 What that terminator owns:
 
@@ -170,7 +170,7 @@ one.
 While the portal is still plain HTTP the notification socket is `ws://`, not
 `wss://`. The SPA CSP allows that — `connect-src 'self'` covers a same-host,
 same-port `ws:` URL under CSP3 — so nothing needs loosening for the interim. Note
-that the extra literal `wss://admin-trainings.aztu.edu.az` in
+that the extra literal `wss://dashboard-trainings.aztu.edu.az` in
 [nginx/security-headers.conf](nginx/security-headers.conf) carries no port and so
 only ever matches 443; replace it if the portal is served from another hostname.
 
@@ -208,7 +208,7 @@ the header of `docker-compose.prod.yml`.
   only symptom is a white flash before dark mode applies.
 - **`/api/` responses are served with `default-src 'none'; sandbox
   allow-downloads`.** The proxy makes the backend same-origin, so
-  `https://admin-trainings.aztu.edu.az/api/media/{id}/content` is a portal URL.
+  `https://dashboard-trainings.aztu.edu.az/api/media/{id}/content` is a portal URL.
   The backend validates upload types, sends `nosniff` and a
   `Content-Disposition`; this is the second layer, so that a script-bearing file
   served from that path can never act as a document on the portal's origin. CSP
