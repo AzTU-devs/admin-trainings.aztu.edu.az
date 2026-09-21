@@ -20,7 +20,7 @@ export default function StudentsListPage() {
   const columns = useMemo<ColumnDef<Student>[]>(
     () => [
       {
-        header: "Student",
+        header: "İştirakçi",
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
             <Avatar size="sm">
@@ -50,9 +50,9 @@ export default function StudentsListPage() {
 
   return (
     <>
-      <PageHeader title="Students" description="Everyone who has enrolled in one of your courses." />
+      <PageHeader title="İştirakçilər" description="Everyone who has enrolled in one of your courses." />
       <Input
-        placeholder="Search students…"
+        placeholder="Search İştirakçilər…"
         leftIcon={<Search className="size-4" />}
         value={search}
         onChange={(e) => { setSearch(e.target.value); setPage(0); }}
@@ -62,8 +62,8 @@ export default function StudentsListPage() {
         data={data?.content ?? []}
         columns={columns}
         isLoading={isFetching}
-        emptyTitle="No students yet"
-        emptyDescription="Once students enroll in your courses, they'll appear here."
+        emptyTitle="No İştirakçilər yet"
+        emptyDescription="Once someone enrolls in your courses, they'll appear here."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         getRowId={(r) => String(r.id)}

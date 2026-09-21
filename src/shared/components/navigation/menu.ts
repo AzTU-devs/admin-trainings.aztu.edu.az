@@ -80,7 +80,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: "students",
-        label: "Students",
+        label: "İştirakçilər",
         icon: Users,
         path: ROUTES.tutorStudents,
         roles: [ROLES.TUTOR],
@@ -119,6 +119,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     id: "admin",
     label: "Administration",
     items: [
+      {
+        id: "admin-courses",
+        label: "Courses",
+        icon: BookOpen,
+        path: ROUTES.adminCourses,
+        roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+      },
       {
         id: "tutors",
         label: "Tutors",

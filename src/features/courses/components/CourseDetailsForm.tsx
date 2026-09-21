@@ -29,9 +29,15 @@ interface Props {
   editing?: boolean;
   onSubmit: (values: CourseFormValues) => Promise<unknown>;
   submitLabel?: string;
+  /**
+   * Extra sections rendered above the submit button — the admin create screen
+   * uses it for the teaching roster, which the backend takes alongside these
+   * fields but which is not part of the course itself.
+   */
+  extra?: React.ReactNode;
 }
 
-export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save" }: Props) {
+export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save", extra }: Props) {
   const [uploadMedia] = useUploadMediaMutation();
 
   const form = useForm<CourseFormValues>({
@@ -223,7 +229,7 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
             name="offlineDetails.studentLimit"
             label="Seat limit"
             required
-            description="How many students can enrol in this cohort."
+            description="How many İştirakçilər can enrol in this cohort."
           >
             {({ field, invalid }) => (
               <Input
@@ -359,6 +365,8 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} maxLength={3} />}
         </FormField>
       </FormSection>
+
+      {extra}
 
       <div className="flex justify-end pt-2">
         <Button type="submit" loading={form.formState.isSubmitting}>{submitLabel}</Button>

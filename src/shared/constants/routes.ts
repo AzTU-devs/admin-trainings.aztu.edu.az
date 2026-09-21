@@ -23,6 +23,11 @@ export const ROUTES = {
 
   // Admin
   adminTutors: "/admin/tutors",
+  adminCourses: "/admin/courses",
+  adminCourseNew: "/admin/courses/new",
+  adminCourseEdit: (id: string | number = ":id") => `/admin/courses/${id}`,
+  adminCourseParticipants: (courseId: string | number = ":courseId") =>
+    `/admin/courses/${courseId}/participants`,
   adminRooms: "/admin/rooms",
   adminCategories: "/admin/categories",
   adminRoomPricing: "/admin/room-pricing",

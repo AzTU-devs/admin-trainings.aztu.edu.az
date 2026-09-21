@@ -2,9 +2,11 @@ import { baseApi } from "@lib/query/baseApi";
 import type { ApiPage, PageRequest } from "@shared/types/api";
 import type { BookingDecision, CourseStatus, CourseType, UUID } from "@shared/types/lms";
 import type {
+  AdminCreateCourseRequest,
   CourseDto,
   CourseSummaryDto,
   CreateCourseRequest,
+  SetCourseTutorsRequest,
   UpdateCourseRequest,
 } from "@features/courses/types";
 
@@ -21,6 +23,20 @@ interface MyCoursesArgs extends PageRequest {
 interface ModerationArgs extends PageRequest {
   status?: CourseStatus;
 }
+
+/**
+ * Cache keys an admin write touches. Keyed off the course id rather than the
+ * response body so the lists still refresh for a write that answers with less
+ * than a full course, and the public slug entry is dropped too whenever the
+ * response tells us the slug.
+ */
+const adminCourseTags = (id: UUID, res?: CourseDto): { type: "Course"; id: string }[] => [
+  { type: "Course", id },
+  { type: "Course", id: "MODERATION" },
+  { type: "Course", id: "MINE" },
+  { type: "Course", id: "PUBLIC-LIST" },
+  ...(res ? [{ type: "Course" as const, id: res.slug }] : []),
+];
 
 export const coursesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -83,6 +99,33 @@ export const coursesApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: "Course", id }],
     }),
 
+    /* Admin authoring — any course, any tutor, any status. Distinct from the
+       tutor endpoints above, which are bounded by `course:update_own`. */
+    createAdminCourse: build.mutation<CourseDto, AdminCreateCourseRequest>({
+      query: (body) => ({ url: "/admin/courses", method: "POST", data: body }),
+      invalidatesTags: [
+        { type: "Course", id: "MODERATION" },
+        { type: "Course", id: "MINE" },
+        { type: "Course", id: "PUBLIC-LIST" },
+      ],
+    }),
+    updateAdminCourse: build.mutation<CourseDto, { id: UUID; body: UpdateCourseRequest }>({
+      query: ({ id, body }) => ({ url: `/admin/courses/${id}`, method: "PATCH", data: body }),
+      invalidatesTags: (res, _e, arg) => adminCourseTags(arg.id, res),
+    }),
+    publishCourse: build.mutation<CourseDto, UUID>({
+      query: (id) => ({ url: `/admin/courses/${id}/publish`, method: "POST" }),
+      invalidatesTags: (res, _e, id) => adminCourseTags(id, res),
+    }),
+    unpublishCourse: build.mutation<CourseDto, UUID>({
+      query: (id) => ({ url: `/admin/courses/${id}/unpublish`, method: "POST" }),
+      invalidatesTags: (res, _e, id) => adminCourseTags(id, res),
+    }),
+    setCourseTutors: build.mutation<CourseDto, { id: UUID; body: SetCourseTutorsRequest }>({
+      query: ({ id, body }) => ({ url: `/admin/courses/${id}/tutors`, method: "PUT", data: body }),
+      invalidatesTags: (res, _e, arg) => adminCourseTags(arg.id, res),
+    }),
+
     /* Admin moderation (single-course decision). */
     decideCourse: build.mutation<CourseDto, { id: UUID; decision: BookingDecision; note?: string }>({
       query: ({ id, ...body }) => ({ url: `/admin/courses/${id}/decision`, method: "POST", data: body }),
@@ -111,6 +154,11 @@ export const {
   useLazyGetAdminCourseByIdQuery,
   useCreateCourseMutation,
   useUpdateCourseMutation,
+  useCreateAdminCourseMutation,
+  useUpdateAdminCourseMutation,
+  usePublishCourseMutation,
+  useUnpublishCourseMutation,
+  useSetCourseTutorsMutation,
   useSubmitForReviewMutation,
   useArchiveCourseMutation,
   useDecideCourseMutation,

@@ -21,6 +21,12 @@ const CoursesListPage = lazy(() => import("@features/courses/pages/CoursesListPa
 const CourseNewPage = lazy(() => import("@features/courses/pages/CourseNewPage"));
 const CourseEditPage = lazy(() => import("@features/courses/pages/CourseEditPage"));
 const ApprovalsPage = lazy(() => import("@features/courses/pages/ApprovalsPage"));
+const AdminCoursesListPage = lazy(() => import("@features/courses/pages/AdminCoursesListPage"));
+const AdminCourseNewPage = lazy(() => import("@features/courses/pages/AdminCourseNewPage"));
+const AdminCourseEditPage = lazy(() => import("@features/courses/pages/AdminCourseEditPage"));
+const CourseParticipantsPage = lazy(
+  () => import("@features/participants/pages/CourseParticipantsPage"),
+);
 const EnrollmentsListPage = lazy(() => import("@features/enrollments/pages/EnrollmentsListPage"));
 const StudentsListPage = lazy(() => import("@features/students/pages/StudentsListPage"));
 const TutorRoomRequestsPage = lazy(() => import("@features/room-requests/pages/TutorRoomRequestsPage"));
@@ -97,6 +103,10 @@ export default function App() {
 
               {/* Admin */}
               <Route element={<RoleGuard roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN]} />}>
+                <Route path={ROUTES.adminCourses} element={<AdminCoursesListPage />} />
+                <Route path={ROUTES.adminCourseNew} element={<AdminCourseNewPage />} />
+                <Route path={ROUTES.adminCourseEdit()} element={<AdminCourseEditPage />} />
+                <Route path={ROUTES.adminCourseParticipants()} element={<CourseParticipantsPage />} />
                 <Route path={ROUTES.adminTutors} element={<AdminTutorsPage />} />
                 <Route path={ROUTES.adminRooms} element={<RoomsListPage />} />
                 <Route path={ROUTES.adminRoomPricing} element={<RoomPricingPage />} />

@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Plus, Search } from "lucide-react";
-import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
-import { Badge } from "@shared/components/ui/Badge";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
-import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { courseColumns } from "@features/courses/components/courseColumns";
 import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
@@ -58,28 +56,7 @@ export default function CoursesListPage() {
   // when the tutor has plenty and simply mistyped a search.
   const activeFilter = debouncedSearch.trim().length > 0 || status !== "ALL";
 
-  const columns = useMemo<ColumnDef<CourseSummaryDto>[]>(
-    () => [
-      {
-        header: "Title",
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 dark:text-white truncate">{row.original.title}</p>
-            <p className="text-xs text-gray-500 truncate">{row.original.subtitle ?? row.original.slug}</p>
-          </div>
-        ),
-      },
-      { header: "Status", cell: ({ row }) => <CourseStatusBadge status={row.original.status} /> },
-      { header: "Type", accessorKey: "courseType" },
-      { header: "Level", accessorKey: "level" },
-      { header: "Enrolled", cell: ({ row }) => row.original.enrolledCount.toLocaleString() },
-      {
-        header: "Price",
-        cell: ({ row }) => (row.original.free ? <Badge tone="success">Free</Badge> : `${row.original.price} ${row.original.currency}`),
-      },
-    ],
-    [],
-  );
+  const columns = useMemo(() => courseColumns(), []);
 
   return (
     <>

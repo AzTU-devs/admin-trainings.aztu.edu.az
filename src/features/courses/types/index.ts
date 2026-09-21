@@ -64,6 +64,14 @@ export interface OfflineDetailsDto {
   addressLine?: string;
 }
 
+/** Mirror of backend CourseTutorDto — one tutor on a course's teaching roster. */
+export interface CourseTutorDto {
+  tutorId: UUID;
+  displayName?: string;
+  /** The single tutor allowed to edit this course. */
+  authorized: boolean;
+}
+
 /** Mirror of backend CourseDto (full detail). */
 export interface CourseDto {
   id: UUID;
@@ -89,6 +97,8 @@ export interface CourseDto {
   enrolledCount: number;
   tutorId: UUID;
   tutorDisplayName?: string;
+  /** Full teaching roster; `tutorId` above is the one authorised to edit. */
+  tutors: CourseTutorDto[];
   categoryIds: UUID[];
   tagIds: UUID[];
   onlineDetails?: OnlineDetailsDto;
@@ -165,3 +175,21 @@ export interface OfflineDetailsRequest {
 export type UpdateCourseRequest = Partial<
   Omit<CreateCourseRequest, "slug" | "courseType">
 >;
+
+/**
+ * Mirror of backend AdminCreateCourseRequest. The tutors are stated explicitly
+ * rather than inferred from the caller: an admin has no tutor profile of their
+ * own, and the course belongs to the university whoever teaches it.
+ */
+export interface AdminCreateCourseRequest {
+  course: CreateCourseRequest;
+  tutorIds: UUID[];
+  /** The tutor allowed to edit the course. Must be one of `tutorIds`. */
+  authorizedTutorId: UUID;
+}
+
+/** Mirror of backend SetCourseTutorsRequest — a full roster replacement. */
+export interface SetCourseTutorsRequest {
+  tutorIds: UUID[];
+  authorizedTutorId: UUID;
+}
