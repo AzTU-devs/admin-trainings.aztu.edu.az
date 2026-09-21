@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { DataTable } from "@shared/components/tables/DataTable";
-import { Avatar, AvatarFallback } from "@shared/components/ui/Avatar";
 import { Button } from "@shared/components/ui/Button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@shared/components/ui/Tabs";
 import {
@@ -17,6 +16,9 @@ import {
 } from "@shared/components/ui/Dialog";
 import { Textarea } from "@shared/components/ui/Textarea";
 import { TutorStatusBadge } from "@features/tutors/components/TutorStatusBadge";
+import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
+import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
+import { EditExpertProfileDialog } from "@features/tutors/components/EditExpertProfileDialog";
 import {
   useDecideTutorMutation,
   useListTutorsQuery,
@@ -24,15 +26,12 @@ import {
 import type { TutorProfileDto } from "@features/tutors/types";
 import { TUTOR_APPROVAL_STATUS, type TutorApprovalStatus } from "@shared/types/lms";
 
-function initials(first: string, last: string) {
-  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "?";
-}
-
 export default function AdminTutorsPage() {
   const [tab, setTab] = useState<TutorApprovalStatus>(TUTOR_APPROVAL_STATUS.PENDING);
   const [page, setPage] = useState(0);
   const [decision, setDecision] = useState<{ tutor: TutorProfileDto; kind: "APPROVED" | "REJECTED" } | null>(null);
   const [note, setNote] = useState("");
+  const [editing, setEditing] = useState<TutorProfileDto | null>(null);
 
   const { data, isFetching } = useListTutorsQuery({ status: tab, page, size: 10 });
   const [decide, { isLoading: deciding }] = useDecideTutorMutation();
@@ -43,14 +42,18 @@ export default function AdminTutorsPage() {
         header: "Tutor",
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <Avatar size="sm">
-              <AvatarFallback>{initials(row.original.firstName, row.original.lastName)}</AvatarFallback>
-            </Avatar>
+            <TutorAvatar
+              size="sm"
+              src={tutorAvatarSrc(row.original)}
+              name={`${row.original.firstName ?? ""} ${row.original.lastName ?? ""}`}
+            />
             <div className="min-w-0">
               <p className="font-medium text-gray-900 dark:text-white truncate">
                 {row.original.firstName} {row.original.lastName}
               </p>
-              <p className="text-xs text-gray-500 truncate">{row.original.headline ?? "—"}</p>
+              <p className="text-xs text-gray-500 truncate">
+                {[row.original.academicTitle, row.original.headline].filter(Boolean).join(" · ") || "—"}
+              </p>
             </div>
           </div>
         ),
@@ -61,13 +64,17 @@ export default function AdminTutorsPage() {
       {
         id: "actions",
         header: "",
-        cell: ({ row }) =>
-          row.original.approvalStatus === TUTOR_APPROVAL_STATUS.PENDING ? (
-            <div className="flex items-center gap-1.5 justify-end">
-              <Button size="sm" variant="secondary" leftIcon={<Check className="size-4" />} onClick={() => { setDecision({ tutor: row.original, kind: "APPROVED" }); setNote(""); }}>Approve</Button>
-              <Button size="sm" variant="danger" leftIcon={<X className="size-4" />} onClick={() => { setDecision({ tutor: row.original, kind: "REJECTED" }); setNote(""); }}>Reject</Button>
-            </div>
-          ) : null,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1.5 justify-end">
+            <Button size="sm" variant="ghost" leftIcon={<Pencil className="size-4" />} onClick={() => setEditing(row.original)}>Edit</Button>
+            {row.original.approvalStatus === TUTOR_APPROVAL_STATUS.PENDING && (
+              <>
+                <Button size="sm" variant="secondary" leftIcon={<Check className="size-4" />} onClick={() => { setDecision({ tutor: row.original, kind: "APPROVED" }); setNote(""); }}>Approve</Button>
+                <Button size="sm" variant="danger" leftIcon={<X className="size-4" />} onClick={() => { setDecision({ tutor: row.original, kind: "REJECTED" }); setNote(""); }}>Reject</Button>
+              </>
+            )}
+          </div>
+        ),
       },
     ],
     [],
@@ -75,7 +82,7 @@ export default function AdminTutorsPage() {
 
   return (
     <>
-      <PageHeader title="Tutors" description="Review and decide on tutor applications." />
+      <PageHeader title="Tutors" description="Review tutor applications and keep expert profiles up to date." />
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v as TutorApprovalStatus); setPage(0); }}>
         <TabsList className="mb-4">
@@ -132,6 +139,8 @@ export default function AdminTutorsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditExpertProfileDialog tutor={editing} onClose={() => setEditing(null)} />
     </>
   );
 }

@@ -2,12 +2,16 @@ import { Link } from "react-router";
 import { Mail, Phone, Settings as SettingsIcon, ShieldCheck, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Card, CardContent } from "@shared/components/ui/Card";
-import { Avatar } from "@shared/components/ui/Avatar";
 import { Badge } from "@shared/components/ui/Badge";
 import { Button } from "@shared/components/ui/Button";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { useMeProfileQuery } from "@features/auth/api/authApi";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
+import { useGetMyTutorProfileQuery } from "@features/tutors/api/tutorsApi";
+import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
+import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
+import { ExpertProfileSection } from "@features/profile/components/ExpertProfileSection";
 import { ROUTES } from "@shared/constants/routes";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -19,6 +23,10 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function ProfilePage() {
   const { data, isLoading, error } = useMeProfileQuery();
+  const { isTutor } = usePermissions();
+  // Only tutors have an expert profile (and its photo); for anyone else the
+  // request would be a guaranteed 404.
+  const { data: tutor } = useGetMyTutorProfileQuery(undefined, { skip: !isTutor });
 
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
   if (error || !data) {
@@ -26,7 +34,6 @@ export default function ProfilePage() {
   }
 
   const fullName = [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || data.email;
-  const initials = fullName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
   return (
     <>
@@ -43,9 +50,13 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1">
           <CardContent className="pt-6 flex flex-col items-center text-center">
-            <Avatar size="lg" className="size-20 mb-4 bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 items-center justify-center text-xl font-semibold">
-              <span>{initials}</span>
-            </Avatar>
+            <TutorAvatar
+              size="lg"
+              src={tutor ? tutorAvatarSrc(tutor) : null}
+              name={fullName}
+              className="size-20 mb-4"
+              fallbackClassName="bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 text-xl font-semibold"
+            />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{fullName}</h2>
             <p className="text-sm text-gray-500">{data.email}</p>
             <div className="flex flex-wrap justify-center gap-1.5 mt-3">
@@ -82,6 +93,8 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      {isTutor && <ExpertProfileSection />}
     </>
   );
 }
