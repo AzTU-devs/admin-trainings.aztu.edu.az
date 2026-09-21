@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { Slot } from "@radix-ui/react-slot";
+import { Slot, Slottable } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 import { cn } from "@shared/lib/cn";
@@ -71,7 +71,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading ? <Loader2 className="size-4 animate-spin" /> : leftIcon}
-        {children}
+        {/* With asChild, Slot must end up with exactly one element to become.
+            The icons are siblings of that element here, so without Slottable
+            Slot receives three children and throws "React.Children.only
+            expected to receive a single React element child" — which took down
+            the whole profile page. Slottable marks the element to render as and
+            moves the icons inside it, around its own children. */}
+        {asChild ? <Slottable>{children}</Slottable> : children}
         {!loading && rightIcon}
       </Comp>
     );
