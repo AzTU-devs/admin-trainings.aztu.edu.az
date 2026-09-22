@@ -256,49 +256,47 @@ export function VideoUploader({
           <div
             {...getRootProps()}
             className={cn(
-              "rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors",
-              "border-gray-200 dark:border-gray-700 hover:border-brand-500",
-              isDragActive && "border-brand-500 bg-brand-50 dark:bg-brand-500/10",
-              error && "border-error-400 dark:border-error-500/60",
+              "cursor-pointer rounded-[22px] border-[1.5px] border-dashed p-8 text-center transition-colors duration-200",
+              "border-line-2 bg-paper/60 hover:border-navy/45 hover:bg-navy-tint/40",
+              isDragActive && "border-navy bg-navy-tint",
+              error && "border-danger",
               disabled && "opacity-60 cursor-not-allowed",
             )}
           >
             <input {...getInputProps()} />
-            <div className="mx-auto size-12 rounded-2xl bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 inline-flex items-center justify-center mb-3">
+            <div className="mx-auto mb-3 inline-flex size-12 items-center justify-center rounded-full bg-navy-tint text-navy">
               <VideoIcon className="size-5" />
             </div>
-            <p className="text-sm font-medium text-gray-900 dark:text-white">
+            <p className="text-sm font-semibold text-ink">
               {isDragActive ? "Drop the video" : "Drag & drop video, or click to browse"}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="mt-1 text-[12.5px] text-ink-3">
               {VIDEO_FORMATS_LABEL} · up to {maxSizeMb} MB
             </p>
           </div>
           {error && (
-            <p role="alert" className="text-xs text-error-600 dark:text-error-400">
+            <p role="alert" className="text-[12.5px] font-medium text-danger">
               {error}
             </p>
           )}
         </div>
       ) : (
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+        <div className="space-y-3 rounded-[22px] border border-line bg-surface p-4">
           {preview && (
-            <video src={preview} controls className="w-full rounded-xl bg-black aspect-video" />
+            <video src={preview} controls className="aspect-video w-full rounded-2xl bg-black" />
           )}
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 inline-flex items-center justify-center shrink-0">
+            <div className={cn("inline-flex size-10 shrink-0 items-center justify-center rounded-full", status === "done" ? "bg-ok-tint text-ok" : "bg-navy-tint text-navy")}>
               {status === "done" ? <CheckCircle2 className="size-5" /> : <VideoIcon className="size-5" />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+              <p className="truncate text-sm font-semibold text-ink">
                 {picked ? picked.name : "Uploaded video"}
               </p>
               <p
                 className={cn(
-                  "text-xs",
-                  status === "error"
-                    ? "text-error-600 dark:text-error-400"
-                    : "text-gray-500 dark:text-gray-400",
+                  "text-[12.5px] tabular-nums",
+                  status === "error" ? "font-medium text-danger" : "text-ink-3",
                 )}
               >
                 {statusLabel()}
@@ -309,7 +307,7 @@ export function VideoUploader({
                 <button
                   type="button"
                   onClick={startUpload}
-                  className="size-9 rounded-xl bg-brand-700 hover:bg-brand-800 text-white inline-flex items-center justify-center"
+                  className="inline-flex size-9 items-center justify-center rounded-full bg-navy text-on-navy transition-colors hover:bg-navy-hover"
                   aria-label={status === "selected" ? "Start upload" : "Restart upload"}
                 >
                   <Play className="size-4" />
@@ -319,7 +317,7 @@ export function VideoUploader({
                 <button
                   type="button"
                   onClick={() => controllerRef.current?.abort()}
-                  className="size-9 rounded-xl border border-gray-200 dark:border-gray-700 inline-flex items-center justify-center text-gray-700 dark:text-gray-200"
+                  className="inline-flex size-9 items-center justify-center rounded-full bg-surface text-ink shadow-[inset_0_0_0_1px_var(--line-2)] transition-shadow hover:shadow-[inset_0_0_0_1px_var(--ink-3)]"
                   aria-label="Stop upload"
                 >
                   <Square className="size-4" />
@@ -328,7 +326,7 @@ export function VideoUploader({
               <button
                 type="button"
                 onClick={cancel}
-                className="size-9 rounded-xl text-gray-400 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 inline-flex items-center justify-center"
+                className="inline-flex size-9 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-danger-tint hover:text-danger"
                 aria-label="Cancel"
               >
                 <X className="size-4" />
@@ -336,9 +334,9 @@ export function VideoUploader({
             </div>
           </div>
           {status === "uploading" && (
-            <div className="h-1.5 rounded-full bg-gray-100 dark:bg-white/5 overflow-hidden">
+            <div className="h-2 overflow-hidden rounded-full bg-ink/7">
               <div
-                className="h-full bg-brand-700 transition-[width] duration-200"
+                className="h-full rounded-full bg-navy transition-[width] duration-200"
                 style={{ width: `${progress}%` }}
               />
             </div>

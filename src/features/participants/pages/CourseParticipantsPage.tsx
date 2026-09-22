@@ -3,13 +3,12 @@ import { Link, useParams } from "react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, UserMinus } from "lucide-react";
+import { Plus, UserMinus, UserPlus, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
-import { Badge } from "@shared/components/ui/Badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@shared/components/ui/Avatar";
+import { StatusBadge } from "@shared/components/ui/Badge";
 import { DataTable } from "@shared/components/tables/DataTable";
 import {
   Dialog,
@@ -22,7 +21,7 @@ import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { ROUTES } from "@shared/constants/routes";
-import { ENROLLMENT_STATUS, type EnrollmentStatus } from "@shared/types/lms";
+import { ENROLLMENT_STATUS } from "@shared/types/lms";
 import type { NormalizedError } from "@lib/axios/httpClient";
 import { useGetAdminCourseByIdQuery } from "@features/courses/api/coursesApi";
 import {
@@ -35,18 +34,7 @@ import {
   type AddParticipantFormValues,
 } from "@features/participants/schemas/participant.schema";
 import type { CourseParticipantDto } from "@features/participants/types";
-
-const TONE: Record<EnrollmentStatus, "neutral" | "warning" | "success" | "danger" | "brand"> = {
-  [ENROLLMENT_STATUS.PENDING_PAYMENT]: "warning",
-  [ENROLLMENT_STATUS.ACTIVE]: "brand",
-  [ENROLLMENT_STATUS.COMPLETED]: "success",
-  [ENROLLMENT_STATUS.CANCELLED]: "danger",
-  [ENROLLMENT_STATUS.REFUNDED]: "neutral",
-};
-
-function initials(name: string) {
-  return name.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-}
+import { DateCell, PersonCell } from "@features/participants/components/PersonCell";
 
 export default function CourseParticipantsPage() {
   // Route param carries the course id — ROUTES.adminCourseParticipants(courseId).
@@ -81,40 +69,32 @@ export default function CourseParticipantsPage() {
       {
         header: "İştirakçi",
         cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <Avatar size="sm">
-              <AvatarImage src={row.original.avatarUrl} />
-              <AvatarFallback>{initials(row.original.fullName)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="font-medium text-gray-900 dark:text-white truncate">{row.original.fullName}</p>
-              <p className="text-xs text-gray-500 truncate">{row.original.email}</p>
-            </div>
-          </div>
+          <PersonCell name={row.original.fullName} email={row.original.email} avatarUrl={row.original.avatarUrl} />
         ),
       },
       {
         header: "Status",
-        cell: ({ row }) => <Badge tone={TONE[row.original.status]} dot>{row.original.status.replace(/_/g, " ")}</Badge>,
+        // The shared status pill: "Active" is the same green as on Users.
+        cell: ({ row }) => <StatusBadge value={row.original.status} />,
       },
-      { header: "Source", cell: ({ row }) => row.original.source ? row.original.source.replace(/_/g, " ") : "—" },
-      { header: "Enrolled", cell: ({ row }) => new Date(row.original.enrolledAt).toLocaleDateString() },
+      {
+        header: "Source",
+        // How the seat was granted is a system value, not a state: a quiet
+        // neutral pill with no status dot.
+        cell: ({ row }) =>
+          row.original.source ? (
+            <StatusBadge value={row.original.source} dot={false} size="sm" />
+          ) : (
+            <span className="text-ink-3">—</span>
+          ),
+      },
+      { header: "Enrolled", cell: ({ row }) => <DateCell value={row.original.enrolledAt} /> },
       {
         id: "actions",
         header: "",
         cell: ({ row }) => (
           <div className="flex justify-end">
-            {/* A cancelled enrollment is already off the course — removing it again does nothing. */}
-            {row.original.status !== ENROLLMENT_STATUS.CANCELLED && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Remove İştirakçi"
-                onClick={() => setRemoving(row.original)}
-              >
-                <UserMinus className="size-4 text-error-500" />
-              </Button>
-            )}
+            <RemoveButton participant={row.original} onRemove={() => setRemoving(row.original)} />
           </div>
         ),
       },
@@ -122,13 +102,15 @@ export default function CourseParticipantsPage() {
     [],
   );
 
-  if (!courseId) return <p className="text-sm text-error-600">Course not found.</p>;
+  if (!courseId) return <p className="text-sm text-danger">Course not found.</p>;
 
   return (
     <>
       <PageHeader
         title="İştirakçilər"
         description={course ? `Enrolled on “${course.title}”.` : "Manage who is enrolled on this course."}
+        // The course crumb names the course instead of a clipped id.
+        crumbLabel={course?.title}
         actions={<Button leftIcon={<Plus className="size-4" />} onClick={openAdd}>Add İştirakçi</Button>}
       />
 
@@ -141,11 +123,14 @@ export default function CourseParticipantsPage() {
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         getRowId={(r) => r.userId}
+        renderMobileRow={(p) => (
+          <ParticipantPhoneRow participant={p} onRemove={() => setRemoving(p)} />
+        )}
       />
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent size="sm">
-          <DialogHeader>
+        <DialogContent size="sm" aria-describedby={undefined}>
+          <DialogHeader icon={<UserPlus />}>
             <DialogTitle>Add İştirakçi</DialogTitle>
           </DialogHeader>
           <Form
@@ -190,17 +175,20 @@ export default function CourseParticipantsPage() {
             </FormSection>
 
             {unknownEmail && (
-              <div className="rounded-xl bg-warning-50 p-3 text-sm dark:bg-warning-500/10">
-                <p className="font-medium text-gray-900 dark:text-white">No account for {unknownEmail}</p>
-                <p className="mt-0.5 text-gray-600 dark:text-gray-300">
-                  Create the account first, then add them to this course.
-                </p>
-                <Link
-                  to={ROUTES.adminUsers}
-                  className="mt-2 inline-block font-medium text-brand-700 hover:underline dark:text-brand-300"
-                >
-                  Create the account →
-                </Link>
+              <div className="flex gap-3 rounded-[18px] bg-warn-tint p-4 text-sm">
+                <UserX aria-hidden className="mt-0.5 size-[18px] shrink-0 text-warn" />
+                <div className="min-w-0">
+                  <p className="break-words font-semibold text-ink">No account for {unknownEmail}</p>
+                  <p className="mt-0.5 leading-relaxed text-ink-2">
+                    Create the account first, then add them to this course.
+                  </p>
+                  <Link
+                    to={ROUTES.adminUsers}
+                    className="mt-2.5 inline-flex items-center font-semibold text-navy decoration-gold decoration-2 underline-offset-4 hover:underline"
+                  >
+                    Create the account →
+                  </Link>
+                </div>
               </div>
             )}
 
@@ -234,5 +222,49 @@ export default function CourseParticipantsPage() {
         }}
       />
     </>
+  );
+}
+
+/** Remove from the course — the row's one action, on the table and on a phone. */
+function RemoveButton({ participant, onRemove }: { participant: CourseParticipantDto; onRemove: () => void }) {
+  // A cancelled enrollment is already off the course — removing it again does nothing.
+  if (participant.status === ENROLLMENT_STATUS.CANCELLED) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Remove İştirakçi"
+      onClick={onRemove}
+      className="text-ink-3 hover:bg-danger-tint hover:text-danger"
+    >
+      <UserMinus className="size-4" />
+    </Button>
+  );
+}
+
+/**
+ * A participant on a phone (below md), where the table's columns do not fit:
+ * the person with the remove button beside them, then status, source and the
+ * enrolment date on one meta line.
+ */
+function ParticipantPhoneRow({ participant: p, onRemove }: { participant: CourseParticipantDto; onRemove: () => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <PersonCell name={p.fullName} email={p.email} avatarUrl={p.avatarUrl} />
+        </div>
+        <div className="-mr-1.5 shrink-0">
+          <RemoveButton participant={p} onRemove={onRemove} />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12.5px] text-ink-3">
+        <StatusBadge value={p.status} size="sm" />
+        {p.source && <StatusBadge value={p.source} dot={false} size="sm" />}
+        <span className="flex gap-1.5">
+          Enrolled <DateCell value={p.enrolledAt} />
+        </span>
+      </div>
+    </div>
   );
 }

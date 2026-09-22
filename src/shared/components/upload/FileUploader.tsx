@@ -67,21 +67,21 @@ export function FileUploader({
       <div
         {...getRootProps()}
         className={cn(
-          "rounded-2xl border-2 border-dashed p-6 text-center transition-colors cursor-pointer",
-          "border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400",
-          isDragActive && "border-brand-500 bg-brand-50 dark:bg-brand-500/10",
-          isDragReject && "border-error-400 bg-error-50 dark:bg-error-500/10",
+          "cursor-pointer rounded-[20px] border-[1.5px] border-dashed p-6 text-center transition-colors duration-200",
+          "border-line-2 bg-paper/60 hover:border-navy/45 hover:bg-navy-tint/40",
+          isDragActive && "border-navy bg-navy-tint",
+          isDragReject && "border-danger bg-danger-tint",
           disabled && "opacity-60 cursor-not-allowed",
         )}
       >
         <input {...getInputProps()} />
-        <div className="mx-auto size-12 rounded-2xl bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 inline-flex items-center justify-center mb-3">
+        <div className="mx-auto mb-3 inline-flex size-12 items-center justify-center rounded-full bg-navy-tint text-navy">
           <UploadCloud className="size-5" />
         </div>
-        <p className="text-sm font-medium text-gray-900 dark:text-white">
+        <p className="text-sm font-semibold text-ink">
           {isDragActive ? "Drop the file here" : "Drag & drop, or click to browse"}
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        <p className="mt-1 text-[12.5px] text-ink-3">
           {helperText ?? `Up to ${maxSizeMb} MB${multiple ? ` · max ${maxFiles} files` : ""}`}
         </p>
       </div>
@@ -91,18 +91,20 @@ export function FileUploader({
           {value.map((file, i) => (
             <li
               key={`${file.name}-${i}`}
-              className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2.5"
+              className="flex items-center gap-3 rounded-2xl border border-line bg-surface py-2.5 pl-2.5 pr-3"
             >
-              <FileIcon className="size-4 text-gray-400 shrink-0" />
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-paper-2 text-ink-3">
+                <FileIcon className="size-4" />
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{formatBytes(file.size)}</p>
+                <p className="truncate text-sm font-medium text-ink">{file.name}</p>
+                <p className="font-mono text-[11.5px] text-ink-3">{formatBytes(file.size)}</p>
               </div>
               <button
                 type="button"
                 onClick={() => remove(i)}
                 aria-label={`Remove ${file.name}`}
-                className="size-8 rounded-lg text-gray-400 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 inline-flex items-center justify-center"
+                className="inline-flex size-8 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-danger-tint hover:text-danger"
               >
                 <X className="size-4" />
               </button>

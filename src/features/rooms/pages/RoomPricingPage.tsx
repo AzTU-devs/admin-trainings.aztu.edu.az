@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { CircleDollarSign, DoorOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
-import { Card, CardContent } from "@shared/components/ui/Card";
+import { Card } from "@shared/components/ui/Card";
+import { Badge } from "@shared/components/ui/Badge";
+import { DataTable } from "@shared/components/tables/DataTable";
+import { cn } from "@shared/lib/cn";
 import { Input } from "@shared/components/ui/Input";
 import { Label } from "@shared/components/ui/Label";
 import { Spinner } from "@shared/components/ui/Spinner";
@@ -24,6 +28,11 @@ import {
   SelectValue,
 } from "@shared/components/ui/Select";
 import { useListRoomsQuery } from "@features/rooms/api/roomsApi";
+import { RoomVisual } from "@features/rooms/components/RoomVisual";
+import { CapacityPill } from "@features/rooms/components/CapacityPill";
+import { RoomStatusBadge } from "@features/rooms/components/RoomStatusBadge";
+import { formatAmount } from "@features/rooms/lib/money";
+import { QUIET_DANGER } from "@features/users/components/IconAction";
 import {
   useCreatePricingRuleMutation,
   useDeletePricingRuleMutation,
@@ -130,6 +139,36 @@ export default function RoomPricingPage() {
     }
   };
 
+  const selected = rooms?.content.find((r) => r.id === roomId);
+
+  // Highest priority first — the order in which the rules are matched.
+  const sortedRules = useMemo(() => [...(rules ?? [])].sort((a, b) => b.priority - a.priority), [rules]);
+
+  // Display-only columns (no accessors), so the table adds no sorting of its own.
+  const columns: ColumnDef<RoomPricingRuleDto>[] = [
+    {
+      id: "name",
+      header: "Name",
+      cell: ({ row }) => <span className="block min-w-[10rem] font-semibold text-ink">{row.original.name}</span>,
+    },
+    { id: "rate", header: "Hourly rate", cell: ({ row }) => <RuleRate rule={row.original} /> },
+    { id: "day", header: "Day", cell: ({ row }) => <RuleDay rule={row.original} /> },
+    { id: "time", header: "Time", cell: ({ row }) => <RuleTime rule={row.original} /> },
+    { id: "valid", header: "Valid", cell: ({ row }) => <RuleValid rule={row.original} /> },
+    {
+      id: "priority",
+      header: "Priority",
+      cell: ({ row }) => <PriorityPill>{row.original.priority}</PriorityPill>,
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <RuleActions onEdit={() => openEdit(row.original)} onDelete={() => setToDelete(row.original)} />
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -142,74 +181,119 @@ export default function RoomPricingPage() {
         }
       />
 
-      <div className="mb-4 max-w-sm">
-        <Label>Room</Label>
-        {roomsLoading ? (
-          <div className="py-2"><Spinner size={4} /></div>
+      <div className="space-y-5">
+        {/* Room picker: the rules below belong to this room, so it reads as
+            the table's subject — its picture, the select, and its facts. */}
+        <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-5 sm:p-5">
+          {selected ? (
+            <RoomVisual room={selected} thumb className="hidden size-16 rounded-[18px] sm:block" />
+          ) : (
+            <span aria-hidden className="icon-tile hidden size-16 rounded-[18px] sm:grid">
+              <DoorOpen className="size-6" />
+            </span>
+          )}
+          <div className="w-full min-w-0 sm:max-w-md">
+            <Label htmlFor="pricing-room">Room</Label>
+            {roomsLoading ? (
+              <div className="py-2"><Spinner size={4} /></div>
+            ) : (
+              <Select value={roomId} onValueChange={setRoomId}>
+                <SelectTrigger id="pricing-room"><SelectValue placeholder="Select a room" /></SelectTrigger>
+                <SelectContent>
+                  {(rooms?.content ?? []).map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name} · {r.roomNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          {selected && (
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">
+              <CapacityPill capacity={selected.capacity} />
+              <RoomStatusBadge status={selected.status} />
+              <p className="whitespace-nowrap pl-1 text-[13px] text-ink-3">
+                <span className="font-display text-[18px] font-extrabold tracking-[-0.02em] text-ink tabular-nums">
+                  {formatAmount(selected.hourlyRate)} {selected.currency}
+                </span>{" "}
+                / hour
+              </p>
+            </div>
+          )}
+        </Card>
+
+        {!roomId ? (
+          <EmptyState Icon={DoorOpen} title="No room selected" description="Choose a room to manage its pricing rules." />
+        ) : !rulesLoading && (rules?.length ?? 0) === 0 ? (
+          // The header's "Add rule" is the page's one primary; this is the same
+          // action repeated where the eye lands, so it stays secondary.
+          <EmptyState
+            Icon={CircleDollarSign}
+            title="No pricing rules"
+            description="This room falls back to its base hourly rate. Add a rule for time-bounded pricing."
+            action={
+              <Button variant="secondary" leftIcon={<Plus className="size-4" />} onClick={openCreate}>
+                Add rule
+              </Button>
+            }
+          />
         ) : (
-          <Select value={roomId} onValueChange={setRoomId}>
-            <SelectTrigger><SelectValue placeholder="Select a room" /></SelectTrigger>
-            <SelectContent>
-              {(rooms?.content ?? []).map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {r.name} · {r.roomNumber}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            {/* Phones: each rule as a row with its facts labelled, like the
+                old rule cards — seven columns do not fit 390px. */}
+            <div className="md:hidden">
+              {rulesLoading ? (
+                <div className="rounded-2xl border border-line bg-surface px-6 py-16">
+                  <Spinner className="mx-auto" />
+                </div>
+              ) : (
+                <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+                  {sortedRules.map((rule) => (
+                    <li key={rule.id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-ink">{rule.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <RuleRate rule={rule} />
+                            <PriorityPill>
+                              <span className="font-sans font-semibold">priority</span>&nbsp;{rule.priority}
+                            </PriorityPill>
+                          </div>
+                        </div>
+                        <RuleActions
+                          className="-mr-2 -mt-1.5"
+                          onEdit={() => openEdit(rule)}
+                          onDelete={() => setToDelete(rule)}
+                        />
+                      </div>
+                      <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-[14px] bg-paper-2 px-3.5 py-3 text-[13px]">
+                        <dt className="text-ink-3">Day</dt>
+                        <dd><RuleDay rule={rule} /></dd>
+                        <dt className="text-ink-3">Time</dt>
+                        <dd className="min-w-0 break-words"><RuleTime rule={rule} /></dd>
+                        <dt className="text-ink-3">Valid</dt>
+                        <dd className="min-w-0 break-words"><RuleValid rule={rule} /></dd>
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <DataTable<RoomPricingRuleDto>
+              className="hidden md:block"
+              data={sortedRules}
+              columns={columns}
+              isLoading={rulesLoading}
+              getRowId={(r) => r.id}
+            />
+          </>
         )}
       </div>
 
-      {!roomId ? (
-        <EmptyState title="No room selected" description="Choose a room to manage its pricing rules." />
-      ) : rulesLoading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
-      ) : (rules?.length ?? 0) === 0 ? (
-        <EmptyState
-          title="No pricing rules"
-          description="This room falls back to its base hourly rate. Add a rule for time-bounded pricing."
-          action={<Button leftIcon={<Plus className="size-4" />} onClick={openCreate}>Add rule</Button>}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[...(rules ?? [])]
-            .sort((a, b) => b.priority - a.priority)
-            .map((rule) => (
-              <Card key={rule.id}>
-                <CardContent className="pt-5 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">{rule.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {rule.hourlyRate} {rule.currency} / hour
-                      </p>
-                    </div>
-                    <span className="text-xs rounded-md bg-gray-100 dark:bg-white/5 px-2 py-1 text-gray-600 dark:text-gray-300">
-                      priority {rule.priority}
-                    </span>
-                  </div>
-                  <dl className="text-xs text-gray-500 space-y-1">
-                    <Row label="Day" value={rule.dayOfWeek === undefined || rule.dayOfWeek === null ? "Any" : DAYS[rule.dayOfWeek]} />
-                    <Row label="Time" value={rule.startTime || rule.endTime ? `${rule.startTime ?? "00:00"}–${rule.endTime ?? "23:59"}` : "All day"} />
-                    <Row label="Valid" value={rule.validFrom || rule.validTo ? `${rule.validFrom ?? "—"} → ${rule.validTo ?? "—"}` : "Always"} />
-                  </dl>
-                  <div className="flex justify-end gap-1.5 pt-1">
-                    <Button variant="ghost" size="sm" leftIcon={<Pencil className="size-4" />} onClick={() => openEdit(rule)}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" leftIcon={<Trash2 className="size-4" />} onClick={() => setToDelete(rule)}>
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-        </div>
-      )}
-
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="md">
-          <DialogHeader>
+        <DialogContent size="md" aria-describedby={undefined}>
+          <DialogHeader icon={<CircleDollarSign />}>
             <DialogTitle>{editing ? "Edit pricing rule" : "New pricing rule"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -289,11 +373,60 @@ export default function RoomPricingPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/* ---- Rule facts, shared by the table cells and the phone rows ---- */
+
+function RuleRate({ rule }: { rule: RoomPricingRuleDto }) {
   return (
-    <div className="flex justify-between gap-3">
-      <dt>{label}</dt>
-      <dd className="text-gray-700 dark:text-gray-300">{value}</dd>
+    <span className="whitespace-nowrap text-[12.5px] text-ink-3">
+      <span className="font-display text-[15px] font-bold tracking-[-0.01em] text-ink tabular-nums">
+        {formatAmount(rule.hourlyRate)} {rule.currency}
+      </span>{" "}
+      / hour
+    </span>
+  );
+}
+
+function RuleDay({ rule }: { rule: RoomPricingRuleDto }) {
+  const any = rule.dayOfWeek === undefined || rule.dayOfWeek === null;
+  return <Badge tone={any ? "neutral" : "brand"}>{any ? "Any" : DAYS[rule.dayOfWeek as number]}</Badge>;
+}
+
+/* Times and dates are technical values: mono, as the API sends them. */
+function RuleTime({ rule }: { rule: RoomPricingRuleDto }) {
+  return rule.startTime || rule.endTime ? (
+    <span className="font-mono text-[12.5px] text-ink">{`${rule.startTime ?? "00:00"}–${rule.endTime ?? "23:59"}`}</span>
+  ) : (
+    <span className="text-ink-3">All day</span>
+  );
+}
+
+function RuleValid({ rule }: { rule: RoomPricingRuleDto }) {
+  return rule.validFrom || rule.validTo ? (
+    <span className="font-mono text-[12.5px] text-ink">{`${rule.validFrom ?? "—"} → ${rule.validTo ?? "—"}`}</span>
+  ) : (
+    <span className="text-ink-3">Always</span>
+  );
+}
+
+function PriorityPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex h-6 min-w-8 items-center justify-center whitespace-nowrap rounded-full bg-gold-tint px-2 font-mono text-[12px] text-gold-ink">
+      {children}
+    </span>
+  );
+}
+
+/** The same quiet edit/delete pair as the rooms table: the bin turns red only on hover or focus. */
+function RuleActions({ onEdit, onDelete, className }: { onEdit: () => void; onDelete: () => void; className?: string }) {
+  return (
+    <div className={cn("flex shrink-0 justify-end gap-1", className)}>
+      <Button variant="ghost" size="sm" leftIcon={<Pencil className="size-4" />} onClick={onEdit}>
+        Edit
+      </Button>
+      {/* The bin only turns red on hover or focus, so a column of rules is not a column of red. */}
+      <Button variant="ghost" size="sm" className={QUIET_DANGER} leftIcon={<Trash2 className="size-4" />} onClick={onDelete}>
+        Delete
+      </Button>
     </div>
   );
 }

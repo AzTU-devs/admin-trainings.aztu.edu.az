@@ -42,14 +42,14 @@ export function MediaImage({ mediaId, alt = "", className }: MediaImageProps) {
 
   if (failed) {
     return (
-      <div className={cn("flex items-center justify-center bg-gray-100 dark:bg-white/5 text-gray-400", className)}>
+      <div className={cn("flex items-center justify-center bg-paper-2 text-ink-3", className)}>
         <ImageOff className="size-6" />
       </div>
     );
   }
   if (!url) {
     return (
-      <div className={cn("flex items-center justify-center bg-gray-100 dark:bg-white/5 text-gray-400", className)}>
+      <div className={cn("flex items-center justify-center bg-paper-2 text-ink-3", className)}>
         <Loader2 className="size-5 animate-spin" />
       </div>
     );

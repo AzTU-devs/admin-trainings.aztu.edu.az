@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { Users } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { Card, CardContent } from "@shared/components/ui/Card";
-import { FormSection } from "@shared/components/forms/Form";
 import { CourseDetailsForm } from "@features/courses/components/CourseDetailsForm";
+import { FormCard } from "@features/courses/components/FormCard";
 import { TutorRosterPicker, type TutorRoster } from "@features/courses/components/TutorRosterPicker";
 import { useCreateAdminCourseMutation } from "@features/courses/api/coursesApi";
 import { ROUTES } from "@shared/constants/routes";
@@ -30,46 +30,46 @@ export default function AdminCourseNewPage() {
         title="New course"
         description="Create a course for the university and assign the tutors who teach it."
       />
-      <Card>
-        <CardContent>
-          <CourseDetailsForm
-            submitLabel="Create course"
-            extra={
-              <FormSection
-                title="Teaching roster"
-                description="Everyone who teaches this course. The nominated editor is the one tutor allowed to change it."
-              >
-                <div className="md:col-span-2">
-                  <TutorRosterPicker
-                    value={roster}
-                    onChange={setRoster}
-                    invalid={attempted && rosterMissing}
-                  />
-                  {attempted && rosterMissing && (
-                    <p className="mt-1.5 text-xs text-error-600">
-                      Assign at least one tutor and nominate the editor.
-                    </p>
-                  )}
-                </div>
-              </FormSection>
+      {/* The form brings its own section cards; the roster is one more.
+          Capped so the two-column fields keep a readable line on wide screens. */}
+      <div className="max-w-[1040px]">
+        <CourseDetailsForm
+          submitLabel="Create course"
+          extra={
+            <FormCard
+              icon={<Users />}
+              title="Teaching roster"
+              description="Everyone who teaches this course. The nominated editor is the one tutor allowed to change it."
+              grid={false}
+            >
+              <TutorRosterPicker
+                value={roster}
+                onChange={setRoster}
+                invalid={attempted && rosterMissing}
+              />
+              {attempted && rosterMissing && (
+                <p className="mt-2 text-[12.5px] font-medium text-danger">
+                  Assign at least one tutor and nominate the editor.
+                </p>
+              )}
+            </FormCard>
+          }
+          onSubmit={async (values) => {
+            setAttempted(true);
+            // The roster sits outside the course schema, so this is the only
+            // place it can be enforced; the form surfaces the throw as a toast.
+            if (rosterMissing) {
+              throw new Error("Assign at least one tutor and nominate the editor");
             }
-            onSubmit={async (values) => {
-              setAttempted(true);
-              // The roster sits outside the course schema, so this is the only
-              // place it can be enforced; the form surfaces the throw as a toast.
-              if (rosterMissing) {
-                throw new Error("Assign at least one tutor and nominate the editor");
-              }
-              const created = await createAdminCourse({
-                course: values,
-                tutorIds: roster.tutorIds,
-                authorizedTutorId: roster.authorizedTutorId!,
-              }).unwrap();
-              navigate(ROUTES.adminCourseEdit(created.id));
-            }}
-          />
-        </CardContent>
-      </Card>
+            const created = await createAdminCourse({
+              course: values,
+              tutorIds: roster.tutorIds,
+              authorizedTutorId: roster.authorizedTutorId!,
+            }).unwrap();
+            navigate(ROUTES.adminCourseEdit(created.id));
+          }}
+        />
+      </div>
     </>
   );
 }

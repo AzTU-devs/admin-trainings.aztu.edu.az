@@ -2,7 +2,20 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Accept } from "react-dropzone";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  CircleHelp,
+  Eye,
+  File,
+  FileText,
+  ListTree,
+  Pencil,
+  PlayCircle,
+  Plus,
+  Radio,
+  Trash2,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { Button } from "@shared/components/ui/Button";
@@ -12,6 +25,9 @@ import { Badge } from "@shared/components/ui/Badge";
 import { Checkbox } from "@shared/components/ui/Checkbox";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { Label } from "@shared/components/ui/Label";
+import { cn } from "@shared/lib/cn";
+import { formatEnum } from "@shared/lib/enums";
+import type { HueClass } from "@shared/lib/categoryStyle";
 import { FileDropzone } from "@shared/components/forms/FileDropzone";
 import {
   ANY_MEDIA_ACCEPT,
@@ -95,6 +111,43 @@ function anyMediaHint(): string {
   );
 }
 
+/** The website's curriculum icons, one per kind of lesson. */
+const LESSON_ICON: Record<LessonContentType, LucideIcon> = {
+  VIDEO: PlayCircle,
+  TEXT: FileText,
+  PDF: File,
+  QUIZ: CircleHelp,
+  LIVE_SESSION: Radio,
+};
+
+/** "4:05", or "1:02:05" past an hour — a duration, so it is set in mono. */
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds < 0) return "—";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+/** A lesson's kind (as the API names it) and, when it has one, its preview tag. */
+function LessonTags({ lesson, className }: { lesson: LessonDto; className?: string }) {
+  return (
+    <span className={cn("flex shrink-0 flex-wrap items-center gap-1.5", className)}>
+      {/* Sentence case, like every other enum on the dashboard (formatEnum). */}
+      <Badge tone="neutral" size="sm" humanize>
+        {lesson.contentType}
+      </Badge>
+      {lesson.preview && (
+        <Badge tone="brand" size="sm">
+          <Eye className="size-3" aria-hidden />
+          preview
+        </Badge>
+      )}
+    </span>
+  );
+}
+
 type ModuleDialogState = { open: boolean; editing: ModuleDto | null };
 type LessonDialogState = { open: boolean; moduleId: UUID; lessonCount: number; editing: LessonDto | null };
 
@@ -104,7 +157,14 @@ type LessonDialogState = { open: boolean; moduleId: UUID; lessonCount: number; e
  * module/lesson endpoints (see modulesApi). Mutations invalidate the cached
  * tree so the list stays in sync.
  */
-export function ModulesEditor({ courseId }: { courseId: UUID }) {
+export function ModulesEditor({
+  courseId,
+  hue = "k-navy",
+}: {
+  courseId: UUID;
+  /** The course's category hue; tints the module numbers as on the website. */
+  hue?: HueClass;
+}) {
   const { data: modules, isLoading, isError } = useListModulesQuery(courseId);
 
   const [addModule] = useAddModuleMutation();
@@ -187,7 +247,7 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
   };
 
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
-  if (isError) return <p className="text-sm text-error-600">Could not load modules.</p>;
+  if (isError) return <EmptyState tone="danger" Icon={TriangleAlert} title="Could not load modules." />;
 
   const sorted = [...(modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
 
@@ -201,58 +261,104 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
 
       {sorted.length === 0 ? (
         <EmptyState
+          Icon={ListTree}
           title="No modules yet"
           description="Add your first module to start structuring the course."
         />
       ) : (
-        <ul className="space-y-3">
+        // The website's curriculum: one rounded card per module, its number in
+        // a tile of the course's hue, lessons as hairline rows with a type icon
+        // and the duration in mono — plus the editing controls.
+        <ul className={cn("space-y-3", hue)}>
           {sorted.map((m) => (
-            <li key={m.id} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark p-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-gray-400">#{m.orderIndex}</span>
-                <p className="font-medium text-gray-900 dark:text-white">{m.title}</p>
-                <span className="text-xs text-gray-500 ml-auto">
-                  {m.lessons.length} lesson{m.lessons.length === 1 ? "" : "s"}
-                </span>
-                <Button variant="ghost" size="icon" aria-label="Edit module" onClick={() => openModuleEdit(m)}>
-                  <Pencil className="size-4" />
-                </Button>
-                <Button variant="ghost" size="icon" aria-label="Delete module" onClick={() => setDelModule(m)}>
-                  <Trash2 className="size-4 text-error-500" />
+            <li key={m.id} className="mod !mt-0">
+              <div className="flex items-start gap-4 px-4 py-4 sm:px-5">
+                {/* The module's own order index, as the API stores it (the
+                    editor reorders by it), not its place in the list. */}
+                <span className="num">#{m.orderIndex}</span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p className="break-words text-[16.5px] font-semibold leading-snug text-ink">{m.title}</p>
+                  <p className="mt-0.5 text-[13.5px] text-ink-3">
+                    {m.lessons.length} lesson{m.lessons.length === 1 ? "" : "s"}
+                  </p>
+                  {m.description && (
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-2">{m.description}</p>
+                  )}
+                </div>
+                <div className="-mr-1 flex shrink-0 items-center gap-0.5">
+                  <Button variant="ghost" size="icon" aria-label="Edit module" onClick={() => openModuleEdit(m)}>
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete module"
+                    onClick={() => setDelModule(m)}
+                    className="hover:bg-danger-tint hover:text-danger"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {m.lessons.length > 0 && (
+                <ul>
+                  {[...m.lessons]
+                    .sort((a, b) => a.orderIndex - b.orderIndex)
+                    .map((l) => {
+                      const Icon = LESSON_ICON[l.contentType] ?? FileText;
+                      return (
+                        <li key={l.id} className="lesson gap-3 py-2.5 pl-4 pr-2.5 sm:gap-3.5 sm:pl-5">
+                          <span className="grid w-10 shrink-0 place-items-center text-ink-3" aria-hidden>
+                            <Icon className="size-[18px]" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-ink">
+                              <span className="mr-2 font-mono text-[12px] text-ink-3">#{l.orderIndex}</span>
+                              {l.title}
+                            </span>
+                            {/* On a phone the tags drop under the title. */}
+                            <LessonTags lesson={l} className="mt-1 sm:hidden" />
+                          </span>
+                          <LessonTags lesson={l} className="hidden sm:flex" />
+                          <span className="du ml-2 hidden sm:block">{formatDuration(l.durationSeconds)}</span>
+                          <span className="flex shrink-0 items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Edit lesson"
+                              onClick={() => openLessonEdit(m, l)}
+                              className="size-9"
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Delete lesson"
+                              onClick={() => setDelLesson(l)}
+                              className="size-9 hover:bg-danger-tint hover:text-danger"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </span>
+                        </li>
+                      );
+                    })}
+                </ul>
+              )}
+
+              <div className="border-t border-line px-3 py-2 sm:px-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-navy hover:bg-navy-tint hover:text-navy"
+                  leftIcon={<Plus className="size-4" />}
+                  onClick={() => openLessonCreate(m)}
+                >
+                  Add lesson
                 </Button>
               </div>
-              {m.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{m.description}</p>}
-
-              <ul className="mt-3 space-y-1.5">
-                {[...m.lessons]
-                  .sort((a, b) => a.orderIndex - b.orderIndex)
-                  .map((l) => (
-                    <li key={l.id} className="flex items-center gap-2 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-2">
-                      <span className="text-xs font-mono text-gray-400">#{l.orderIndex}</span>
-                      <span className="text-sm text-gray-900 dark:text-gray-100">{l.title}</span>
-                      <Badge tone="neutral">{l.contentType}</Badge>
-                      {l.preview && <Badge tone="success">preview</Badge>}
-                      <div className="ml-auto flex gap-1">
-                        <Button variant="ghost" size="icon" aria-label="Edit lesson" onClick={() => openLessonEdit(m, l)}>
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" aria-label="Delete lesson" onClick={() => setDelLesson(l)}>
-                          <Trash2 className="size-4 text-error-500" />
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-
-              <Button
-                variant="secondary"
-                size="sm"
-                className="mt-3"
-                leftIcon={<Plus className="size-4" />}
-                onClick={() => openLessonCreate(m)}
-              >
-                Add lesson
-              </Button>
             </li>
           ))}
         </ul>
@@ -260,8 +366,8 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
 
       {/* Module dialog */}
       <Dialog open={moduleDialog.open} onOpenChange={(o) => setModuleDialog((s) => ({ ...s, open: o }))}>
-        <DialogContent size="md">
-          <DialogHeader>
+        <DialogContent size="md" aria-describedby={undefined}>
+          <DialogHeader icon={<ListTree />}>
             <DialogTitle>{moduleDialog.editing ? "Edit module" : "Add module"}</DialogTitle>
           </DialogHeader>
           <Form form={moduleForm} onSubmit={submitModule}>
@@ -285,8 +391,8 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
 
       {/* Lesson dialog */}
       <Dialog open={!!lessonDialog} onOpenChange={(o) => !o && setLessonDialog(null)}>
-        <DialogContent size="md">
-          <DialogHeader>
+        <DialogContent size="md" aria-describedby={undefined}>
+          <DialogHeader icon={<FileText />}>
             <DialogTitle>{lessonDialog?.editing ? "Edit lesson" : "Add lesson"}</DialogTitle>
           </DialogHeader>
           <Form form={lessonForm} onSubmit={submitLesson}>
@@ -301,7 +407,7 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
                   </SelectTrigger>
                   <SelectContent>
                     {CONTENT_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                      <SelectItem key={t} value={t}>{formatEnum(t)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

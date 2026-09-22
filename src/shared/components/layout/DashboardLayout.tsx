@@ -14,8 +14,9 @@ import { useNotificationStream } from "@features/notifications/hooks/useNotifica
  *   │             │                            │
  *   └─────────────┴────────────────────────────┘
  *
- * Sidebar is fixed; the main column shifts via left-padding so the layout
- * remains scrollable without resize jank when the sidebar collapses.
+ * Sidebar is fixed (a floating card, 272px wide or 92px collapsed — keep in
+ * step with Sidebar.tsx); the main column shifts via left-padding so the
+ * layout remains scrollable without resize jank when the sidebar collapses.
  *
  * `overflow-x-clip` on the content column matters: without it a page that
  * renders something wider than the viewport (a table that escapes its scroll
@@ -28,16 +29,16 @@ export function DashboardLayout() {
   useNotificationStream();
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-paper text-ink">
       <Sidebar />
       <div
         className={cn(
-          "min-w-0 overflow-x-clip transition-[padding-left] duration-300 ease-in-out",
-          collapsed ? "lg:pl-[84px]" : "lg:pl-[272px]",
+          "min-w-0 overflow-x-clip transition-[padding-left] duration-300 ease-out",
+          collapsed ? "lg:pl-[92px]" : "lg:pl-[272px]",
         )}
       >
         <Header />
-        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full max-w-[1600px] px-4 pb-12 pt-6 sm:px-6 lg:px-8 lg:pt-8">
           <Outlet />
         </main>
       </div>

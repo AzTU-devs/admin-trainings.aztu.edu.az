@@ -7,6 +7,7 @@ import { Input } from "@shared/components/ui/Input";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
 import { courseColumns } from "@features/courses/components/courseColumns";
+import { COURSE_TABLE_PHONE } from "@features/courses/components/courseCells";
 import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
@@ -104,6 +105,7 @@ export default function CoursesListPage() {
         data={rows}
         columns={columns}
         isLoading={isFetching}
+        // A failed load says so, with a retry, instead of "No courses yet".
         emptyTitle={activeFilter ? "No matching courses" : "No courses yet"}
         emptyDescription={
           activeFilter
@@ -114,6 +116,7 @@ export default function CoursesListPage() {
         onPageChange={setPage}
         onRowClick={(row) => navigate(ROUTES.tutorCourseEdit(row.slug))}
         getRowId={(row) => row.id}
+        className={COURSE_TABLE_PHONE}
       />
     </>
   );

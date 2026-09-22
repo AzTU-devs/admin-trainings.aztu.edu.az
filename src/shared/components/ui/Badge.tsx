@@ -1,22 +1,29 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@shared/lib/cn";
+import { formatEnum, statusTone } from "@shared/lib/enums";
 
+/*
+ * Status and meta labels as Bright pills. Every tone reads a token that swaps
+ * with the theme. `hue` takes the nearest category hue class — pass one in
+ * `className` (e.g. `className="k-data"`) for a subject-coloured pill.
+ */
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold leading-none",
   {
     variants: {
       tone: {
-        neutral: "bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-300",
-        brand: "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300",
-        gold: "bg-aztu-gold-100 text-aztu-gold-700 dark:bg-aztu-gold-500/10 dark:text-aztu-gold-300",
-        success: "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-300",
-        warning: "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300",
-        danger: "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400",
-        outline: "border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300",
+        neutral: "bg-ink/6 text-ink-2",
+        brand: "bg-navy-tint text-navy",
+        gold: "bg-gold-tint text-gold-ink",
+        success: "bg-ok-tint text-ok",
+        warning: "bg-warn-tint text-warn",
+        danger: "bg-danger-tint text-danger",
+        outline: "text-ink-2 shadow-[inset_0_0_0_1px_var(--line-2)]",
+        hue: "bg-k-100 text-k-900",
       },
       size: {
-        sm: "text-[10px] px-2 py-0.5",
-        md: "text-xs px-2.5 py-0.5",
+        sm: "h-5 px-2 text-[11px]",
+        md: "h-6 px-2.5 text-[12px]",
       },
     },
     defaultVariants: { tone: "neutral", size: "md" },
@@ -27,13 +34,51 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {
   dot?: boolean;
+  /**
+   * The child is a raw API enum ("ACTIVE", "ADMIN_GRANT"): show it sentence
+   * case ("Active", "Admin grant"), like every other pill. Same words — see
+   * formatEnum in @shared/lib/enums.
+   */
+  humanize?: boolean;
 }
 
-export function Badge({ className, tone, size, dot, children, ...props }: BadgeProps) {
+export function Badge({ className, tone, size, dot, humanize, children, ...props }: BadgeProps) {
   return (
     <span className={cn(badgeVariants({ tone, size }), className)} {...props}>
-      {dot && <span className="size-1.5 rounded-full bg-current" />}
-      {children}
+      {dot && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />}
+      {humanize && typeof children === "string" ? formatEnum(children) : children}
     </span>
   );
+}
+
+/**
+ * A status value from the API as a pill: sentence case, with the one tone
+ * that value has on every screen (statusTone), and a dot. Pass `tone` only
+ * to override the shared map.
+ *
+ *   <StatusBadge value={user.status} />            // ACTIVE → green "Active"
+ *   <StatusBadge value={e.source} dot={false} />  // FREE → neutral "Free"
+ */
+export function StatusBadge({
+  value,
+  tone,
+  dot = true,
+  ...props
+}: Omit<BadgeProps, "children" | "humanize"> & { value: string }) {
+  return (
+    <Badge tone={tone ?? statusTone(value)} dot={dot} {...props}>
+      {formatEnum(value)}
+    </Badge>
+  );
+}
+
+/**
+ * A raw API enum outside a pill — a table cell, a meta row — in the same
+ * sentence case as `<Badge humanize>`: "ADMIN_GRANT" → "Admin grant",
+ * "ONLINE" → "Online". Same words (formatEnum), only the shouting goes.
+ *
+ *   <EnumText>{course.level}</EnumText>
+ */
+export function EnumText({ children, className }: { children: string; className?: string }) {
+  return <span className={className}>{formatEnum(children)}</span>;
 }

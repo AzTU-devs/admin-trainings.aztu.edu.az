@@ -6,23 +6,35 @@ interface Props {
   description?: string;
   Icon?: LucideIcon;
   action?: React.ReactNode;
+  /**
+   * "danger" / "warning" tint the icon tile, for a query that failed or a
+   * service that is down. Neutral by default.
+   */
+  tone?: "neutral" | "danger" | "warning";
   className?: string;
 }
 
-export function EmptyState({ title, description, Icon = Inbox, action, className }: Props) {
+const TILE: Record<NonNullable<Props["tone"]>, string> = {
+  neutral: "bg-surface text-ink-3 shadow-[0_0_0_1px_var(--line)]",
+  danger: "bg-danger-tint text-danger",
+  warning: "bg-warn-tint text-warn",
+};
+
+/**
+ * A quiet well for "nothing here" and "could not load": an icon tile, one
+ * bold line, one helpful line and an optional action — on the paper-2 tone,
+ * never a dashed box. For a one-line version inside a section, use
+ * <SoftEmpty> from @shared/components/bright.
+ */
+export function EmptyState({ title, description, Icon = Inbox, action, tone = "neutral", className }: Props) {
   return (
-    <div
-      className={cn(
-        "rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 py-12 px-6 text-center",
-        className,
-      )}
-    >
-      <div className="mx-auto size-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 flex items-center justify-center mb-4">
+    <div className={cn("rounded-2xl bg-paper-2 px-6 py-10 text-center", className)}>
+      <div className={cn("mx-auto mb-4 grid size-14 place-items-center rounded-[18px]", TILE[tone])}>
         <Icon className="size-6" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h3>
-      {description && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">{description}</p>}
-      {action && <div className="mt-5">{action}</div>}
+      <h3 className="font-display text-[17px] font-bold tracking-[-0.012em] text-ink">{title}</h3>
+      {description && <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-ink-2">{description}</p>}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   );
 }

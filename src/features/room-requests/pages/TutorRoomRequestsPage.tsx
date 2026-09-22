@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { CalendarPlus, CalendarX, Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
@@ -19,6 +19,13 @@ import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { Input } from "@shared/components/ui/Input";
 import { RoomRequestStatusBadge } from "@features/room-requests/components/RoomRequestStatusBadge";
+import {
+  BookingMobileRow,
+  EndsCell,
+  FeeCell,
+  RoomCell,
+  StartsCell,
+} from "@features/room-requests/components/BookingCells";
 import {
   useCancelRoomBookingMutation,
   useCreateRoomBookingMutation,
@@ -52,47 +59,46 @@ export default function TutorRoomRequestsPage() {
 
   const fmt = (iso: string) => new Date(iso).toLocaleString();
 
+  /** Pending and approved bookings can still be cancelled; the rest have no action. */
+  const cancelAction = useCallback((b: RoomBookingDto) => {
+    const cancellable = b.status === BOOKING_STATUS.PENDING || b.status === BOOKING_STATUS.APPROVED;
+    if (!cancellable) return null;
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        // A calendar with a cross: this cancels the booking, it does not delete a record.
+        leftIcon={<CalendarX className="size-4" />}
+        onClick={(e) => {
+          e.stopPropagation();
+          setToCancel(b);
+        }}
+      >
+        Cancel
+      </Button>
+    );
+  }, []);
+
   const columns = useMemo<ColumnDef<RoomBookingDto>[]>(
     () => [
-      {
-        header: "Room",
-        cell: ({ row }) => (
-          <span className="font-medium text-gray-900 dark:text-white">{row.original.roomName}</span>
-        ),
-      },
-      { header: "Starts", cell: ({ row }) => <span className="text-sm">{fmt(row.original.startsAt)}</span> },
-      { header: "Ends", cell: ({ row }) => <span className="text-sm">{fmt(row.original.endsAt)}</span> },
-      {
-        header: "Fee",
-        cell: ({ row }) => `${row.original.totalFee} ${row.original.currency}`,
-      },
+      { header: "Room", cell: ({ row }) => <RoomCell name={row.original.roomName} roomId={row.original.roomId} /> },
+      { header: "Starts", cell: ({ row }) => <StartsCell booking={row.original} /> },
+      { header: "Ends", cell: ({ row }) => <EndsCell booking={row.original} /> },
+      { header: "Fee", cell: ({ row }) => <FeeCell booking={row.original} /> },
       { header: "Status", cell: ({ row }) => <RoomRequestStatusBadge status={row.original.status} /> },
       {
         header: "",
         id: "actions",
-        cell: ({ row }) => {
-          const cancellable =
-            row.original.status === BOOKING_STATUS.PENDING ||
-            row.original.status === BOOKING_STATUS.APPROVED;
-          if (!cancellable) return null;
-          return (
-            <Button
-              variant="ghost"
-              size="sm"
-              leftIcon={<Trash2 className="size-4" />}
-              onClick={(e) => {
-                e.stopPropagation();
-                setToCancel(row.original);
-              }}
-            >
-              Cancel
-            </Button>
-          );
-        },
+        cell: ({ row }) => <div className="flex justify-end">{cancelAction(row.original)}</div>,
       },
     ],
-    [],
+    [cancelAction],
   );
+
+  const bookings = data?.content ?? [];
+  const pagination = data
+    ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages }
+    : undefined;
 
   return (
     <>
@@ -106,20 +112,23 @@ export default function TutorRoomRequestsPage() {
         }
       />
 
+      {/* Below 768px DataTable shows each row as a card: the booking's
+          tile, room, fee, status and time, with Cancel in reach. */}
       <DataTable<RoomBookingDto>
-        data={data?.content ?? []}
+        data={bookings}
         columns={columns}
         isLoading={isFetching}
         emptyTitle="No bookings yet"
         emptyDescription="Request a classroom with the button above; an admin reviews it."
-        pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
+        pagination={pagination}
         onPageChange={setPage}
         getRowId={(row) => row.id}
+        renderMobileRow={(b) => <BookingMobileRow booking={b} actions={cancelAction(b)} />}
       />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="md">
-          <DialogHeader>
+        <DialogContent size="md" aria-describedby={undefined}>
+          <DialogHeader icon={<CalendarPlus />}>
             <DialogTitle>New room booking</DialogTitle>
           </DialogHeader>
           <Form

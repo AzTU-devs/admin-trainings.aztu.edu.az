@@ -1,15 +1,11 @@
-import { type LucideIcon } from "lucide-react";
+import { useMemo } from "react";
+import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
+import { hash, tileSvg } from "@shared/lib/art";
+import type { HueClass } from "@shared/lib/categoryStyle";
 import { cn } from "@shared/lib/cn";
+import { Svg } from "@shared/components/bright/Svg";
 
 type Accent = "brand" | "gold" | "success" | "warning" | "danger";
-
-const ACCENTS: Record<Accent, string> = {
-  brand: "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300",
-  gold: "bg-aztu-gold-100 text-aztu-gold-700 dark:bg-aztu-gold-500/10 dark:text-aztu-gold-300",
-  success: "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-300",
-  warning: "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300",
-  danger: "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400",
-};
 
 interface Props {
   label: string;
@@ -17,38 +13,99 @@ interface Props {
   delta?: string;
   deltaTone?: "neutral" | "up" | "down";
   Icon: LucideIcon;
+  /**
+   * Kept for existing callers. Only "danger" still changes the colour (a red
+   * field, so an alarm reads as one); the others are decorative and give way
+   * to the hue rotation below.
+   */
   accent?: Accent;
+  /**
+   * The colour family (a `k-*` class from @shared/lib/categoryStyle). Leave it
+   * out and cards take different families by their position in the row.
+   */
+  hue?: HueClass;
   /** Renders a placeholder bar in place of the value while the query is in flight. */
   loading?: boolean;
   className?: string;
 }
 
-export function StatCard({ label, value, delta, deltaTone = "neutral", Icon, accent = "brand", loading, className }: Props) {
+/** The geometric motifs a stat card can carry in its corner, picked by label. */
+const MOTIFS = ["rings", "dots", "quarter", "bars", "blocks", "half", "stairs", "circle"] as const;
+
+/**
+ * A stat as a small category tile: a hue colour field with a drafted motif in
+ * the corner, the number in Albert Sans, the label and the trend under it —
+ * the website's category tiles, made compact.
+ *
+ * Colour: an explicit `hue` wins; `accent="danger"` turns the field red;
+ * otherwise `k-auto` picks a different family for each card in a row (see
+ * "Category hue engine" in index.css), so a grid of four is four colours.
+ */
+export function StatCard({
+  label,
+  value,
+  delta,
+  deltaTone = "neutral",
+  Icon,
+  accent,
+  hue,
+  loading,
+  className,
+}: Props) {
+  const k = hue ?? (accent === "danger" ? "k-trans" : "k-auto");
+  const motif = useMemo(() => tileSvg(MOTIFS[hash(label) % MOTIFS.length]), [label]);
+  const text = String(value);
+  // Long values ("3.2 / 15.6 GB") step down so they never overflow a narrow card.
+  const valueSize = text.length > 10 ? "text-[24px]" : text.length > 6 ? "text-[28px]" : "text-[34px]";
+  const TrendIcon = deltaTone === "up" ? ArrowUpRight : deltaTone === "down" ? ArrowDownRight : null;
+
   return (
-    <div className={cn("rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark p-5", className)}>
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-        <span className={cn("size-10 rounded-xl inline-flex items-center justify-center", ACCENTS[accent])}>
-          <Icon className="size-5" />
+    <div
+      className={cn(
+        "relative isolate flex min-h-[148px] flex-col overflow-hidden rounded-[26px] bg-k-100 p-5 text-k-900",
+        k,
+        className,
+      )}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -bottom-6 -right-6 -z-10 size-28 opacity-90 [&_svg]:size-full"
+      >
+        <Svg markup={motif} />
+      </span>
+
+      <div className="flex items-start justify-between gap-3">
+        <p className="pt-1 text-[13.5px] font-semibold leading-snug text-k-900/85">{label}</p>
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-k-0 text-k-700 shadow-[0_1px_2px_oklch(0_0_0/0.06)]">
+          <Icon className="size-[18px]" />
         </span>
       </div>
-      {loading ? (
-        <div className="h-8 w-16 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
-      ) : (
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-      )}
-      {delta && !loading && (
-        <p
-          className={cn(
-            "mt-1 text-xs",
-            deltaTone === "up" && "text-success-600 dark:text-success-400",
-            deltaTone === "down" && "text-error-600 dark:text-error-400",
-            deltaTone === "neutral" && "text-gray-500 dark:text-gray-400",
-          )}
-        >
-          {delta}
-        </p>
-      )}
+
+      <div className="mt-auto pt-4">
+        {loading ? (
+          <div className="h-9 w-20 animate-pulse rounded-full bg-k-200" />
+        ) : (
+          <p
+            className={cn(
+              "break-words pr-12 font-display font-extrabold leading-none tracking-[-0.035em] tabular-nums",
+              valueSize,
+            )}
+          >
+            {value}
+          </p>
+        )}
+        {delta && !loading && (
+          <p
+            className={cn(
+              "mt-2 flex items-start gap-1 pr-12 text-[12.5px] font-medium leading-snug",
+              deltaTone === "down" ? "text-danger" : "text-k-700",
+            )}
+          >
+            {TrendIcon && <TrendIcon className="mt-px size-3.5 shrink-0" />}
+            <span className="min-w-0 break-words">{delta}</span>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

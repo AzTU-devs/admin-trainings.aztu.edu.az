@@ -1,25 +1,29 @@
 import { Link } from "react-router";
-import { Mail, Phone, Settings as SettingsIcon, ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  Activity,
+  Clock,
+  Globe,
+  Mail,
+  Phone,
+  Settings as SettingsIcon,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { Card, CardContent } from "@shared/components/ui/Card";
 import { Badge } from "@shared/components/ui/Badge";
 import { Button } from "@shared/components/ui/Button";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { cn } from "@shared/lib/cn";
+import { hueFor } from "@shared/lib/hue";
+import { formatEnum } from "@shared/lib/enums";
 import { useMeProfileQuery } from "@features/auth/api/authApi";
 import { usePermissions } from "@features/auth/hooks/usePermissions";
 import { useGetMyTutorProfileQuery } from "@features/tutors/api/tutorsApi";
-import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
 import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
 import { ExpertProfileSection } from "@features/profile/components/ExpertProfileSection";
+import { ProfileHero } from "@features/profile/components/ProfileHero";
 import { ROUTES } from "@shared/constants/routes";
-
-const ROLE_LABEL: Record<string, string> = {
-  USER: "Student",
-  TUTOR: "Tutor",
-  ADMIN: "Admin",
-  SUPER_ADMIN: "Super admin",
-};
 
 export default function ProfilePage() {
   const { data, isLoading, error } = useMeProfileQuery();
@@ -30,10 +34,13 @@ export default function ProfilePage() {
 
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
   if (error || !data) {
-    return <EmptyState title="Couldn't load your profile" description="Please try again later." />;
+    return <EmptyState tone="danger" title="Couldn't load your profile" description="Please try again later." />;
   }
 
   const fullName = [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || data.email;
+  // The colour the header's user menu gives this person (seeded by email), so
+  // the header chip, this page and the settings preview all agree.
+  const hue = hueFor(data.email || fullName);
 
   return (
     <>
@@ -47,51 +54,58 @@ export default function ProfilePage() {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-1">
-          <CardContent className="pt-6 flex flex-col items-center text-center">
-            <TutorAvatar
-              size="lg"
-              src={tutor ? tutorAvatarSrc(tutor) : null}
-              name={fullName}
-              className="size-20 mb-4"
-              fallbackClassName="bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 text-xl font-semibold"
-            />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{fullName}</h2>
-            <p className="text-sm text-gray-500">{data.email}</p>
-            <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-              {data.roles.map((r) => (
-                <Badge key={r} tone="brand">{ROLE_LABEL[r] ?? r}</Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        {/* The profile header, like the expert hero on the public website
+            (Settings shows a compact copy of it). */}
+        <ProfileHero
+          name={fullName}
+          email={data.email}
+          roles={data.roles}
+          hue={hue}
+          seed={data.email}
+          photo={tutor ? tutorAvatarSrc(tutor) : null}
+        />
 
-        <Card className="lg:col-span-2">
-          <CardContent className="pt-6 space-y-4">
-            <Detail Icon={Mail} label="Email" value={data.email}>
-              {data.emailVerified ? (
-                <Badge tone="success" className="ml-2"><ShieldCheck className="size-3" /> Verified</Badge>
+        {/* Key facts under the header, divided by hairlines (the website's
+            facts strip); the 1px gap over a line-coloured track draws them,
+            which keeps them right whatever wraps. Below xl the email takes a
+            row of its own and the other four share the next row(s), so every
+            row stays full. On one xl row the columns are weighted by what
+            they hold: equal fifths cut the email at "superadmin@eduplatfo…"
+            while "en" and "—" sat in mostly empty cells. The email wraps as a
+            last resort rather than being cut. */}
+        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,1.4fr)]">
+          <Fact
+            Icon={Mail}
+            label="Email"
+            className="col-span-2 sm:col-span-4 xl:col-span-1"
+            aside={
+              data.emailVerified ? (
+                <Badge tone="success" size="sm"><ShieldCheck className="size-3" /> Verified</Badge>
               ) : (
-                <Badge tone="warning" className="ml-2"><ShieldAlert className="size-3" /> Unverified</Badge>
-              )}
-            </Detail>
-            <Detail Icon={Phone} label="Phone" value={data.phone || "—"} />
-            <Detail Icon={SettingsIcon} label="Locale" value={data.locale || "—"} />
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Status</p>
-                <p className="text-gray-900 dark:text-white font-medium">{data.status}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Last sign-in</p>
-                <p className="text-gray-900 dark:text-white font-medium">
-                  {data.lastLoginAt ? new Date(data.lastLoginAt).toLocaleString() : "—"}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                <Badge tone="warning" size="sm"><ShieldAlert className="size-3" /> Unverified</Badge>
+              )
+            }
+          >
+            <span className="block [overflow-wrap:anywhere]">{data.email}</span>
+          </Fact>
+          {/* Proportional figures, as in every other value: tabular ones set a
+              lone date or number wider and heavier than its neighbours. */}
+          <Fact Icon={Phone} label="Phone">{data.phone || "—"}</Fact>
+          <Fact Icon={Globe} label="Locale">{data.locale || "—"}</Fact>
+          <Fact Icon={Activity} label="Status">
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden
+                className={cn("size-2 shrink-0 rounded-full", data.status === "ACTIVE" ? "bg-ok" : "bg-ink-3")}
+              />
+              {formatEnum(data.status)}
+            </span>
+          </Fact>
+          <Fact Icon={Clock} label="Last sign-in">
+            {data.lastLoginAt ? new Date(data.lastLoginAt).toLocaleString() : "—"}
+          </Fact>
+        </dl>
       </div>
 
       {isTutor && <ExpertProfileSection />}
@@ -99,29 +113,34 @@ export default function ProfilePage() {
   );
 }
 
-function Detail({
+/**
+ * One fact: a quiet label with its icon over the value (`.fact` from
+ * index.css). `aside` sits at the end of the label row (the email's
+ * verification), so every value line starts and reads the same.
+ */
+function Fact({
   Icon,
   label,
-  value,
+  aside,
+  className,
   children,
 }: {
   Icon: typeof Mail;
   label: string;
-  value: string;
-  children?: React.ReactNode;
+  aside?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="size-9 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-500 inline-flex items-center justify-center shrink-0">
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm text-gray-900 dark:text-white inline-flex items-center">
-          {value}
-          {children}
-        </p>
-      </div>
+    // A touch tighter on phones, where two facts share a 390px row: enough
+    // that a full phone number stays on one line.
+    <div className={cn("fact bg-surface px-4 py-4 sm:px-5", className)}>
+      <dt className="l">
+        <Icon aria-hidden />
+        {label}
+        {aside && <span className="ml-auto">{aside}</span>}
+      </dt>
+      <dd className="v text-[14.5px] sm:text-[15px]">{children}</dd>
     </div>
   );
 }

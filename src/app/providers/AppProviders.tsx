@@ -6,29 +6,40 @@ import { store } from "@lib/redux/store";
 import { useAppDispatch, useAppSelector } from "@lib/redux/hooks";
 import { logout } from "@features/auth/store/authSlice";
 import { ErrorBoundary } from "@shared/components/feedback/ErrorBoundary";
+import { TooltipProvider } from "@shared/components/ui/Tooltip";
 import { DevAuthBootstrap } from "./DevAuthBootstrap";
 import { AuthBootstrap } from "./AuthBootstrap";
 
 /**
  * Top-level providers. Order matters:
- *   ErrorBoundary > Redux > Helmet > Theme effect > children > Toaster
+ *   ErrorBoundary > Redux > Helmet > Tooltip > Theme effect > children > Toaster
+ *
+ * One TooltipProvider for the app, so moving between icon buttons (row
+ * actions, the header) skips the delay after the first tooltip.
  */
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ErrorBoundary>
       <ReduxProvider store={store}>
         <HelmetProvider>
-          <ThemeSync />
-          <AuthEventBridge />
-          <DevAuthBootstrap />
-          <AuthBootstrap />
-          {children}
-          <Toaster
-            position="top-right"
-            richColors
-            closeButton
-            toastOptions={{ className: "rounded-xl" }}
-          />
+          <TooltipProvider>
+            <ThemeSync />
+            <AuthEventBridge />
+            <DevAuthBootstrap />
+            <AuthBootstrap />
+            {children}
+            {/* Below the sticky header (68px, 60px on a phone): at the default
+                offset a toast covered the avatar and theme toggle on a
+                desktop, and the menu button, logo and bell on a phone. */}
+            <Toaster
+              position="top-right"
+              offset={{ top: 80, right: 24 }}
+              mobileOffset={{ top: 72, left: 16, right: 16 }}
+              richColors
+              closeButton
+              toastOptions={{ className: "rounded-xl" }}
+            />
+          </TooltipProvider>
         </HelmetProvider>
       </ReduxProvider>
     </ErrorBoundary>

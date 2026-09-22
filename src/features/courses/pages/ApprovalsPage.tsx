@@ -1,10 +1,17 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { CalendarDays } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
 import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import {
+  COURSE_TABLE_PHONE,
+  CourseLevelValue,
+  CourseTitleCell,
+  CourseTypeValue,
+} from "@features/courses/components/courseCells";
 import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
@@ -27,20 +34,50 @@ export default function ApprovalsPage() {
     () => [
       {
         header: "Course",
+        // On a phone the other columns are hidden (COURSE_TABLE_PHONE), so the
+        // status — what this page is for — sits under the title instead of
+        // off the edge of the card.
         cell: ({ row }) => (
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 dark:text-white truncate">{row.original.title}</p>
-            <p className="text-xs text-gray-500 truncate">{row.original.subtitle ?? row.original.slug}</p>
-          </div>
+          <CourseTitleCell
+            course={row.original}
+            meta={
+              <>
+                <CourseStatusBadge status={row.original.status} />
+                <CourseTypeValue type={row.original.courseType} />
+                <CourseLevelValue level={row.original.level} />
+                {row.original.publishedAt ? (
+                  <span>
+                    <CalendarDays aria-hidden />
+                    <span className="tabular-nums">{new Date(row.original.publishedAt).toLocaleDateString()}</span>
+                  </span>
+                ) : null}
+              </>
+            }
+          />
         ),
       },
       { header: "Status", cell: ({ row }) => <CourseStatusBadge status={row.original.status} /> },
-      { header: "Type", accessorKey: "courseType" },
-      { header: "Level", accessorKey: "level" },
+      // Accessor columns keep their sorting; the cells only dress the value.
+      {
+        header: "Type",
+        accessorKey: "courseType",
+        cell: ({ row }) => <CourseTypeValue type={row.original.courseType} />,
+      },
+      {
+        header: "Level",
+        accessorKey: "level",
+        cell: ({ row }) => <CourseLevelValue level={row.original.level} />,
+      },
       {
         header: "Submitted",
         cell: ({ row }) =>
-          row.original.publishedAt ? new Date(row.original.publishedAt).toLocaleDateString() : "—",
+          row.original.publishedAt ? (
+            <span className="whitespace-nowrap tabular-nums">
+              {new Date(row.original.publishedAt).toLocaleDateString()}
+            </span>
+          ) : (
+            <span className="text-ink-3">—</span>
+          ),
       },
     ],
     [],
@@ -72,6 +109,8 @@ export default function ApprovalsPage() {
         data={data?.content ?? []}
         columns={columns}
         isLoading={isFetching}
+        // A failed load must not read as "Nothing awaiting review": it would
+        // hide courses that are in review or were sent back.
         emptyTitle={
           status === COURSE_STATUS.IN_REVIEW
             ? "Nothing awaiting review"
@@ -88,6 +127,7 @@ export default function ApprovalsPage() {
         onPageChange={setPage}
         onRowClick={(row) => navigate(ROUTES.tutorCourseEdit(row.slug))}
         getRowId={(row) => row.id}
+        className={COURSE_TABLE_PHONE}
       />
     </>
   );

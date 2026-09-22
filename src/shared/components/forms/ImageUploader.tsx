@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useDropzone } from "react-dropzone";
+import { useFormContext } from "react-hook-form";
 import { UploadCloud, X, Loader2, Star } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@shared/lib/cn";
@@ -19,14 +20,23 @@ interface ImageUploaderProps {
   onChange: (ids: UUID[]) => void;
   min?: number;
   disabled?: boolean;
+  /**
+   * Show the "at least N required" counter as an error. Defaults to "the
+   * surrounding form has been submitted" (or always, outside a form) — a
+   * freshly opened dialog should not open on a red message it has not
+   * validated yet.
+   */
+  invalid?: boolean;
 }
 
 /**
  * Drag-and-drop multi-image uploader. Each dropped image is uploaded to
  * `/media`; the resulting ids are appended (order preserved, first = cover).
  */
-export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploaderProps) {
+export function ImageUploader({ value, onChange, min = 2, disabled, invalid }: ImageUploaderProps) {
   const [uploadMedia, { isLoading }] = useUploadMediaMutation();
+  // react-hook-form's context is null outside a <FormProvider>.
+  const form = useFormContext() as ReturnType<typeof useFormContext> | null;
 
   const onDrop = useCallback(
     async (accepted: File[]) => {
@@ -72,26 +82,28 @@ export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploa
 
   const remove = (id: UUID) => onChange(value.filter((v) => v !== id));
 
-  const short = value.length < min;
+  const short = value.length < min && (invalid ?? form?.formState.isSubmitted ?? true);
 
   return (
     <div className="space-y-3">
       <div
         {...getRootProps()}
         className={cn(
-          "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors",
+          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed px-4 py-6 text-center transition-colors duration-200",
           isDragActive
-            ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-            : "border-gray-200 dark:border-gray-700 hover:border-brand-400",
+            ? "border-navy bg-navy-tint"
+            : "border-line-2 bg-paper/60 hover:border-navy/45 hover:bg-navy-tint/40",
           (disabled || isLoading) && "opacity-60 cursor-not-allowed",
         )}
       >
         <input {...getInputProps()} />
-        {isLoading ? <Loader2 className="size-6 text-brand-500 animate-spin" /> : <UploadCloud className="size-6 text-gray-400" />}
-        <p className="text-sm text-gray-700 dark:text-gray-200">
+        <span className="grid size-11 place-items-center rounded-full bg-navy-tint text-navy">
+          {isLoading ? <Loader2 className="size-5 animate-spin" /> : <UploadCloud className="size-5" />}
+        </span>
+        <p className="text-sm font-medium text-ink">
           {isLoading ? "Uploading…" : "Drag & drop images, or click to browse"}
         </p>
-        <p className={cn("text-xs", short ? "text-error-600" : "text-gray-400")}>
+        <p className={cn("text-[12.5px] tabular-nums", short ? "font-medium text-danger" : "text-ink-3")}>
           {value.length} added · at least {min} required
         </p>
       </div>
@@ -99,10 +111,10 @@ export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploa
       {value.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
           {value.map((id, i) => (
-            <div key={id} className="relative group rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-video">
+            <div key={id} className="group relative aspect-video overflow-hidden rounded-2xl border border-line bg-paper-2">
               <MediaImage mediaId={id} className="h-full w-full object-cover" />
               {i === 0 && (
-                <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-aztu-gold-500 text-white text-[10px] font-semibold px-1.5 py-0.5">
+                <span className="absolute left-2 top-2 inline-flex h-6 items-center gap-1 rounded-full bg-gold px-2 text-[11px] font-semibold text-on-gold">
                   <Star className="size-3" /> Cover
                 </span>
               )}
@@ -111,7 +123,7 @@ export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploa
                 onClick={() => remove(id)}
                 disabled={disabled}
                 aria-label="Remove image"
-                className="absolute right-1.5 top-1.5 rounded-md bg-gray-900/70 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-error-600"
+                className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-black/65 text-white opacity-0 transition-[opacity,background-color] hover:bg-error-600 focus-visible:opacity-100 group-hover:opacity-100"
               >
                 <X className="size-3.5" />
               </button>

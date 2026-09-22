@@ -6,6 +6,7 @@ import { Button } from "@shared/components/ui/Button";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
 import { courseColumns } from "@features/courses/components/courseColumns";
+import { COURSE_TABLE_PHONE } from "@features/courses/components/courseCells";
 import { useListModerationCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
@@ -69,12 +70,14 @@ export default function AdminCoursesListPage() {
         data={data?.content ?? []}
         columns={columns}
         isLoading={isFetching}
+        // A failed load says so, with a retry, instead of "No … courses".
         emptyTitle={`No ${statusLabel} courses`}
         emptyDescription="Pick another status, or create a course."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         onRowClick={(row) => navigate(ROUTES.adminCourseEdit(row.id))}
         getRowId={(row) => row.id}
+        className={COURSE_TABLE_PHONE}
       />
     </>
   );

@@ -46,20 +46,14 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent size="sm" showClose={false}>
-        <DialogHeader>
-          <div className="flex items-start gap-3">
-            {destructive && (
-              <div className="size-10 shrink-0 rounded-xl bg-error-50 dark:bg-error-500/10 text-error-600 dark:text-error-400 inline-flex items-center justify-center">
-                <AlertTriangle className="size-5" />
-              </div>
-            )}
-            <div className="min-w-0">
-              <DialogTitle>{title}</DialogTitle>
-              {description && <DialogDescription className="mt-1">{description}</DialogDescription>}
-            </div>
-          </div>
+        {/* The shared header layout: the danger tile beside the title, the
+            description under it — like every other dialog. */}
+        <DialogHeader icon={destructive ? <AlertTriangle /> : undefined} iconTone="danger">
+          <DialogTitle>{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <DialogFooter>
+        {/* Straight after the header: its own 12px + the header's 20px is enough. */}
+        <DialogFooter className="mt-0">
           <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
             {cancelLabel}
           </Button>

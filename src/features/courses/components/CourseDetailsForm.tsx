@@ -1,12 +1,14 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Form, FormSection } from "@shared/components/forms/Form";
+import { CalendarDays, FileText, ImageIcon, MonitorPlay, Tags, Wallet } from "lucide-react";
+import { Form } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { Input } from "@shared/components/ui/Input";
 import { Textarea } from "@shared/components/ui/Textarea";
 import { Switch } from "@shared/components/ui/Switch";
 import { Button } from "@shared/components/ui/Button";
+import { cn } from "@shared/lib/cn";
 import {
   Select,
   SelectContent,
@@ -18,6 +20,7 @@ import { ImageUploader } from "@shared/components/upload/ImageUploader";
 import { VideoUploader } from "@shared/components/upload/VideoUploader";
 import { useUploadMediaMutation, mediaContentUrl } from "@shared/api/mediaApi";
 import { CategoryMultiSelect } from "@features/courses/components/CategoryMultiSelect";
+import { FormCard } from "@features/courses/components/FormCard";
 import { courseSchema, type CourseFormValues } from "@features/courses/schemas/course.schema";
 import { COURSE_LEVEL, COURSE_TYPE } from "@shared/types/lms";
 import type { CourseDto } from "@features/courses/types";
@@ -32,10 +35,25 @@ interface Props {
   /**
    * Extra sections rendered above the submit button — the admin create screen
    * uses it for the teaching roster, which the backend takes alongside these
-   * fields but which is not part of the course itself.
+   * fields but which is not part of the course itself. Pass a <FormCard> so it
+   * sits in the stack like the other sections.
    */
   extra?: React.ReactNode;
 }
+
+/*
+ * The two uploaders sit side by side, and their empty drop zones used to be
+ * different heights (a 16:9 image box beside a padded video box), leaving the
+ * Media card with a ragged bottom. Both drop zones take the website's 16:10
+ * cover shape instead, with their prompt centred. The uploaders only take a
+ * wrapper class, so the drop zone is reached by the role react-dropzone gives
+ * its root; once a video is picked its player card is not a drop zone and
+ * keeps its own height.
+ */
+const MEDIA_BOX = cn(
+  "[&_[role=presentation]]:flex [&_[role=presentation]]:aspect-[16/10] [&_[role=presentation]]:flex-col",
+  "[&_[role=presentation]]:items-center [&_[role=presentation]]:justify-center",
+);
 
 export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save", extra }: Props) {
   const [uploadMedia] = useUploadMediaMutation();
@@ -76,6 +94,8 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
   });
 
   const isFree = form.watch("free");
+  // Only echoed in the save bar, so the bar says which course it saves.
+  const title = form.watch("title");
   const courseType = form.watch("courseType");
   const isOffline = courseType === COURSE_TYPE.OFFLINE;
   const thumbnailMediaId = form.watch("thumbnailMediaId");
@@ -132,7 +152,7 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
 
   return (
     <Form form={form} onSubmit={handle}>
-      <FormSection title="Basics">
+      <FormCard icon={<FileText />} title="Basics">
         <FormField<CourseFormValues> name="title" label="Title" required>
           {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} />}
         </FormField>
@@ -161,9 +181,9 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         <FormField<CourseFormValues> name="syllabus" label="Syllabus" className="md:col-span-2">
           {({ field, invalid }) => <Textarea rows={5} {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
         </FormField>
-      </FormSection>
+      </FormCard>
 
-      <FormSection title="Classification">
+      <FormCard icon={<Tags />} title="Classification">
         <FormField<CourseFormValues>
           name="courseType"
           label="Type"
@@ -211,10 +231,10 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
             />
           )}
         </FormField>
-      </FormSection>
+      </FormCard>
 
       {isOffline ? (
-        <FormSection title="Offline schedule">
+        <FormCard icon={<CalendarDays />} title="Offline schedule">
           <FormField<CourseFormValues> name="offlineDetails.startDate" label="Start date" required>
             {({ field, invalid }) => (
               <Input type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
@@ -282,14 +302,14 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
               <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />
             )}
           </FormField>
-        </FormSection>
+        </FormCard>
       ) : (
-        <FormSection title="Online options">
+        <FormCard icon={<MonitorPlay />} title="Online options">
           <FormField<CourseFormValues> name="onlineDetails.hasCertificate" label="Certificate on completion">
             {({ field }) => (
-              <div className="flex h-10 items-center gap-2">
+              <div className="flex h-11 items-center gap-3">
                 <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm font-medium text-ink-2">
                   {field.value ? "Issued" : "Not issued"}
                 </span>
               </div>
@@ -301,21 +321,22 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
             description="Release lessons on a schedule instead of all at once."
           >
             {({ field }) => (
-              <div className="flex h-10 items-center gap-2">
+              <div className="flex h-11 items-center gap-3">
                 <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm font-medium text-ink-2">
                   {field.value ? "Enabled" : "Disabled"}
                 </span>
               </div>
             )}
           </FormField>
-        </FormSection>
+        </FormCard>
       )}
 
-      <FormSection title="Media">
+      <FormCard icon={<ImageIcon />} title="Media">
         <FormField<CourseFormValues> name="thumbnailMediaId" label="Cover image">
           {() => (
             <ImageUploader
+              className={MEDIA_BOX}
               value={thumbnailMediaId ? mediaContentUrl(thumbnailMediaId) : null}
               onChange={(file) => {
                 if (file) void uploadAnd(file, "thumbnailMediaId");
@@ -328,6 +349,7 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         <FormField<CourseFormValues> name="trailerMediaId" label="Trailer video">
           {() => (
             <VideoUploader
+              className={MEDIA_BOX}
               value={trailerMediaId ? mediaContentUrl(trailerMediaId) : null}
               uploader={trailerUploader}
               onChange={(file) => {
@@ -336,18 +358,18 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
             />
           )}
         </FormField>
-      </FormSection>
+      </FormCard>
 
-      <FormSection title="Pricing">
+      <FormCard icon={<Wallet />} title="Pricing">
         <FormField<CourseFormValues> name="free" label="Free course">
           {({ field }) => (
-            <div className="flex items-center gap-2 h-10">
+            <div className="flex h-11 items-center gap-3">
               <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
-              <span className="text-sm text-gray-600 dark:text-gray-400">{isFree ? "Free" : "Paid"}</span>
+              <span className="text-sm font-medium text-ink-2">{isFree ? "Free" : "Paid"}</span>
             </div>
           )}
         </FormField>
-        <div />
+        <div className="hidden md:block" aria-hidden />
         <FormField<CourseFormValues> name="price" label="Price" required>
           {({ field, invalid }) => (
             <Input
@@ -364,12 +386,33 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         <FormField<CourseFormValues> name="currency" label="Currency" required>
           {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} maxLength={3} />}
         </FormField>
-      </FormSection>
+      </FormCard>
 
       {extra}
 
-      <div className="flex justify-end pt-2">
-        <Button type="submit" loading={form.formState.isSubmitting}>{submitLabel}</Button>
+      {/* A sticky save bar: it rides the bottom of the viewport while the
+          form scrolls past, so a change near the top can be saved without a
+          trip to the end, and settles under the last card when reached. Its
+          left side names the course being saved; with nothing to name it
+          shrinks to the button rather than stretching an empty bar across
+          the page. At night .glass (paper, the darkest canvas) would sit
+          darker than the cards it floats over and read as a hole, so the bar
+          takes the raised step instead — surfaces step up at night. */}
+      <div
+        className={cn(
+          "glass sticky bottom-3 z-20 flex items-center justify-end gap-3 rounded-[22px] py-2.5 pl-2.5 pr-2.5 shadow-[0_0_0_1px_var(--line),var(--shadow-md)] sm:bottom-5 sm:gap-4",
+          "dark:bg-raised/90 dark:shadow-[0_0_0_1px_var(--raised-line),var(--shadow-md)]",
+          title?.trim() ? "ml-auto w-fit sm:ml-0 sm:w-auto sm:pl-5" : "ml-auto w-fit",
+        )}
+      >
+        {title?.trim() ? (
+          <p className="mr-auto hidden min-w-0 truncate font-display text-[15px] font-bold tracking-[-0.012em] text-ink-2 sm:block">
+            {title}
+          </p>
+        ) : null}
+        <Button type="submit" loading={form.formState.isSubmitting} className="shrink-0">
+          {submitLabel}
+        </Button>
       </div>
     </Form>
   );

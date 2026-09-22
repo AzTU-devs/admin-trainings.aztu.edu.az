@@ -1,19 +1,12 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { Badge } from "@shared/components/ui/Badge";
+import { StatusBadge } from "@shared/components/ui/Badge";
 import { DataTable } from "@shared/components/tables/DataTable";
+import { CourseCover } from "@shared/components/bright";
+import { DateCell, ProgressCell, StackedProgress } from "@features/participants/components/PersonCell";
 import { useListMyEnrollmentsQuery } from "@features/enrollments/api/enrollmentsApi";
 import type { EnrollmentDto } from "@features/enrollments/types";
-import { ENROLLMENT_STATUS, type EnrollmentStatus } from "@shared/types/lms";
-
-const TONE: Record<EnrollmentStatus, "neutral" | "warning" | "success" | "danger" | "brand"> = {
-  [ENROLLMENT_STATUS.PENDING_PAYMENT]: "warning",
-  [ENROLLMENT_STATUS.ACTIVE]: "brand",
-  [ENROLLMENT_STATUS.COMPLETED]: "success",
-  [ENROLLMENT_STATUS.CANCELLED]: "danger",
-  [ENROLLMENT_STATUS.REFUNDED]: "neutral",
-};
 
 /**
  * Backend exposes the current user's OWN enrollments (`/portal/enrollments/mine`).
@@ -25,21 +18,24 @@ export default function EnrollmentsListPage() {
 
   const columns = useMemo<ColumnDef<EnrollmentDto>[]>(
     () => [
-      { header: "Course", accessorKey: "courseTitle" },
+      {
+        header: "Course",
+        // accessorKey stays: it is what the column sorts on.
+        accessorKey: "courseTitle",
+        cell: ({ row }) => <CourseTitle enrollment={row.original} />,
+      },
       {
         header: "Progress",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2 min-w-[140px]">
-            <div className="h-1.5 flex-1 rounded-full bg-gray-100 dark:bg-white/5 overflow-hidden">
-              <div className="h-full bg-brand-700" style={{ width: `${row.original.progressPercent}%` }} />
-            </div>
-            <span className="text-xs text-gray-600 dark:text-gray-300 w-9 text-right">{row.original.progressPercent}%</span>
-          </div>
-        ),
+        cell: ({ row }) => <ProgressCell value={row.original.progressPercent} />,
       },
-      { header: "Source", accessorKey: "source" },
-      { header: "Status", cell: ({ row }) => <Badge tone={TONE[row.original.status]} dot>{row.original.status.replace(/_/g, " ")}</Badge> },
-      { header: "Enrolled", cell: ({ row }) => new Date(row.original.enrolledAt).toLocaleDateString() },
+      {
+        header: "Source",
+        accessorKey: "source",
+        // A source is not a state: a neutral pill with no status dot.
+        cell: ({ row }) => <StatusBadge value={row.original.source} dot={false} size="sm" />,
+      },
+      { header: "Status", cell: ({ row }) => <StatusBadge value={row.original.status} /> },
+      { header: "Enrolled", cell: ({ row }) => <DateCell value={row.original.enrolledAt} /> },
     ],
     [],
   );
@@ -56,7 +52,48 @@ export default function EnrollmentsListPage() {
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         getRowId={(r) => r.id}
+        renderMobileRow={(e) => <EnrollmentPhoneRow enrollment={e} />}
       />
     </>
+  );
+}
+
+/**
+ * The course: the same generated cover it has everywhere else (seeded by its
+ * id; this DTO carries no category, so it is drawn in navy) and its title —
+ * one truncated line beside the other columns, two lines on a phone, where it
+ * has the row to itself.
+ */
+function CourseTitle({ enrollment: e }: { enrollment: EnrollmentDto }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3.5">
+      <CourseCover seed={e.courseId} thumb className="size-11 shrink-0 rounded-[14px]" />
+      <p
+        className="break-words font-semibold text-ink max-md:line-clamp-2 md:max-w-[26rem] md:truncate"
+        title={e.courseTitle}
+      >
+        {e.courseTitle}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * An enrollment on a phone (below md): the course, its progress across the
+ * full width, then status, source and the enrolment date on one meta line.
+ */
+function EnrollmentPhoneRow({ enrollment: e }: { enrollment: EnrollmentDto }) {
+  return (
+    <div className="space-y-3">
+      <CourseTitle enrollment={e} />
+      <StackedProgress label="Progress" value={e.progressPercent} />
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12.5px] text-ink-3">
+        <StatusBadge value={e.status} size="sm" />
+        <StatusBadge value={e.source} dot={false} size="sm" />
+        <span className="flex gap-1.5">
+          Enrolled <DateCell value={e.enrolledAt} />
+        </span>
+      </div>
+    </div>
   );
 }

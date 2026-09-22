@@ -1,15 +1,17 @@
 import { cn } from "@shared/lib/cn";
 
 /**
- * The AzTU portal lockup.
+ * The AzTU portal lockup, set like the public website's brand block: the
+ * shield, then the two-line wordmark — the product name in Albert Sans over
+ * the university line in small gold caps. The words are the same as before
+ * ("AzTU Portal" / "Az. Technical Uni."); only their setting is new.
  *
- * Two files, both the university's own mark trimmed to the glyph and put on
- * transparency: navy for light surfaces, white for dark. The supplied source
- * art is dark-on-white with an opaque background, so it cannot be tinted with a
- * filter — an inverted copy turns the whole plate into a solid block.
- *
- * Both are rendered and one is hidden by the `dark` class, so the correct mark
- * is on screen at first paint with no JavaScript involved.
+ * Two shield files, both the university's own mark trimmed to the glyph and
+ * put on transparency: navy for light surfaces, white for dark. The supplied
+ * source art is dark-on-white with an opaque background, so it cannot be
+ * tinted with a filter — an inverted copy turns the whole plate into a solid
+ * block. Both are rendered and one is hidden by the `dark` class, so the
+ * correct mark is on screen at first paint with no JavaScript involved.
  */
 export function Logo({
   showText = true,
@@ -20,7 +22,7 @@ export function Logo({
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <span className="relative block h-9 w-[19px] shrink-0">
+      <span className="relative block h-[34px] w-[18px] shrink-0">
         <img
           src="/images/logo/aztu-mark.png"
           alt="AzTU"
@@ -34,11 +36,11 @@ export function Logo({
         />
       </span>
       {showText && (
-        <span className="leading-tight">
-          <span className="block text-sm font-bold text-brand-700 dark:text-white">
+        <span aria-hidden className="flex flex-col leading-none">
+          <span className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-ink">
             AzTU Portal
           </span>
-          <span className="block text-[9px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+          <span className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-gold-ink">
             Az. Technical Uni.
           </span>
         </span>

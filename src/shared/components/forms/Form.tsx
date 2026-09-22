@@ -55,8 +55,8 @@ export function FormSection({
     <section className={cn("space-y-4", className)}>
       {(title || description) && (
         <header>
-          {title && <h3 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h3>}
-          {description && <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+          {title && <h3 className="font-display text-[17px] font-bold tracking-[-0.012em] text-ink">{title}</h3>}
+          {description && <p className="mt-1 text-[13.5px] leading-relaxed text-ink-3">{description}</p>}
         </header>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>

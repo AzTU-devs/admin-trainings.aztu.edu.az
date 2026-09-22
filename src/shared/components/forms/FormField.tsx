@@ -56,10 +56,10 @@ export function FormField<TFieldValues extends FieldValues>({
             <>
               {children({ field, invalid: !!fieldState.error, id })}
               {description && !error && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+                <p className="text-[12.5px] leading-snug text-ink-3">{description}</p>
               )}
               {error && (
-                <p className="text-xs text-error-600 dark:text-error-400">{error}</p>
+                <p className="text-[12.5px] font-medium leading-snug text-danger">{error}</p>
               )}
             </>
           );

@@ -123,11 +123,11 @@ export function ImageUploader({
       <div
         {...getRootProps()}
         className={cn(
-          "relative w-full rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer transition-colors",
+          "relative w-full cursor-pointer overflow-hidden rounded-[22px] border-[1.5px] border-dashed transition-colors duration-200",
           aspectCls,
-          preview ? "border-transparent" : "border-gray-200 dark:border-gray-700 hover:border-brand-500",
-          isDragActive && "border-brand-500 bg-brand-50 dark:bg-brand-500/10",
-          !preview && error && "border-error-400 dark:border-error-500/60",
+          preview ? "border-transparent" : "border-line-2 bg-paper/60 hover:border-navy/45 hover:bg-navy-tint/40",
+          isDragActive && "border-navy bg-navy-tint",
+          !preview && error && "border-danger",
           disabled && "opacity-60 cursor-not-allowed",
         )}
       >
@@ -143,27 +143,27 @@ export function ImageUploader({
                 onChange?.(null);
               }}
               aria-label="Remove image"
-              className="absolute top-2 right-2 size-9 rounded-xl bg-gray-900/70 text-white inline-flex items-center justify-center hover:bg-gray-900"
+              className="absolute right-2.5 top-2.5 inline-flex size-9 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm transition-colors hover:bg-black/85"
             >
               <X className="size-4" />
             </button>
           </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-            <div className="size-12 rounded-2xl bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 inline-flex items-center justify-center mb-3">
+            <div className="mb-3 inline-flex size-12 items-center justify-center rounded-full bg-navy-tint text-navy">
               <ImageIcon className="size-5" />
             </div>
-            <p className="text-sm font-medium text-gray-900 dark:text-white">
+            <p className="text-sm font-semibold text-ink">
               {isDragActive ? "Drop image" : "Click or drag to upload"}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="mt-1 text-[12.5px] text-ink-3">
               {IMAGE_FORMATS_LABEL} · up to {maxSizeMb} MB
             </p>
           </div>
         )}
       </div>
       {error && (
-        <p role="alert" className="text-xs text-error-600 dark:text-error-400">
+        <p role="alert" className="text-[12.5px] font-medium text-danger">
           {error}
         </p>
       )}

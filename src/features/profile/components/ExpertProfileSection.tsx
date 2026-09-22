@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@shared/components/ui/Card";
+import { Card, CardContent } from "@shared/components/ui/Card";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { ExpertProfileForm } from "@features/tutors/components/ExpertProfileForm";
@@ -25,8 +25,8 @@ export function ExpertProfileSection() {
 
   if (isLoading) {
     return (
-      <Card className="mt-4">
-        <CardContent className="py-10 flex justify-center">
+      <Card className="mt-6">
+        <CardContent className="flex justify-center py-10">
           <Spinner />
         </CardContent>
       </Card>
@@ -39,7 +39,7 @@ export function ExpertProfileSection() {
     const missing = !!error && "status" in error && error.status === 404;
     return (
       <EmptyState
-        className="mt-4"
+        className="mt-6"
         title={missing ? "No expert profile yet" : "Couldn't load your expert profile"}
         description={
           missing
@@ -51,18 +51,32 @@ export function ExpertProfileSection() {
   }
 
   return (
-    <Card className="mt-4">
-      <CardHeader className="flex flex-row items-start justify-between gap-3">
+    // A bare section over the form's cards (the foundation's page pattern
+    // for an unboxed section): the heading a step above the cards' titles,
+    // the visibility note under it and the approval status at its end. The
+    // cards and the sticky save bar are the course editor's, so the three
+    // forms (course, settings, expert profile) read as one product.
+    <section aria-labelledby="expert-profile-title" className="mt-10">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <CardTitle>Expert profile</CardTitle>
-          <CardDescription>{VISIBILITY[data.approvalStatus]}</CardDescription>
+          <h2
+            id="expert-profile-title"
+            className="font-display text-[24px] font-extrabold leading-tight tracking-[-0.024em] text-ink"
+          >
+            Expert profile
+          </h2>
+          <p className="mt-1 text-[14.5px] leading-relaxed text-ink-2">{VISIBILITY[data.approvalStatus]}</p>
         </div>
         <TutorStatusBadge status={data.approvalStatus} />
-      </CardHeader>
-      <CardContent className="pt-2">
-        {/* Keyed by id only: a refetch after saving must not reset edits in progress. */}
-        <ExpertProfileForm key={data.id} profile={data} onSave={(body) => update(body).unwrap()} />
-      </CardContent>
-    </Card>
+      </header>
+      {/* Keyed by id only: a refetch after saving must not reset edits in progress. */}
+      <ExpertProfileForm
+        key={data.id}
+        profile={data}
+        onSave={(body) => update(body).unwrap()}
+        layout="cards"
+        saveBarLabel="Expert profile"
+      />
+    </section>
   );
 }

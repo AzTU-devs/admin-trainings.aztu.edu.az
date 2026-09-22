@@ -50,16 +50,18 @@ export function FileDropzone({ accept, hint, current, onUploaded, onClear, disab
 
   if (current) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5 px-3.5 py-3">
-        <FileCheck2 className="size-5 text-success-500 shrink-0" />
-        <span className="text-sm text-gray-900 dark:text-gray-100 truncate">{current}</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-line bg-paper-2 py-2.5 pl-2.5 pr-3.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ok-tint text-ok">
+          <FileCheck2 className="size-[18px]" />
+        </span>
+        <span className="truncate text-sm font-medium text-ink">{current}</span>
         {onClear && (
           <button
             type="button"
             onClick={onClear}
             disabled={disabled || isLoading}
             aria-label="Remove file"
-            className="ml-auto text-gray-400 hover:text-error-500 disabled:opacity-50"
+            className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-danger-tint hover:text-danger disabled:opacity-50"
           >
             <X className="size-4" />
           </button>
@@ -72,23 +74,23 @@ export function FileDropzone({ accept, hint, current, onUploaded, onClear, disab
     <div
       {...getRootProps()}
       className={cn(
-        "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center cursor-pointer transition-colors",
+        "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed px-4 py-8 text-center transition-colors duration-200",
         isDragActive
-          ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-          : "border-gray-200 dark:border-gray-700 hover:border-brand-400",
+          ? "border-navy bg-navy-tint"
+          : "border-line-2 bg-paper/60 hover:border-navy/45 hover:bg-navy-tint/40",
         (disabled || isLoading) && "opacity-60 cursor-not-allowed",
       )}
     >
       <input {...getInputProps()} />
       {isLoading ? (
-        <Loader2 className="size-6 text-brand-500 animate-spin" />
+        <span className="grid size-11 place-items-center rounded-full bg-navy-tint text-navy"><Loader2 className="size-5 animate-spin" /></span>
       ) : (
-        <UploadCloud className="size-6 text-gray-400" />
+        <span className="grid size-11 place-items-center rounded-full bg-navy-tint text-navy"><UploadCloud className="size-5" /></span>
       )}
-      <p className="text-sm text-gray-700 dark:text-gray-200">
+      <p className="text-sm font-medium text-ink">
         {isLoading ? "Uploading…" : isDragActive ? "Drop the file here" : "Drag & drop a file, or click to browse"}
       </p>
-      {hint && !isLoading && <p className="text-xs text-gray-400">{hint}</p>}
+      {hint && !isLoading && <p className="text-[12.5px] text-ink-3">{hint}</p>}
     </div>
   );
 }

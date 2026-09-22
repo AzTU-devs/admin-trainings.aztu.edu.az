@@ -4,13 +4,15 @@ import { Search } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Input } from "@shared/components/ui/Input";
 import { DataTable } from "@shared/components/tables/DataTable";
-import { Avatar, AvatarFallback, AvatarImage } from "@shared/components/ui/Avatar";
+import { cn } from "@shared/lib/cn";
+import {
+  DateCell,
+  PersonCell,
+  ProgressCell,
+  StackedProgress,
+} from "@features/participants/components/PersonCell";
 import { useListMyStudentsQuery } from "@features/students/api/studentsApi";
 import type { Student } from "@features/students/types";
-
-function initials(name: string) {
-  return name.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-}
 
 export default function StudentsListPage() {
   const [page, setPage] = useState(0);
@@ -22,27 +24,24 @@ export default function StudentsListPage() {
       {
         header: "İştirakçi",
         cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <Avatar size="sm">
-              <AvatarImage src={row.original.avatarUrl} />
-              <AvatarFallback>{initials(row.original.fullName)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="font-medium text-gray-900 dark:text-white truncate">{row.original.fullName}</p>
-              <p className="text-xs text-gray-500 truncate">{row.original.email}</p>
-            </div>
-          </div>
+          <PersonCell name={row.original.fullName} email={row.original.email} avatarUrl={row.original.avatarUrl} />
         ),
       },
-      { header: "Active", cell: ({ row }) => row.original.activeEnrollments },
-      { header: "Total enrollments", cell: ({ row }) => row.original.totalEnrollments },
+      {
+        header: "Active",
+        cell: ({ row }) => <Count value={row.original.activeEnrollments} />,
+      },
+      {
+        header: "Total enrollments",
+        cell: ({ row }) => <Count value={row.original.totalEnrollments} />,
+      },
       {
         header: "Avg. progress",
-        cell: ({ row }) => `${row.original.averageProgressPct}%`,
+        cell: ({ row }) => <ProgressCell value={row.original.averageProgressPct} />,
       },
       {
         header: "Last active",
-        cell: ({ row }) => row.original.lastActivityAt ? new Date(row.original.lastActivityAt).toLocaleDateString() : "—",
+        cell: ({ row }) => <DateCell value={row.original.lastActivityAt} />,
       },
     ],
     [],
@@ -56,7 +55,7 @@ export default function StudentsListPage() {
         leftIcon={<Search className="size-4" />}
         value={search}
         onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-        className="sm:max-w-sm mb-4"
+        className="mb-5 sm:max-w-sm"
       />
       <DataTable<Student>
         data={data?.content ?? []}
@@ -67,7 +66,47 @@ export default function StudentsListPage() {
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
         getRowId={(r) => String(r.id)}
+        renderMobileRow={(s) => <StudentPhoneRow student={s} />}
       />
     </>
+  );
+}
+
+/**
+ * A count as a plain tabular number — both count columns read as the same kind
+ * of data (pills are for statuses). Zero steps back to ink-3 so the people
+ * still studying stand out down the column.
+ */
+function Count({ value }: { value: number }) {
+  return <span className={cn("font-medium tabular-nums", value > 0 ? "text-ink" : "text-ink-3")}>{value}</span>;
+}
+
+/**
+ * A student on a phone (below md), where the five columns do not fit: the
+ * person, their average progress across the full width, then the counts and
+ * the last activity on one meta line — each labelled with its column's name.
+ */
+function StudentPhoneRow({ student: s }: { student: Student }) {
+  return (
+    <div className="space-y-3">
+      <PersonCell name={s.fullName} email={s.email} avatarUrl={s.avatarUrl} />
+      <StackedProgress label="Avg. progress" value={s.averageProgressPct} />
+      <dl className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-ink-3">
+        <div className="flex gap-1.5">
+          <dt>Active</dt>
+          <dd><Count value={s.activeEnrollments} /></dd>
+        </div>
+        <span aria-hidden>·</span>
+        <div className="flex gap-1.5">
+          <dt>Total enrollments</dt>
+          <dd><Count value={s.totalEnrollments} /></dd>
+        </div>
+        <span aria-hidden>·</span>
+        <div className="flex gap-1.5">
+          <dt>Last active</dt>
+          <dd><DateCell value={s.lastActivityAt} /></dd>
+        </div>
+      </dl>
+    </div>
   );
 }

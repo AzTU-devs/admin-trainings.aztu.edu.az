@@ -48,6 +48,35 @@ describe("Button", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  // Icon-only buttons carry their aria-label as a hover/focus tooltip; that
+  // wrapper must work without an app-level TooltipProvider and keep the
+  // button's name and click.
+  it("keeps an icon button's name and click when it adds its tooltip", async () => {
+    const onClick = vi.fn();
+    render(
+      <Button size="icon" aria-label="Edit" onClick={onClick}>
+        <svg />
+      </Button>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  // The tooltip only repeats the name, so it must not also be linked as the
+  // button's description ("Edit, button, Edit" on a screen reader).
+  it("does not describe an icon button by a tooltip that repeats its name", async () => {
+    render(
+      <Button size="icon" aria-label="Edit">
+        <svg />
+      </Button>,
+    );
+    const button = screen.getByRole("button", { name: "Edit" });
+    await userEvent.tab();
+    expect(button).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Edit");
+    expect(button).not.toHaveAttribute("aria-describedby");
+  });
+
   it("renders as its child without icons when asChild is set", () => {
     render(
       <MemoryRouter>

@@ -9,13 +9,13 @@ export const Label = forwardRef<
   <LabelPrimitive.Root
     ref={ref}
     className={cn(
-      "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5",
+      "mb-1.5 block text-[13.5px] font-semibold text-ink",
       className,
     )}
     {...props}
   >
     {children}
-    {required && <span className="text-error-500 ml-0.5">*</span>}
+    {required && <span className="ml-0.5 text-danger">*</span>}
   </LabelPrimitive.Root>
 ));
 Label.displayName = "Label";

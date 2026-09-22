@@ -4,16 +4,8 @@ import { useNavigate } from "react-router";
 import { useAuth } from "@features/auth/hooks/useAuth";
 import { ROUTES } from "@shared/constants/routes";
 import { cn } from "@shared/lib/cn";
-
-function initials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
+import { hueFor, initialsOf } from "@shared/lib/hue";
+import { formatEnum } from "@shared/lib/enums";
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
@@ -22,38 +14,41 @@ export function UserMenu() {
   if (!user) return null;
 
   const fullName = user.fullName || user.email;
-  const roleLabel = (user.roles[0] ?? "USER").replace("_", " ").toLowerCase();
+  // Sentence case, as every role pill spells it ("Super admin").
+  const roleLabel = formatEnum(user.roles[0] ?? "USER");
 
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 pl-1 pr-2.5 py-1 transition-colors"
+          className="group inline-flex h-11 items-center gap-2.5 rounded-full bg-surface py-1 pl-1 pr-2.5 shadow-[inset_0_0_0_1px_var(--line)] transition-shadow duration-200 hover:shadow-[inset_0_0_0_1px_var(--line-2)] data-[state=open]:shadow-[inset_0_0_0_1px_var(--line-2)] md:pr-3.5"
         >
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt="" className="size-9 rounded-full object-cover" />
           ) : (
-            <span className="size-9 rounded-full bg-brand-700 text-white text-xs font-semibold inline-flex items-center justify-center">
-              {initials(fullName)}
+            // Initials on the person's hue field, as on the website.
+            <span className={cn("av round size-9 text-[13px]", hueFor(user.email || fullName))}>
+              <span className="ini">{initialsOf(fullName)}</span>
             </span>
           )}
-          <span className="hidden md:block text-left leading-tight">
-            <span className="block text-sm font-medium text-gray-900 dark:text-white truncate max-w-[140px]">{fullName}</span>
-            <span className="block text-[11px] text-gray-500 dark:text-gray-400 capitalize">{roleLabel}</span>
+          <span className="hidden text-left leading-tight md:block">
+            <span className="block max-w-[140px] truncate text-[13.5px] font-semibold text-ink">{fullName}</span>
+            <span className="mt-0.5 block text-[11.5px] text-ink-3">{roleLabel}</span>
           </span>
-          <ChevronDown className="size-4 text-gray-400" />
+          <ChevronDown className="size-4 text-ink-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
           sideOffset={8}
-          className="z-[60] w-60 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark shadow-theme-lg p-1.5"
+          // --raised: a step up from the cards at night (the shadow barely shows there).
+          className="z-[60] w-64 animate-pop-in rounded-[22px] border border-raised-line bg-raised p-2 text-ink shadow-[var(--shadow-lg)]"
         >
-          <div className="px-3 py-3 border-b border-gray-100 dark:border-gray-800 mb-1.5">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{fullName}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+          <div className="mb-1.5 border-b border-line px-3 pb-3 pt-2">
+            <p className="truncate text-sm font-semibold text-ink">{fullName}</p>
+            <p className="mt-0.5 truncate text-[12.5px] text-ink-3">{user.email}</p>
           </div>
           <MenuItem onSelect={() => navigate(ROUTES.profile)} Icon={UserIcon}>
             Profile
@@ -61,7 +56,7 @@ export function UserMenu() {
           <MenuItem onSelect={() => navigate(ROUTES.settings)} Icon={Settings}>
             Settings
           </MenuItem>
-          <DropdownMenu.Separator className="h-px bg-gray-100 dark:bg-gray-800 my-1.5" />
+          <DropdownMenu.Separator className="-mx-2 my-1.5 h-px bg-line" />
           <MenuItem
             danger
             Icon={LogOut}
@@ -93,10 +88,8 @@ function MenuItem({
     <DropdownMenu.Item
       onSelect={onSelect}
       className={cn(
-        "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm cursor-pointer outline-none",
-        danger
-          ? "text-error-600 dark:text-error-400 focus:bg-error-50 dark:focus:bg-error-500/10"
-          : "text-gray-700 dark:text-gray-200 focus:bg-gray-100 dark:focus:bg-white/5",
+        "flex h-10 cursor-pointer items-center gap-2.5 rounded-[12px] px-3 text-sm font-medium outline-none transition-colors",
+        danger ? "text-danger focus:bg-danger-tint" : "text-ink-2 focus:bg-paper-2 focus:text-ink",
       )}
     >
       <Icon className="size-4" />

@@ -10,7 +10,9 @@ import { Logo } from "./Logo";
 import { NotificationBell } from "@features/notifications/components/NotificationBell";
 
 /**
- * Top bar of the authenticated shell.
+ * Top bar of the authenticated shell — the website's header in its scrolled
+ * state: translucent paper with a blur, a pill search field, round icon
+ * buttons and the avatar pill.
  *
  * The <header> is full-bleed across the content column; an inner container
  * carries the same padding and max-width as <main>, so the bar spans the whole
@@ -37,41 +39,50 @@ export function Header() {
   }, [focusSearch]);
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-gray-200 bg-white/85 backdrop-blur-md dark:border-gray-800 dark:bg-gray-dark/85">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-2 px-4 sm:gap-3 sm:px-6 lg:px-8">
-        <button
-          type="button"
-          onClick={() => dispatch(setMobileSidebarOpen(true))}
-          aria-label="Open menu"
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 lg:hidden dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white"
-        >
-          <Menu className="size-5" />
-        </button>
+    <>
+      <header className="sticky top-0 z-30 w-full border-b border-line/80 bg-paper/80 backdrop-blur-xl backdrop-saturate-150">
+        {/* 60px on a phone, where the bar is permanent chrome on a short screen. */}
+        <div className="mx-auto flex h-[60px] w-full max-w-[1600px] items-center gap-2 px-4 sm:h-[68px] sm:gap-3 sm:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={() => dispatch(setMobileSidebarOpen(true))}
+            aria-label="Open menu"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-ink/6 hover:text-ink lg:hidden"
+          >
+            <Menu className="size-5" />
+          </button>
 
-        {/* The sidebar is off-canvas below lg, so the bar carries the brand there. */}
-        <NavLink to={ROUTES.dashboard} className="shrink-0 lg:hidden">
-          <Logo showText={false} />
-        </NavLink>
+          {/* The sidebar is off-canvas below lg, so the bar carries the brand there. */}
+          <NavLink to={ROUTES.dashboard} className="shrink-0 rounded-xl lg:hidden">
+            <Logo showText={false} />
+          </NavLink>
 
-        <div className="hidden min-w-0 flex-1 md:flex">
-          <SearchBox inputRef={searchRef} />
+          <div className="hidden min-w-0 flex-1 md:flex">
+            <SearchBox inputRef={searchRef} />
+          </div>
+          <div className="flex-1 md:hidden" />
+
+          <div className="flex shrink-0 items-center gap-1">
+            {/* The bell belongs to the notifications feature; round its trigger
+                to match the other icon buttons here. */}
+            <div className="flex [&>button]:rounded-full [&>button]:text-ink-2">
+              <NotificationBell />
+            </div>
+            <ThemeToggle compact />
+            <span aria-hidden className="mx-1.5 hidden h-7 w-px bg-line md:block" />
+            <UserMenu />
+          </div>
         </div>
-        <div className="flex-1 md:hidden" />
+      </header>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <NotificationBell />
-          <ThemeToggle compact />
-          <span className="mx-1 hidden h-8 w-px bg-gray-200 md:block dark:bg-gray-800" />
-          <UserMenu />
-        </div>
-      </div>
-
-      {/* Below md the field moves to its own row rather than being hidden behind
-          a magnifier button that had nowhere to open a search UI. */}
-      <div className="border-t border-gray-100 px-4 pb-2.5 pt-1 md:hidden dark:border-gray-800">
+      {/* Below md the field gets its own row rather than hiding behind a
+          magnifier button with nowhere to open. It sits in the page flow, not
+          in the sticky bar, so it scrolls away instead of holding another
+          57px of a phone screen. */}
+      <div className="mx-auto w-full max-w-[1600px] px-4 pt-3 sm:px-6 md:hidden">
         <SearchBox />
       </div>
-    </header>
+    </>
   );
 }
 
@@ -98,17 +109,19 @@ function SearchBox({ inputRef }: { inputRef?: React.Ref<HTMLInputElement> }) {
   };
 
   return (
-    <form onSubmit={submit} role="search" className="relative w-full max-w-xl">
-      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+    <form onSubmit={submit} role="search" className="relative w-full max-w-lg">
+      <Search className="pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-ink-3" />
       <input
         ref={inputRef}
         type="search"
         name="q"
         placeholder="Search courses…"
         aria-label="Search courses"
-        className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-14 text-sm text-gray-900 transition-shadow placeholder:text-gray-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/15 dark:border-gray-800 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-gray-dark"
+        // 16px below sm (iOS zooms into smaller fields on focus); ink-3
+        // placeholder, as on every search box — it is the field's only label.
+        className="h-11 w-full rounded-full border-0 bg-surface pl-11 pr-16 text-base text-ink shadow-[inset_0_0_0_1px_var(--control-line)] transition-shadow duration-200 placeholder:text-ink-3 hover:shadow-[inset_0_0_0_1px_var(--ink-3)] focus:shadow-[inset_0_0_0_1.5px_var(--focus),0_0_0_3px_color-mix(in_oklch,var(--focus)_25%,transparent)] focus:outline-none sm:text-sm"
       />
-      <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-gray-500 lg:inline-flex dark:border-gray-700 dark:bg-gray-dark dark:text-gray-400">
+      <kbd className="kbd pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 lg:inline-flex">
         ⌘K
       </kbd>
     </form>

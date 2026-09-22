@@ -4,7 +4,11 @@ import { Input } from "@shared/components/ui/Input";
 import { Badge } from "@shared/components/ui/Badge";
 import { Checkbox } from "@shared/components/ui/Checkbox";
 import { Spinner } from "@shared/components/ui/Spinner";
+import { CategorySwatch } from "@shared/components/bright";
+import { categoryStyle } from "@shared/lib/categoryStyle";
+import { cn } from "@shared/lib/cn";
 import { useListCategoriesQuery } from "@features/categories/api/categoriesApi";
+import type { CategoryDto } from "@features/categories/types";
 import type { UUID } from "@shared/types/lms";
 
 interface Props {
@@ -21,9 +25,10 @@ export function CategoryMultiSelect({ value, onChange, invalid }: Props) {
   const { data: categories, isLoading } = useListCategoriesQuery();
   const [query, setQuery] = useState("");
 
+  // Whole categories, not just names: the chips need the slug for their colour.
   const byId = useMemo(() => {
-    const m = new Map<string, string>();
-    (categories ?? []).forEach((c) => m.set(c.id, c.name));
+    const m = new Map<string, CategoryDto>();
+    (categories ?? []).forEach((c) => m.set(c.id, c));
     return m;
   }, [categories]);
 
@@ -39,32 +44,38 @@ export function CategoryMultiSelect({ value, onChange, invalid }: Props) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {value.map((id) => (
-            <Badge key={id} tone="brand" className="gap-1">
-              <span className="truncate max-w-[12rem]">{byId.get(id) ?? id}</span>
-              <button
-                type="button"
-                onClick={() => toggle(id)}
-                aria-label="Remove category"
-                className="-mr-0.5 inline-flex"
-              >
-                <X className="size-3" />
-              </button>
-            </Badge>
-          ))}
+          {value.map((id) => {
+            const c = byId.get(id);
+            return (
+              // Selected categories in their own colours, as the website's
+              // topic chips show them.
+              <Badge key={id} tone="hue" className={cn("h-7 gap-1.5 pl-1.5 pr-1", categoryStyle(c).k)}>
+                <span aria-hidden className="size-2 shrink-0 rounded-[3px] bg-k-500" />
+                <span className="truncate max-w-[12rem]">{c?.name ?? id}</span>
+                <button
+                  type="button"
+                  onClick={() => toggle(id)}
+                  aria-label="Remove category"
+                  className="inline-flex size-5 items-center justify-center rounded-full transition-colors hover:bg-k-200"
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            );
+          })}
         </div>
       )}
 
       <div
-        className={
-          "rounded-xl border " +
-          (invalid ? "border-error-300" : "border-gray-200 dark:border-gray-700")
-        }
+        className={cn(
+          "overflow-hidden rounded-[16px] border bg-surface",
+          invalid ? "border-danger" : "border-line-2",
+        )}
       >
-        <div className="p-2 border-b border-gray-100 dark:border-gray-800">
+        <div className="border-b border-line p-2">
           <Input
             placeholder="Search categories…"
             leftIcon={<Search className="size-4" />}
@@ -72,21 +83,30 @@ export function CategoryMultiSelect({ value, onChange, invalid }: Props) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="max-h-56 overflow-y-auto p-1">
+        <div className="max-h-64 overflow-y-auto p-1.5">
           {isLoading ? (
             <div className="flex justify-center py-6"><Spinner size={4} /></div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-gray-500 px-2 py-4 text-center">No categories found.</p>
+            <p className="px-2 py-4 text-center text-sm text-ink-3">No categories found.</p>
           ) : (
-            filtered.map((c) => (
-              <label
-                key={c.id}
-                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5"
-              >
-                <Checkbox checked={value.includes(c.id)} onCheckedChange={() => toggle(c.id)} />
-                <span className="text-sm text-gray-700 dark:text-gray-200">{c.name}</span>
-              </label>
-            ))
+            filtered.map((c) => {
+              const checked = value.includes(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-[12px] px-2.5 py-1.5 transition-colors",
+                    checked ? "bg-navy-tint/60 hover:bg-navy-tint" : "hover:bg-paper-2",
+                  )}
+                >
+                  <Checkbox checked={checked} onCheckedChange={() => toggle(c.id)} />
+                  <CategorySwatch category={c} round className="size-7" />
+                  <span className={cn("min-w-0 text-sm", checked ? "font-medium text-ink" : "text-ink-2")}>
+                    {c.name}
+                  </span>
+                </label>
+              );
+            })
           )}
         </div>
       </div>

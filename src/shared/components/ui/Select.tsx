@@ -2,6 +2,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { forwardRef } from "react";
 import { cn } from "@shared/lib/cn";
+import { fieldClasses } from "./field";
 
 export const Select = SelectPrimitive.Root;
 export const SelectGroup = SelectPrimitive.Group;
@@ -14,18 +15,17 @@ export const SelectTrigger = forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-xl border bg-white dark:bg-gray-dark px-3.5 text-sm",
-      "text-gray-900 dark:text-white",
-      "focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 transition-shadow",
-      "data-[placeholder]:text-gray-400 disabled:opacity-60 disabled:cursor-not-allowed",
-      invalid ? "border-error-300" : "border-gray-200 dark:border-gray-700",
+      fieldClasses(invalid),
+      "flex h-11 items-center justify-between gap-2 px-4 text-left data-[placeholder]:text-ink-4",
+      "data-[state=open]:border-focus data-[state=open]:ring-[3px] data-[state=open]:ring-focus/25",
+      "[&>span]:truncate",
       className,
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="size-4 text-gray-400" />
+      <ChevronDown className="size-4 shrink-0 text-ink-3" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -41,8 +41,15 @@ export const SelectContent = forwardRef<
       position={position}
       sideOffset={6}
       className={cn(
-        "z-[60] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark shadow-theme-lg p-1.5",
+        // --raised: one step lighter than the cards at night, where the shadow
+        // barely shows on the navy canvas.
+        "z-[60] overflow-hidden rounded-[18px] border border-raised-line bg-raised p-1.5 text-ink shadow-[var(--shadow-lg)] animate-pop-in",
         "min-w-[var(--radix-select-trigger-width)] max-h-[var(--radix-select-content-available-height)]",
+        // At least the trigger's width, at most what is left of the screen: a
+        // long option ("SMOKE-verify-roomstatus RETIRED · SMOKE-vrs-R…") grew
+        // the panel past a phone's right edge and cut the room code, which is
+        // what tells the options apart. Options wrap inside instead.
+        "max-w-[min(var(--radix-select-content-available-width),calc(100vw-24px))]",
         className,
       )}
       {...props}
@@ -60,19 +67,21 @@ export const SelectItem = forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-xl py-2 pl-8 pr-3 text-sm outline-none",
-      "focus:bg-brand-50 dark:focus:bg-brand-500/10 focus:text-brand-700 dark:focus:text-brand-300",
+      "relative flex min-h-10 w-full cursor-pointer select-none items-center rounded-[12px] py-2 pl-9 pr-3 text-sm text-ink-2 outline-none",
+      "focus:bg-navy-tint focus:text-navy data-[state=checked]:font-semibold data-[state=checked]:text-ink",
       "data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed",
       className,
     )}
     {...props}
   >
-    <span className="absolute left-2.5 inline-flex size-4 items-center justify-center">
+    <span className="absolute left-3 inline-flex size-4 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="size-4 text-brand-700 dark:text-brand-300" />
+        <Check className="size-4 text-navy" strokeWidth={2.5} />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    <span className="min-w-0 break-words">
+      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    </span>
   </SelectPrimitive.Item>
 ));
 SelectItem.displayName = "SelectItem";
@@ -83,7 +92,7 @@ export const SelectSeparator = forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Separator
     ref={ref}
-    className={cn("my-1 h-px bg-gray-100 dark:bg-gray-800", className)}
+    className={cn("-mx-1.5 my-1.5 h-px bg-line", className)}
     {...props}
   />
 ));
