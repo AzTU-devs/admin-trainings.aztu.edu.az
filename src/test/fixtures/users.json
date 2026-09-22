@@ -1,0 +1,55 @@
+[
+  {
+    "id": "2e44d99d-6568-40c7-98ec-7fc0430b73f6",
+    "email": "fixture-1@example.com",
+    "fullName": "Fixture Admin 1",
+    "phone": null,
+    "roles": [
+      "ADMIN"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-21T20:07:42.100284Z",
+    "lastLoginAt": "2026-09-21T20:41:25.525019Z",
+    "lockedUntil": null
+  },
+  {
+    "id": "f44d2bee-3b8f-49e8-929c-c307479fcc37",
+    "email": "fixture-2@example.com",
+    "fullName": "Fixture Tutor-User 2",
+    "phone": null,
+    "roles": [
+      "USER",
+      "TUTOR"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-21T18:03:30.288683Z",
+    "lastLoginAt": null,
+    "lockedUntil": null
+  },
+  {
+    "id": "460de803-0b65-400b-986d-7394f0bfe274",
+    "email": "fixture-3@example.com",
+    "fullName": "Fixture User 3",
+    "phone": null,
+    "roles": [
+      "USER"
+    ],
+    "status": "DISABLED",
+    "createdAt": "2026-09-21T20:38:43.097261Z",
+    "lastLoginAt": "2026-09-21T20:38:43.151456Z",
+    "lockedUntil": null
+  },
+  {
+    "id": "0f0f0f0f-0000-4000-8000-00000000005a",
+    "email": "fixture-sa@example.com",
+    "fullName": "Fixture Super Admin",
+    "phone": null,
+    "roles": [
+      "SUPER_ADMIN"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-21T20:07:42.100284Z",
+    "lastLoginAt": "2026-09-21T20:41:25.525019Z",
+    "lockedUntil": null
+  }
+]

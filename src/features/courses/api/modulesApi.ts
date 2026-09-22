@@ -8,7 +8,8 @@ import type {
 } from "@features/courses/types";
 
 /**
- * Tutor course-content management — modules & lessons.
+ * Course-content management — modules & lessons. Tutors edit their own
+ * courses; staff (`course:manage`) any course, on an API that allows it.
  * Backs the existing backend endpoints under `/portal`:
  *   GET/POST  /portal/courses/{courseId}/modules
  *   PUT/DELETE /portal/modules/{moduleId}
@@ -20,6 +21,17 @@ import type {
  * editor re-fetches the whole tree. `courseId` is threaded through lesson
  * mutations purely for that invalidation (it is not sent to the backend).
  */
+/**
+ * A content change also refreshes the course itself: both course screens read
+ * the lesson count (the empty-course publish and submit warnings, the co-tutor
+ * outline) from the course DTO. The id tag reaches the tutor's slug-keyed copy
+ * too, because every course detail is also tagged with its id (courseDetailTags).
+ */
+const contentTags = (courseId: UUID) => [
+  { type: "Module" as const, id: courseId },
+  { type: "Course" as const, id: courseId },
+];
+
 export const modulesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     listModules: build.query<ModuleDto[], UUID>({
@@ -33,17 +45,17 @@ export const modulesApi = baseApi.injectEndpoints({
         method: "POST",
         data: body,
       }),
-      invalidatesTags: (_r, _e, a) => [{ type: "Module", id: a.courseId }],
+      invalidatesTags: (_r, _e, a) => contentTags(a.courseId),
     }),
 
     updateModule: build.mutation<ModuleDto, { courseId: UUID; moduleId: UUID; body: ModuleUpsertRequest }>({
       query: ({ moduleId, body }) => ({ url: `/portal/modules/${moduleId}`, method: "PUT", data: body }),
-      invalidatesTags: (_r, _e, a) => [{ type: "Module", id: a.courseId }],
+      invalidatesTags: (_r, _e, a) => contentTags(a.courseId),
     }),
 
     deleteModule: build.mutation<void, { courseId: UUID; moduleId: UUID }>({
       query: ({ moduleId }) => ({ url: `/portal/modules/${moduleId}`, method: "DELETE" }),
-      invalidatesTags: (_r, _e, a) => [{ type: "Module", id: a.courseId }],
+      invalidatesTags: (_r, _e, a) => contentTags(a.courseId),
     }),
 
     addLesson: build.mutation<LessonDto, { courseId: UUID; moduleId: UUID; body: LessonUpsertRequest }>({
@@ -52,17 +64,17 @@ export const modulesApi = baseApi.injectEndpoints({
         method: "POST",
         data: body,
       }),
-      invalidatesTags: (_r, _e, a) => [{ type: "Module", id: a.courseId }],
+      invalidatesTags: (_r, _e, a) => contentTags(a.courseId),
     }),
 
     updateLesson: build.mutation<LessonDto, { courseId: UUID; lessonId: UUID; body: LessonUpsertRequest }>({
       query: ({ lessonId, body }) => ({ url: `/portal/lessons/${lessonId}`, method: "PUT", data: body }),
-      invalidatesTags: (_r, _e, a) => [{ type: "Module", id: a.courseId }],
+      invalidatesTags: (_r, _e, a) => contentTags(a.courseId),
     }),
 
     deleteLesson: build.mutation<void, { courseId: UUID; lessonId: UUID }>({
       query: ({ lessonId }) => ({ url: `/portal/lessons/${lessonId}`, method: "DELETE" }),
-      invalidatesTags: (_r, _e, a) => [{ type: "Module", id: a.courseId }],
+      invalidatesTags: (_r, _e, a) => contentTags(a.courseId),
     }),
   }),
   overrideExisting: false,

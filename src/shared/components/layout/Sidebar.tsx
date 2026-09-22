@@ -1,4 +1,5 @@
-import { NavLink } from "react-router";
+import { useEffect } from "react";
+import { NavLink, useLocation } from "react-router";
 import { ChevronsLeft, ChevronsRight, X } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@lib/redux/hooks";
 import {
@@ -18,10 +19,20 @@ export function Sidebar() {
   const dispatch = useAppDispatch();
   const collapsed = useAppSelector((s) => s.ui.sidebarCollapsed);
   const mobileOpen = useAppSelector((s) => s.ui.mobileSidebarOpen);
-  const { roles } = usePermissions();
+  const { roles, can } = usePermissions();
+  const { pathname } = useLocation();
   // Only render the menu items the current user's roles can access — a tutor
   // must never see the Administration / System groups, etc.
-  const groups = filterMenuForRoles(MENU_GROUPS, roles);
+  const groups = filterMenuForRoles(MENU_GROUPS, roles, can);
+
+  // Below lg the sidebar is an overlay drawer. Tapping an item navigated but
+  // left the drawer covering the page it had just opened; close it whenever the
+  // route changes. (The links' own onClick covers tapping the current page.)
+  useEffect(() => {
+    dispatch(setMobileSidebarOpen(false));
+  }, [pathname, dispatch]);
+
+  const closeMobile = () => dispatch(setMobileSidebarOpen(false));
 
   return (
     <>
@@ -42,7 +53,7 @@ export function Sidebar() {
           collapsed ? "w-[84px]" : "w-[272px]",
         )}
       >
-        <SidebarHeader collapsed={collapsed} onClose={() => dispatch(setMobileSidebarOpen(false))} />
+        <SidebarHeader collapsed={collapsed} onClose={closeMobile} />
 
         <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4">
           <ul className="space-y-6">
@@ -55,7 +66,7 @@ export function Sidebar() {
                 )}
                 <ul className="space-y-1">
                   {g.items.map((item) => (
-                    <SidebarLink key={item.id} item={item} collapsed={collapsed} />
+                    <SidebarLink key={item.id} item={item} collapsed={collapsed} onNavigate={closeMobile} />
                   ))}
                 </ul>
               </li>
@@ -90,7 +101,7 @@ function SidebarHeader({ collapsed, onClose }: { collapsed: boolean; onClose: ()
         collapsed ? "justify-center" : "justify-between",
       )}
     >
-      <NavLink to="/dashboard" className="min-w-0">
+      <NavLink to="/dashboard" className="min-w-0" onClick={onClose}>
         <Logo showText={!collapsed} />
       </NavLink>
       <button
@@ -105,7 +116,15 @@ function SidebarHeader({ collapsed, onClose }: { collapsed: boolean; onClose: ()
   );
 }
 
-function SidebarLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }) {
+function SidebarLink({
+  item,
+  collapsed,
+  onNavigate,
+}: {
+  item: MenuItem;
+  collapsed: boolean;
+  onNavigate: () => void;
+}) {
   const Icon = item.icon;
   if (!item.path) return null;
 
@@ -114,6 +133,7 @@ function SidebarLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }
       <NavLink
         to={item.path}
         end={item.path === "/dashboard"}
+        onClick={onNavigate}
         className={({ isActive }) =>
           cn(
             "group relative flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition-colors",

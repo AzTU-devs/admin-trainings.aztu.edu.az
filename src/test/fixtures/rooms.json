@@ -1,0 +1,17 @@
+[
+  {
+    "id": "d7a7af54-bbec-4483-bc52-289a7d205a43",
+    "name": "Fixture room",
+    "roomNumber": "F-101",
+    "building": null,
+    "capacity": 10,
+    "description": null,
+    "status": "AVAILABLE",
+    "hourlyRate": 5.0,
+    "currency": "AZN",
+    "imageMediaIds": [
+      "66304a2a-7a35-4283-863e-ee294876b0b4",
+      "48643de3-33d1-4d04-87ea-0a9f9a301bcd"
+    ]
+  }
+]

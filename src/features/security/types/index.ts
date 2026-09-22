@@ -1,6 +1,10 @@
+/** The API also records IP_BLOCKED, IP_UNBLOCKED and ACCOUNT_UNLOCKED (SecurityEventRecorder). */
 export type SecurityEventKind =
   | "FAILED_LOGIN"
   | "LOCKOUT"
+  | "ACCOUNT_UNLOCKED"
+  | "IP_BLOCKED"
+  | "IP_UNBLOCKED"
   | "PASSWORD_CHANGE"
   | "MFA_ENROLLED"
   | "MFA_REMOVED"
@@ -31,4 +35,14 @@ export interface SecurityOverview {
   blockedIps: number;
   recentEvents: SecurityEvent[];
   topOffendingIps: { ipAddress: string; count: number; countryCode?: string }[];
+}
+
+/** Mirror of backend BlockedIpDto — one entry of the IP blocklist. */
+export interface BlockedIp {
+  id: string;
+  ipAddress: string;
+  reason?: string | null;
+  createdAt?: string | null;
+  createdBy?: string | null;
+  createdByEmail?: string | null;
 }

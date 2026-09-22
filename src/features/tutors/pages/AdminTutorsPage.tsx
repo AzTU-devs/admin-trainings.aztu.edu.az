@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, RotateCcw, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { DataTable } from "@shared/components/tables/DataTable";
@@ -25,15 +25,33 @@ import {
 } from "@features/tutors/api/tutorsApi";
 import type { TutorProfileDto } from "@features/tutors/types";
 import { TUTOR_APPROVAL_STATUS, type TutorApprovalStatus } from "@shared/types/lms";
+import { apiErrorMessage } from "@shared/lib/apiError";
+
+type Decision = { tutor: TutorProfileDto; kind: "APPROVED" | "REJECTED"; reapprove?: boolean; revoke?: boolean };
+
+/*
+ * The tabs are the statuses a decision can produce. "Suspended" is gone: no API
+ * path sets it, so the tab could never fill.
+ *
+ * Revoke (APPROVED → REJECTED) is offered only by an API that versions profiles:
+ * that one takes the TUTOR role back and ends the expert's sessions, and also
+ * delivers the note. An older API only flipped the status, leaving a "rejected"
+ * expert every tutor right, and stored the note where nobody saw it.
+ */
+const TABS: { value: TutorApprovalStatus; label: string }[] = [
+  { value: TUTOR_APPROVAL_STATUS.PENDING, label: "Pending" },
+  { value: TUTOR_APPROVAL_STATUS.APPROVED, label: "Approved" },
+  { value: TUTOR_APPROVAL_STATUS.REJECTED, label: "Rejected" },
+];
 
 export default function AdminTutorsPage() {
   const [tab, setTab] = useState<TutorApprovalStatus>(TUTOR_APPROVAL_STATUS.PENDING);
   const [page, setPage] = useState(0);
-  const [decision, setDecision] = useState<{ tutor: TutorProfileDto; kind: "APPROVED" | "REJECTED" } | null>(null);
+  const [decision, setDecision] = useState<Decision | null>(null);
   const [note, setNote] = useState("");
   const [editing, setEditing] = useState<TutorProfileDto | null>(null);
 
-  const { data, isFetching } = useListTutorsQuery({ status: tab, page, size: 10 });
+  const { currentData: data, isFetching, isError, error, refetch } = useListTutorsQuery({ status: tab, page, size: 10 });
   const [decide, { isLoading: deciding }] = useDecideTutorMutation();
 
   const columns = useMemo<ColumnDef<TutorProfileDto>[]>(
@@ -61,6 +79,18 @@ export default function AdminTutorsPage() {
       { header: "Experience", cell: ({ row }) => (row.original.yearsExperience != null ? `${row.original.yearsExperience} yr` : "—") },
       { header: "Rating", cell: ({ row }) => (row.original.ratingCount ? `${row.original.ratingAvg ?? 0} (${row.original.ratingCount})` : "—") },
       { header: "Status", cell: ({ row }) => <TutorStatusBadge status={row.original.approvalStatus} /> },
+      ...(tab === TUTOR_APPROVAL_STATUS.REJECTED
+        ? [
+            {
+              header: "Reason",
+              cell: ({ row }) => (
+                <span className="block max-w-xs whitespace-normal text-sm text-gray-600 dark:text-gray-300">
+                  {row.original.rejectionReason || "—"}
+                </span>
+              ),
+            } as ColumnDef<TutorProfileDto>,
+          ]
+        : []),
       {
         id: "actions",
         header: "",
@@ -73,12 +103,23 @@ export default function AdminTutorsPage() {
                 <Button size="sm" variant="danger" leftIcon={<X className="size-4" />} onClick={() => { setDecision({ tutor: row.original, kind: "REJECTED" }); setNote(""); }}>Reject</Button>
               </>
             )}
+            {/* A rejected applicant could never be approved later; the API
+                accepts APPROVED on a rejected profile, so offer it. */}
+            {row.original.approvalStatus === TUTOR_APPROVAL_STATUS.REJECTED && (
+              <Button size="sm" variant="secondary" leftIcon={<RotateCcw className="size-4" />} onClick={() => { setDecision({ tutor: row.original, kind: "APPROVED", reapprove: true }); setNote(""); }}>Re-approve</Button>
+            )}
+            {row.original.approvalStatus === TUTOR_APPROVAL_STATUS.APPROVED && typeof row.original.version === "number" && (
+              <Button size="sm" variant="ghost" leftIcon={<UserX className="size-4 text-error-500" />} onClick={() => { setDecision({ tutor: row.original, kind: "REJECTED", revoke: true }); setNote(""); }}>Revoke</Button>
+            )}
           </div>
         ),
       },
     ],
-    [],
+    [tab],
   );
+
+  // A versioned profile means an API that emails and notifies the decision's note.
+  const noteIsSent = typeof decision?.tutor.version === "number";
 
   return (
     <>
@@ -86,16 +127,19 @@ export default function AdminTutorsPage() {
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v as TutorApprovalStatus); setPage(0); }}>
         <TabsList className="mb-4">
-          <TabsTrigger value={TUTOR_APPROVAL_STATUS.PENDING}>Pending</TabsTrigger>
-          <TabsTrigger value={TUTOR_APPROVAL_STATUS.APPROVED}>Approved</TabsTrigger>
-          <TabsTrigger value={TUTOR_APPROVAL_STATUS.REJECTED}>Rejected</TabsTrigger>
-          <TabsTrigger value={TUTOR_APPROVAL_STATUS.SUSPENDED}>Suspended</TabsTrigger>
+          {TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
+          ))}
         </TabsList>
         <TabsContent value={tab}>
           <DataTable<TutorProfileDto>
             data={data?.content ?? []}
             columns={columns}
-            isLoading={isFetching}
+            isLoading={isFetching && !data}
+            isError={isError}
+            error={error}
+            onRetry={refetch}
+            errorWhat="tutors"
             emptyTitle={`No ${tab.toLowerCase()} tutors`}
             pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
             onPageChange={setPage}
@@ -107,14 +151,34 @@ export default function AdminTutorsPage() {
       <Dialog open={!!decision} onOpenChange={(o) => !o && setDecision(null)}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>{decision?.kind === "APPROVED" ? "Approve tutor" : "Reject tutor"}</DialogTitle>
+            <DialogTitle>
+              {decision?.revoke
+                ? "Revoke expert approval"
+                : decision?.reapprove
+                  ? "Re-approve tutor"
+                  : decision?.kind === "APPROVED"
+                    ? "Approve tutor"
+                    : "Reject tutor"}
+            </DialogTitle>
             <DialogDescription>
               {decision && `${decision.tutor.firstName} ${decision.tutor.lastName}`}
+              {decision?.revoke
+                ? " loses the tutor role and is signed out. Their courses stay; an admin can re-approve them later."
+                : decision?.kind === "APPROVED"
+                  ? " gets the tutor tools and a public expert page."
+                  : " stays without tutor access."}
             </DialogDescription>
           </DialogHeader>
+          {/* Only an API that delivers the note (in-app and by email) may be
+              promised to; an older one stored it where nobody saw it. */}
           <Textarea
             rows={3}
-            placeholder={decision?.kind === "APPROVED" ? "Optional welcome note…" : "Reason for rejection (sent to the applicant)…"}
+            placeholder={
+              noteIsSent
+                ? "Note to the applicant — sent with the decision, in-app and by email…"
+                : "Internal note (not sent to the applicant)…"
+            }
+            aria-label={noteIsSent ? "Note to the applicant" : "Internal note"}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
@@ -127,14 +191,22 @@ export default function AdminTutorsPage() {
                 if (!decision) return;
                 try {
                   await decide({ id: decision.tutor.id, decision: decision.kind, note: note.trim() || undefined }).unwrap();
-                  toast.success(decision.kind === "APPROVED" ? "Tutor approved" : "Tutor rejected");
+                  toast.success(
+                    decision.revoke
+                      ? "Approval revoked"
+                      : decision.reapprove
+                        ? "Tutor re-approved"
+                        : decision.kind === "APPROVED"
+                          ? "Tutor approved"
+                          : "Tutor rejected",
+                  );
                   setDecision(null);
-                } catch {
-                  toast.error("Could not save decision");
+                } catch (e) {
+                  toast.error(apiErrorMessage(e, "Could not save the decision"));
                 }
               }}
             >
-              {decision?.kind === "APPROVED" ? "Approve" : "Reject"}
+              {decision?.revoke ? "Revoke" : decision?.reapprove ? "Re-approve" : decision?.kind === "APPROVED" ? "Approve" : "Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>

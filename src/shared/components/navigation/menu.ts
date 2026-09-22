@@ -5,7 +5,6 @@ import {
   Video,
   Users,
   CalendarClock,
-  ClipboardCheck,
   ShieldCheck,
   DoorOpen,
   Tags,
@@ -31,6 +30,8 @@ export interface MenuItem {
   path?: string;
   /** Required roles — user must have at least one. Omit for everyone. */
   roles?: Role[];
+  /** API permission the page needs; the item is hidden when the account lacks it. */
+  permission?: string;
   children?: MenuItem[];
   badge?: string;
 }
@@ -41,6 +42,11 @@ export interface MenuGroup {
   items: MenuItem[];
 }
 
+/*
+ * Each label is the title of the page it opens (the routes smoke test checks
+ * this). "Booking requests" and "My room requests" both opened a page called
+ * "Room bookings", so the menu and the page seemed to be two different things.
+ */
 export const MENU_GROUPS: MenuGroup[] = [
   {
     id: "general",
@@ -57,6 +63,8 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "Notifications",
         icon: Bell,
         path: ROUTES.notifications,
+        // ADMIN has no inbox permission on the API; the page was a 403.
+        permission: "notification:read_own",
       },
     ],
   },
@@ -66,16 +74,9 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       {
         id: "courses",
-        label: "Courses",
+        label: "My courses",
         icon: BookOpen,
         path: ROUTES.tutorCourses,
-        roles: [ROLES.TUTOR],
-      },
-      {
-        id: "enrollments",
-        label: "Enrollments",
-        icon: ClipboardCheck,
-        path: ROUTES.tutorEnrollments,
         roles: [ROLES.TUTOR],
       },
       {
@@ -94,14 +95,14 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: "room-requests-tutor",
-        label: "My room requests",
+        label: "Room bookings",
         icon: CalendarClock,
         path: ROUTES.tutorRoomRequests,
         roles: [ROLES.TUTOR],
       },
       {
         id: "approvals",
-        label: "Approvals",
+        label: "Approval status",
         icon: ShieldCheck,
         path: ROUTES.tutorApprovals,
         roles: [ROLES.TUTOR],
@@ -149,7 +150,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: "room-requests-admin",
-        label: "Booking requests",
+        label: "Room bookings",
         icon: CalendarClock,
         path: ROUTES.adminRoomRequests,
         roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
@@ -231,10 +232,12 @@ export const MENU_GROUPS: MenuGroup[] = [
 export function filterMenuForRoles(
   groups: MenuGroup[],
   userRoles: Role[],
+  can: (permission: string) => boolean = () => true,
 ): MenuGroup[] {
   const userRoleSet = new Set<Role>(userRoles);
   const allowed = (item: MenuItem) =>
-    !item.roles || item.roles.some((r) => userRoleSet.has(r));
+    (!item.roles || item.roles.some((r) => userRoleSet.has(r))) &&
+    (!item.permission || can(item.permission));
 
   return groups
     .map((g) => ({

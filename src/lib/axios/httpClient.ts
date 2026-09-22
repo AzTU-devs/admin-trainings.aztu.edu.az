@@ -27,6 +27,11 @@ export interface NormalizedError {
   status: number;
   message: string;
   code?: string;
+  /**
+   * Field path → message, first message per field. The API sends validation
+   * errors as an array of `{ field, code, message }`; it is folded into a map
+   * here so every form can look a field up by the same name it registered.
+   */
   fieldErrors?: Record<string, string>;
   /** marker so re-normalizing is a no-op and the shape stays serializable */
   isNormalized: true;
@@ -55,9 +60,29 @@ declare module "axios" {
 
 /* ─────────────────────────────  refresh queue  ──────────────────────────── */
 
-let refreshPromise: Promise<string> | null = null;
+/** What `/auth/refresh` hands back that the portal uses. */
+export interface RefreshedSession {
+  accessToken: string;
+  /** The backend UserDto, when the API includes it (it does today). */
+  user?: unknown;
+}
 
-async function refreshAccessToken(): Promise<string> {
+let refreshPromise: Promise<RefreshedSession> | null = null;
+
+/**
+ * Mints a new access token from the refresh cookie. Exported because it is not
+ * only the 401 interceptor's business: the notification socket must present a
+ * live token on every reconnect, and a new tab has to turn the 30-day cookie
+ * into a session before its first request. Concurrent callers share one call.
+ *
+ * Every success is also announced as an `auth:token` window event, so the auth
+ * slice follows the stored token instead of keeping the one it was born with.
+ */
+export async function refreshAccessToken(): Promise<string> {
+  return (await refreshSession()).accessToken;
+}
+
+export function refreshSession(): Promise<RefreshedSession> {
   if (refreshPromise) return refreshPromise;
 
   // Nothing to send and nothing to check first: the token is in a cookie this app
@@ -67,7 +92,7 @@ async function refreshAccessToken(): Promise<string> {
   // payload the API can deserialize. Bare `axios` on purpose — going through
   // `httpClient` would re-enter the interceptor below on the refresh's own 401.
   refreshPromise = axios
-    .post<{ data: { accessToken: string } }>(
+    .post<{ data: { accessToken: string; user?: unknown } }>(
       `${env.api.baseUrl}/auth/refresh`,
       {},
       { timeout: env.api.timeoutMs, withCredentials: true },
@@ -76,9 +101,12 @@ async function refreshAccessToken(): Promise<string> {
       // Unwrap the { data: ... } envelope. The response still carries the rotated
       // refresh token — deliberately ignored, the cookie the API just re-set is
       // the only copy this app keeps.
-      const { accessToken } = res.data.data;
+      const { accessToken, user } = res.data.data;
       appStorage.set(STORAGE_KEYS.accessToken, accessToken);
-      return accessToken;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:token", { detail: { accessToken } }));
+      }
+      return { accessToken, user };
     })
     .finally(() => {
       refreshPromise = null;
@@ -186,6 +214,21 @@ export function normalizeError(err: unknown): NormalizedError {
       };
     }
 
+    // No response at all: the request never reached the API (offline, DNS,
+    // CORS, a proxy that dropped it, a timeout). Axios's own "Network Error"
+    // tells the user nothing they can act on.
+    if (!err.response) {
+      return {
+        status: 0,
+        message:
+          err.code === "ECONNABORTED"
+            ? "The server took too long to answer. Please try again."
+            : "Can't reach the server. Check your connection and try again.",
+        code: err.code ?? "NETWORK_ERROR",
+        isNormalized: true,
+      };
+    }
+
     return {
       status,
       message:
@@ -193,7 +236,7 @@ export function normalizeError(err: unknown): NormalizedError {
         err.message ||
         "Unexpected network error. Please try again.",
       code: body?.code ?? body?.error ?? err.code,
-      fieldErrors: body?.fieldErrors ?? body?.errors,
+      fieldErrors: toFieldErrorMap(body?.fieldErrors ?? body?.errors),
       isNormalized: true,
     };
   }
@@ -201,6 +244,31 @@ export function normalizeError(err: unknown): NormalizedError {
     return { status: 0, message: err.message, isNormalized: true };
   }
   return { status: 0, message: "Unknown error", isNormalized: true };
+}
+
+/**
+ * Folds the API's validation errors into `{ field: message }`.
+ *
+ * The API answers a 400 with `errors: [{ field, code, message, rejectedValue }]`,
+ * but this used to be passed through as if it were already a map, so callers
+ * that did `Object.entries(fieldErrors)` got `["0", {…}]` and called
+ * `setError("0", …)` — no field was ever marked. The first message per field
+ * wins, which is the one the API considers most specific.
+ */
+function toFieldErrorMap(raw: ApiErrorBody["errors"]): Record<string, string> | undefined {
+  if (!raw) return undefined;
+  const out: Record<string, string> = {};
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (!item || typeof item.field !== "string" || !item.field) continue;
+      if (!(item.field in out)) out[item.field] = item.message || item.code || "Invalid value";
+    }
+  } else {
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === "string" && !(k in out)) out[k] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** Thin typed wrappers — prefer these in feature `api/` modules. */

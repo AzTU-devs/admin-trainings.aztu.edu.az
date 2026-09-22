@@ -11,14 +11,15 @@ import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@shared/components/ui/Dialog";
 import { Form, FormSection } from "@shared/components/forms/Form";
-import { FormField } from "@shared/components/forms/FormField";
-import { Input } from "@shared/components/ui/Input";
+import { toastApiError } from "@shared/lib/apiError";
 import { RoomRequestStatusBadge } from "@features/room-requests/components/RoomRequestStatusBadge";
+import { BookingFields } from "@features/room-requests/components/BookingFields";
 import {
   useCancelRoomBookingMutation,
   useCreateRoomBookingMutation,
@@ -41,13 +42,13 @@ export default function TutorRoomRequestsPage() {
   const [page, setPage] = useState(0);
   const [toCancel, setToCancel] = useState<RoomBookingDto | null>(null);
 
-  const { data, isFetching } = useListMyRoomBookingsQuery({ page, size: 10 });
+  const { currentData: data, isFetching, isError, error, refetch } = useListMyRoomBookingsQuery({ page, size: 10 });
   const [createBooking] = useCreateRoomBookingMutation();
   const [cancelBooking] = useCancelRoomBookingMutation();
 
   const form = useForm<RoomBookingFormValues>({
     resolver: zodResolver(roomBookingSchema),
-    defaultValues: { roomId: "", offlineCourseId: "", startsAt: "", endsAt: "", recurrenceRule: "" },
+    defaultValues: { roomId: "", offlineCourseId: "", startsAt: "", endsAt: "" },
   });
 
   const fmt = (iso: string) => new Date(iso).toLocaleString();
@@ -60,6 +61,7 @@ export default function TutorRoomRequestsPage() {
           <span className="font-medium text-gray-900 dark:text-white">{row.original.roomName}</span>
         ),
       },
+      { header: "Course", cell: ({ row }) => <span className="text-sm">{row.original.offlineCourseTitle ?? "—"}</span> },
       { header: "Starts", cell: ({ row }) => <span className="text-sm">{fmt(row.original.startsAt)}</span> },
       { header: "Ends", cell: ({ row }) => <span className="text-sm">{fmt(row.original.endsAt)}</span> },
       {
@@ -100,7 +102,7 @@ export default function TutorRoomRequestsPage() {
         title="Room bookings"
         description="Request a classroom for an offline session and track your bookings."
         actions={
-          <Button leftIcon={<Plus className="size-4" />} onClick={() => setOpen(true)}>
+          <Button leftIcon={<Plus className="size-4" />} onClick={() => { form.reset(); setOpen(true); }}>
             New booking
           </Button>
         }
@@ -109,7 +111,11 @@ export default function TutorRoomRequestsPage() {
       <DataTable<RoomBookingDto>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="your bookings"
         emptyTitle="No bookings yet"
         emptyDescription="Request a classroom with the button above; an admin reviews it."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
@@ -121,6 +127,7 @@ export default function TutorRoomRequestsPage() {
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>New room booking</DialogTitle>
+            <DialogDescription>An administrator reviews each request before the room is yours.</DialogDescription>
           </DialogHeader>
           <Form
             form={form}
@@ -131,32 +138,18 @@ export default function TutorRoomRequestsPage() {
                   offlineCourseId: values.offlineCourseId || undefined,
                   startsAt: new Date(values.startsAt).toISOString(),
                   endsAt: new Date(values.endsAt).toISOString(),
-                  recurrenceRule: values.recurrenceRule || undefined,
                 }).unwrap();
                 toast.success("Booking requested");
                 form.reset();
                 setOpen(false);
-              } catch {
-                toast.error("Could not submit booking");
+              } catch (e) {
+                // e.g. ROOM_TIME_TAKEN, ROOM_UNAVAILABLE — say which.
+                toastApiError(e, "Could not submit the booking", form);
               }
             }}
           >
             <FormSection title="">
-              <FormField<RoomBookingFormValues> name="roomId" label="Room UUID" required>
-                {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} placeholder="room id" />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="offlineCourseId" label="Offline course UUID (optional)">
-                {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="startsAt" label="Starts at" required>
-                {({ field, invalid }) => <Input type="datetime-local" {...field} value={field.value as string} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="endsAt" label="Ends at" required>
-                {({ field, invalid }) => <Input type="datetime-local" {...field} value={field.value as string} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="recurrenceRule" label="Recurrence (RRULE, optional)" className="md:col-span-2">
-                {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} placeholder="FREQ=WEEKLY;COUNT=8" />}
-              </FormField>
+              <BookingFields />
             </FormSection>
             <DialogFooter>
               <Button variant="secondary" type="button" onClick={() => setOpen(false)}>Cancel</Button>
@@ -176,13 +169,9 @@ export default function TutorRoomRequestsPage() {
         destructive
         onConfirm={async () => {
           if (!toCancel) return;
-          try {
-            await cancelBooking(toCancel.id).unwrap();
-            toast.success("Booking cancelled");
-            setToCancel(null);
-          } catch {
-            toast.error("Could not cancel booking");
-          }
+          // A refusal is shown by ConfirmDialog, which keeps the dialog open.
+          await cancelBooking(toCancel.id).unwrap();
+          toast.success("Booking cancelled");
         }}
       />
     </>

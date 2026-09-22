@@ -1,3 +1,10 @@
+# Bridged stack for trying the image on a workstation. NOT for the server: there,
+# use docker-compose.prod.yml (host networking, port 8081, log rotation).
+#
+# Under this file the container's own nginx proxies /api/ and /ws to 127.0.0.1:8080,
+# which in a bridged container is the container itself, where no API runs, so
+# sign-in and notifications do not work unless the image was built with an
+# absolute VITE_API_BASE_URL. docker-compose.prod.yml has no such gap.
 services:
   portal:
     build:
@@ -15,8 +22,13 @@ services:
     # The nginx inside accepts request bodies up to 550m so a 512 MB lesson
     # video survives the single PUT the admin uses; keep that in step with the
     # backend's UPLOAD_MAX_VIDEO_MB.
+    #
+    # Loopback only. A published port is inserted into Docker's own iptables
+    # chains, ahead of UFW's INPUT rules, so `"8081:8081"` bound every interface and
+    # served the portal over plain HTTP to anyone who could reach the host,
+    # whatever `ufw deny` said.
     ports:
-      - "${PORT:-8081}:8081"
+      - "127.0.0.1:${PORT:-8081}:8081"
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -25,3 +37,10 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
+    # json-file keeps every line forever by default, so an nginx access log left
+    # running for months fills the disk. Same rotation as docker-compose.prod.yml.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

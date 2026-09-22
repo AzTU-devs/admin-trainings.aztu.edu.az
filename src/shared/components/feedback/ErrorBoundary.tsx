@@ -1,71 +1,71 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { isChunkLoadError } from "./chunkError";
+import { crashDetails, errorDigest, reportCrash } from "./crashReport";
+import { ErrorFallback } from "./ErrorFallback";
 
 interface Props {
   children: ReactNode;
   fallback?: (error: Error, reset: () => void) => ReactNode;
+  /**
+   * "screen" fills the viewport — the last-resort boundary around the whole
+   * app. "page" is a card inside the dashboard shell, so a broken page keeps the
+   * sidebar and header and the user can navigate away.
+   */
+  variant?: "screen" | "page";
 }
 
 interface State {
   error: Error | null;
+  /** The id shown to the user and sent in the report (see crashReport). */
+  digest: string | null;
+  /** The text "Copy details" copies; filled in once React hands over the component stack. */
+  details: string | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, digest: null, details: null };
 
-  static getDerivedStateFromError(error: Error): State {
-    return { error };
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    // The digest is needed for the very first fallback render, so it comes from
+    // the error alone; the component stack only arrives in componentDidCatch.
+    return { error, digest: errorDigest(error), details: null };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    if (import.meta.env.DEV) {
-      console.error("[ErrorBoundary]", error, info.componentStack);
-    }
+    const digest = this.state.digest ?? errorDigest(error);
+    // Still logged in production: the console reaches anyone debugging with the user.
+    console.error(`[ErrorBoundary] ${digest}`, error, info.componentStack);
+    this.setState({ details: crashDetails(error, { digest, componentStack: info.componentStack }) });
+    // A chunk that failed to load after a deploy is expected, not a bug; the
+    // fallback reloads it. Everything else goes to the access log so the team
+    // hears about a crash without waiting for the user to write in.
+    if (!isChunkLoadError(error)) reportCrash(error, { digest });
   }
 
-  reset = () => this.setState({ error: null });
+  reset = () => {
+    // A lazy chunk that failed to load fails again from React.lazy's cache, so
+    // "Try again" would loop forever; a reload fetches the current build.
+    if (this.state.error && isChunkLoadError(this.state.error)) {
+      window.location.reload();
+      return;
+    }
+    this.setState({ error: null, digest: null, details: null });
+  };
 
   render() {
-    const { error } = this.state;
+    const { error, digest, details } = this.state;
     if (error) {
       if (this.props.fallback) return this.props.fallback(error, this.reset);
-      return <DefaultFallback error={error} onReset={this.reset} />;
+      return (
+        <ErrorFallback
+          error={error}
+          digest={digest ?? errorDigest(error)}
+          details={details}
+          onReset={this.reset}
+          variant={this.props.variant ?? "screen"}
+        />
+      );
     }
     return this.props.children;
   }
-}
-
-function DefaultFallback({ error, onReset }: { error: Error; onReset: () => void }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-md w-full rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-dark p-8 shadow-theme-md">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="size-10 rounded-xl bg-error-50 text-error-600 flex items-center justify-center dark:bg-error-500/10 dark:text-error-400">
-            <svg viewBox="0 0 24 24" fill="none" className="size-5" stroke="currentColor" strokeWidth="2">
-              <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Something went wrong</h1>
-        </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 break-words">
-          {error.message || "An unexpected error occurred."}
-        </p>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onReset}
-            className="flex-1 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-sm font-medium px-4 py-2.5"
-          >
-            Try again
-          </button>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5"
-          >
-            Reload
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }

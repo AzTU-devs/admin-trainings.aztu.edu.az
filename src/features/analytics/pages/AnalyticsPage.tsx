@@ -6,13 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@shar
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
 import { useGetAnalyticsOverviewQuery } from "@features/analytics/api/analyticsApi";
 
 type Range = "7d" | "30d" | "90d";
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<Range>("30d");
-  const { data, isFetching, error } = useGetAnalyticsOverviewQuery({ range });
+  const { currentData: data, isFetching, error, refetch } = useGetAnalyticsOverviewQuery({ range });
 
   return (
     <>
@@ -32,7 +33,10 @@ export default function AnalyticsPage() {
 
       {isFetching && !data ? (
         <div className="flex justify-center py-12"><Spinner /></div>
-      ) : error || !data ? (
+      ) : error ? (
+        // Not "No analytics yet": a failed request is not an empty portal.
+        <QueryErrorState error={error} onRetry={refetch} what="analytics" />
+      ) : !data ? (
         <EmptyState title="No analytics yet" description="Once activity starts in the portal, charts will appear here." />
       ) : (
         <>

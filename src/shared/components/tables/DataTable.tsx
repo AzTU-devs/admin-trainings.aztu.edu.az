@@ -1,5 +1,6 @@
 import {
   type ColumnDef,
+  type RowData,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -11,6 +12,18 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "luci
 import { cn } from "@shared/lib/cn";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
+
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /**
+     * Language of the header text. Headers are CSS-uppercased, and under the
+     * page's lang="en" "İştirakçi" became "İŞTIRAKÇI" — Azerbaijani needs "İŞTİRAKÇI".
+     */
+    lang?: string;
+  }
+}
 
 interface PaginationState {
   page: number;       // 0-indexed
@@ -31,6 +44,15 @@ interface DataTableProps<TData> {
   getRowId?: (row: TData, index: number) => string;
   onRowClick?: (row: TData) => void;
   className?: string;
+  /**
+   * The query failed. Checked before the empty state: a 403 or a 500 used to
+   * render as "No users yet", which is a false statement about the data.
+   */
+  isError?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
+  /** Noun for the error message: "Couldn't load <what>". */
+  errorWhat?: string;
 }
 
 export function DataTable<TData>({
@@ -45,9 +67,14 @@ export function DataTable<TData>({
   getRowId,
   onRowClick,
   className,
+  isError,
+  error,
+  onRetry,
+  errorWhat,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const isEmpty = !isLoading && data.length === 0;
+  const failed = !isLoading && !!isError;
+  const isEmpty = !isLoading && !failed && data.length === 0;
 
   const table = useReactTable<TData>({
     data,
@@ -71,7 +98,7 @@ export function DataTable<TData>({
         <table className="w-full text-sm">
           {/* Column headers over an empty body read as a broken table, so they
               are dropped while there is nothing to label. */}
-          <thead hidden={isEmpty} className="bg-gray-50 dark:bg-white/5">
+          <thead hidden={isEmpty || failed} className="bg-gray-50 dark:bg-white/5">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-gray-200 dark:border-gray-800">
                 {hg.headers.map((h) => {
@@ -81,6 +108,7 @@ export function DataTable<TData>({
                     <th
                       key={h.id}
                       colSpan={h.colSpan}
+                      lang={h.column.columnDef.meta?.lang}
                       className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-4 py-3"
                     >
                       {h.isPlaceholder ? null : canSort ? (
@@ -106,6 +134,12 @@ export function DataTable<TData>({
               <tr>
                 <td colSpan={Math.max(columns.length, 1)} className="px-4 py-16 text-center">
                   <Spinner className="mx-auto" />
+                </td>
+              </tr>
+            ) : failed ? (
+              <tr>
+                <td colSpan={Math.max(columns.length, 1)} className="p-6">
+                  <QueryErrorState error={error} onRetry={onRetry} what={errorWhat} />
                 </td>
               </tr>
             ) : isEmpty ? (
@@ -136,7 +170,7 @@ export function DataTable<TData>({
         </table>
       </div>
 
-      {pagination && (
+      {pagination && !failed && (
         <Pagination pagination={pagination} onPageChange={onPageChange} />
       )}
     </div>

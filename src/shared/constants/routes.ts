@@ -14,6 +14,7 @@ export const ROUTES = {
   tutorCourses: "/tutor/courses",
   tutorCourseNew: "/tutor/courses/new",
   tutorCourseEdit: (id: string | number = ":id") => `/tutor/courses/${id}`,
+  /** Retired: it listed the tutor's own enrollments as a learner. Redirects to tutorStudents. */
   tutorEnrollments: "/tutor/enrollments",
   tutorStudents: "/tutor/students",
   tutorRoomRequests: "/tutor/room-requests",
@@ -35,7 +36,9 @@ export const ROUTES = {
   adminUsers: "/admin/users",
   adminCourseModeration: "/admin/course-moderation",
   adminAnalytics: "/admin/analytics",
-  adminNotifications: "/admin/notifications",
+  /** Broadcast composer. Named for what it is; the old path redirects here. */
+  adminNotifications: "/admin/broadcasts",
+  adminNotificationsLegacy: "/admin/notifications",
 
   // Super Admin
   superAuditLogs: "/super/audit-logs",

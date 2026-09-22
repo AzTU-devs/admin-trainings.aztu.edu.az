@@ -43,3 +43,17 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => false,
   }),
 });
+
+// jsdom gaps that Radix (Select, Dialog, Popover) and the media previews need.
+// Without them a render test dies on the first dropdown rather than on a bug.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.releasePointerCapture ??= () => {};
+Element.prototype.scrollIntoView ??= () => {};
+URL.createObjectURL ??= () => "blob:test";
+URL.revokeObjectURL ??= () => {};

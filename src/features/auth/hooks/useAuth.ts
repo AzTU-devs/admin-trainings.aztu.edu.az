@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "@lib/redux/hooks";
 import { logout as logoutAction } from "@features/auth/store/authSlice";
 import { useLogoutMutation } from "@features/auth/api/authApi";
+import { baseApi } from "@lib/query/baseApi";
 
 export function useAuth() {
   const dispatch = useAppDispatch();
@@ -18,6 +19,10 @@ export function useAuth() {
         }
       }
       dispatch(logoutAction());
+      // Drop everything cached under this account: the next person to sign in
+      // on this tab must not see it, nor be judged by it (a cached 404 for one
+      // user's expert profile would bounce the next user's too).
+      dispatch(baseApi.util.resetApiState());
     },
     [dispatch, logoutMutation],
   );

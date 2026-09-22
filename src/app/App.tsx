@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { DashboardLayout } from "@shared/components/layout";
 import { ProtectedRoute } from "@app/router/ProtectedRoute";
 import { RoleGuard } from "@app/router/RoleGuard";
-import { Spinner } from "@shared/components/ui/Spinner";
+import { RouteFallback } from "@shared/components/feedback/RouteFallback";
 import { ROLES } from "@shared/constants/roles";
 import { ROUTES } from "@shared/constants/routes";
 import { SignInPage, ForgotPasswordPage, ForbiddenPage, NotFoundPage } from "@features/auth";
@@ -27,7 +27,6 @@ const AdminCourseEditPage = lazy(() => import("@features/courses/pages/AdminCour
 const CourseParticipantsPage = lazy(
   () => import("@features/participants/pages/CourseParticipantsPage"),
 );
-const EnrollmentsListPage = lazy(() => import("@features/enrollments/pages/EnrollmentsListPage"));
 const StudentsListPage = lazy(() => import("@features/students/pages/StudentsListPage"));
 const TutorRoomRequestsPage = lazy(() => import("@features/room-requests/pages/TutorRoomRequestsPage"));
 const AdminRoomRequestsPage = lazy(() => import("@features/room-requests/pages/AdminRoomRequestsPage"));
@@ -46,16 +45,6 @@ const AuditLogsPage = lazy(() => import("@features/audit-logs/pages/AuditLogsPag
 const SystemMonitoringPage = lazy(() => import("@features/system-monitoring/pages/SystemMonitoringPage"));
 const ApiLogsPage = lazy(() => import("@features/api-logs/pages/ApiLogsPage"));
 const SecurityPage = lazy(() => import("@features/security/pages/SecurityPage"));
-
-/** Shown while a lazily-loaded route chunk is in flight. */
-function RouteFallback() {
-  return (
-    <div className="flex min-h-[50vh] items-center justify-center">
-      <Spinner />
-      <span className="sr-only">Loading…</span>
-    </div>
-  );
-}
 
 /**
  * Top-level router. Layout is decided by route nesting:
@@ -93,7 +82,9 @@ export default function App() {
                 <Route path={ROUTES.tutorCourses} element={<CoursesListPage />} />
                 <Route path={ROUTES.tutorCourseNew} element={<CourseNewPage />} />
                 <Route path={ROUTES.tutorCourseEdit()} element={<CourseEditPage />} />
-                <Route path={ROUTES.tutorEnrollments} element={<EnrollmentsListPage />} />
+                {/* The old "Enrollments" item showed the tutor's own learner
+                    enrollments, not their courses'; participants live here now. */}
+                <Route path={ROUTES.tutorEnrollments} element={<Navigate to={ROUTES.tutorStudents} replace />} />
                 <Route path={ROUTES.tutorStudents} element={<StudentsListPage />} />
                 <Route path={ROUTES.tutorRooms} element={<BrowseRoomsPage />} />
                 <Route path={ROUTES.tutorRoomRequests} element={<TutorRoomRequestsPage />} />
@@ -116,6 +107,10 @@ export default function App() {
                 <Route path={ROUTES.adminCourseModeration} element={<ModerationPage />} />
                 <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
                 <Route path={ROUTES.adminNotifications} element={<AdminNotificationsPage />} />
+                <Route
+                  path={ROUTES.adminNotificationsLegacy}
+                  element={<Navigate to={ROUTES.adminNotifications} replace />}
+                />
               </Route>
 
               {/* Super admin */}

@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const moduleSchema = z.object({
-  title: z.string().min(1, "Title is required").max(160),
+  // Trimmed first, so a title of spaces is caught here rather than by the API.
+  title: z.string().trim().min(1, "Title is required").max(160),
   description: z.string().max(2000).optional(),
 });
 

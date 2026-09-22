@@ -9,20 +9,28 @@ import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
 import { Badge } from "@shared/components/ui/Badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@shared/components/ui/Avatar";
 import { DataTable } from "@shared/components/tables/DataTable";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@shared/components/ui/Dialog";
+import { Spinner } from "@shared/components/ui/Spinner";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
+import { NotFoundState } from "@shared/components/feedback/NotFoundState";
+import { isLookupNotFound } from "@shared/components/feedback/queryError";
+import { resolveApiUrl } from "@shared/config/env";
+import { apiErrorMessage } from "@shared/lib/apiError";
+import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
 import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { ROUTES } from "@shared/constants/routes";
 import { ENROLLMENT_STATUS, type EnrollmentStatus } from "@shared/types/lms";
+import { enumLabel } from "@shared/constants/enumLabels";
 import type { NormalizedError } from "@lib/axios/httpClient";
 import { useGetAdminCourseByIdQuery } from "@features/courses/api/coursesApi";
 import {
@@ -44,10 +52,6 @@ const TONE: Record<EnrollmentStatus, "neutral" | "warning" | "success" | "danger
   [ENROLLMENT_STATUS.REFUNDED]: "neutral",
 };
 
-function initials(name: string) {
-  return name.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-}
-
 export default function CourseParticipantsPage() {
   // Route param carries the course id — ROUTES.adminCourseParticipants(courseId).
   const { courseId } = useParams();
@@ -57,8 +61,13 @@ export default function CourseParticipantsPage() {
   /** Email the server has no account for, kept to offer creating one. */
   const [unknownEmail, setUnknownEmail] = useState<string | null>(null);
 
-  const { data: course } = useGetAdminCourseByIdQuery(courseId!, { skip: !courseId });
-  const { data, isFetching } = useListCourseParticipantsQuery(
+  const {
+    data: course,
+    error: courseError,
+    isLoading: courseLoading,
+    refetch: refetchCourse,
+  } = useGetAdminCourseByIdQuery(courseId!, { skip: !courseId });
+  const { currentData: data, isFetching, isError, error, refetch } = useListCourseParticipantsQuery(
     { courseId: courseId!, page, size: 10 },
     { skip: !courseId },
   );
@@ -80,12 +89,12 @@ export default function CourseParticipantsPage() {
     () => [
       {
         header: "İştirakçi",
+        meta: { lang: "az" },
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <Avatar size="sm">
-              <AvatarImage src={row.original.avatarUrl} />
-              <AvatarFallback>{initials(row.original.fullName)}</AvatarFallback>
-            </Avatar>
+            {/* Authenticated media route: TutorAvatar fetches it with the token.
+                A plain <img> got a 401 and always fell back to initials. */}
+            <TutorAvatar size="sm" src={resolveApiUrl(row.original.avatarUrl) || null} name={row.original.fullName} />
             <div className="min-w-0">
               <p className="font-medium text-gray-900 dark:text-white truncate">{row.original.fullName}</p>
               <p className="text-xs text-gray-500 truncate">{row.original.email}</p>
@@ -95,9 +104,9 @@ export default function CourseParticipantsPage() {
       },
       {
         header: "Status",
-        cell: ({ row }) => <Badge tone={TONE[row.original.status]} dot>{row.original.status.replace(/_/g, " ")}</Badge>,
+        cell: ({ row }) => <Badge tone={TONE[row.original.status] ?? "neutral"} dot>{enumLabel("enrollmentStatus", row.original.status)}</Badge>,
       },
-      { header: "Source", cell: ({ row }) => row.original.source ? row.original.source.replace(/_/g, " ") : "—" },
+      { header: "Source", cell: ({ row }) => row.original.source ? enumLabel("enrollmentSource", row.original.source) : "—" },
       { header: "Enrolled", cell: ({ row }) => new Date(row.original.enrolledAt).toLocaleDateString() },
       {
         id: "actions",
@@ -122,20 +131,39 @@ export default function CourseParticipantsPage() {
     [],
   );
 
-  if (!courseId) return <p className="text-sm text-error-600">Course not found.</p>;
+  // After every hook. A course that does not exist used to render as a normal
+  // empty roster ("No İştirakçilər yet") although both calls were 404s.
+  if (courseLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
+  if (!courseId || (courseError && isLookupNotFound(courseError))) {
+    return (
+      <NotFoundState
+        title="Course not found"
+        description="There is no course at this address, so there is nobody to list. It may have been deleted, or the link may be wrong."
+        backTo={ROUTES.adminCourses}
+        backLabel="Back to courses"
+        missingSegment={courseId}
+      />
+    );
+  }
+  if (courseError) return <QueryErrorState error={courseError} onRetry={refetchCourse} what="this course" />;
 
   return (
     <>
       <PageHeader
         title="İştirakçilər"
         description={course ? `Enrolled on “${course.title}”.` : "Manage who is enrolled on this course."}
+        crumbLabels={course ? { [course.id]: course.title } : undefined}
         actions={<Button leftIcon={<Plus className="size-4" />} onClick={openAdd}>Add İştirakçi</Button>}
       />
 
       <DataTable<CourseParticipantDto>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="İştirakçilər"
         emptyTitle="No İştirakçilər yet"
         emptyDescription="Add someone by email, or wait for the first enrollment."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
@@ -147,6 +175,7 @@ export default function CourseParticipantsPage() {
         <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Add İştirakçi</DialogTitle>
+            <DialogDescription className="sr-only">Enrol an existing account on this course by email.</DialogDescription>
           </DialogHeader>
           <Form
             form={form}
@@ -164,7 +193,7 @@ export default function CourseParticipantsPage() {
                   setUnknownEmail(email);
                   return;
                 }
-                toast.error(err.message || "Could not add the İştirakçi");
+                toast.error(apiErrorMessage(err, "Could not add the İştirakçi"));
               }
             }}
           >
@@ -197,6 +226,7 @@ export default function CourseParticipantsPage() {
                 </p>
                 <Link
                   to={ROUTES.adminUsers}
+                  state={{ createParticipant: unknownEmail }}
                   className="mt-2 inline-block font-medium text-brand-700 hover:underline dark:text-brand-300"
                 >
                   Create the account →
@@ -218,19 +248,16 @@ export default function CourseParticipantsPage() {
         title="Remove İştirakçi?"
         description={
           removing
-            ? `${removing.fullName} loses access to this course. Their progress and any certificate are kept.`
+            ? `${removing.fullName} loses access to this course. Their progress is kept.`
             : undefined
         }
         confirmLabel="Remove"
         destructive
         onConfirm={async () => {
           if (!removing) return;
-          try {
-            await removeParticipant({ courseId, userId: removing.userId }).unwrap();
-            toast.success("İştirakçi removed");
-          } catch (e) {
-            toast.error((e as NormalizedError).message || "Could not remove the İştirakçi");
-          }
+          // A refusal is shown by ConfirmDialog, which keeps the dialog open.
+          await removeParticipant({ courseId, userId: removing.userId }).unwrap();
+          toast.success("İştirakçi removed");
         }}
       />
     </>

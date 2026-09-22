@@ -13,6 +13,7 @@ import { authSuccess } from "@features/auth/store/authSlice";
 import { useAuth } from "@features/auth/hooks/useAuth";
 import { cn } from "@shared/lib/cn";
 import { ROUTES } from "@shared/constants/routes";
+import { HELPDESK_EMAIL } from "@shared/constants/support";
 import { Logo } from "@shared/components/layout/Logo";
 import type { NormalizedError } from "@lib/axios/httpClient";
 
@@ -21,10 +22,12 @@ export default function SignInPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, status } = useAuth();
   const [login, { isLoading }] = useLoginMutation();
 
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? ROUTES.dashboard;
+  const state = location.state as { from?: { pathname: string }; notice?: string } | null;
+  const from = state?.from?.pathname ?? ROUTES.dashboard;
+  const notice = state?.notice;
 
   const {
     register,
@@ -37,18 +40,26 @@ export default function SignInPage() {
   });
 
   if (isAuthenticated) return <Navigate to={from} replace />;
+  // A new tab is restoring its session from the refresh cookie; showing the
+  // form for that moment only to redirect away reads as being signed out.
+  if (status === "idle") return null;
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
       const res = await login(values).unwrap();
       dispatch(authSuccess({ user: res.user, accessToken: res.accessToken }));
-      toast.success(`Welcome back, ${res.user.fullName.split(" ")[0]}`);
+      // Only experts and staff are greeted: anyone else is checked for an expert
+      // application next and may be sent back here.
+      if (res.user.roles.some((r) => r !== "USER")) {
+        const first = res.user.fullName.split(" ")[0];
+        toast.success(res.firstLogin ? `Welcome, ${first}` : `Welcome back, ${first}`);
+      }
       navigate(from, { replace: true });
     } catch (err) {
       const e = err as NormalizedError;
       if (e.fieldErrors) {
         for (const [field, msg] of Object.entries(e.fieldErrors)) {
-          setError(field as keyof LoginFormValues, { message: msg });
+          if (field === "email" || field === "password") setError(field, { message: msg });
         }
       }
       toast.error(e.message || "Sign in failed");
@@ -102,10 +113,19 @@ export default function SignInPage() {
               </div>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Welcome back</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Sign in</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
               Sign in to access your dashboard.
             </p>
+
+            {notice && (
+              <p role="alert" className="mb-6 rounded-xl border border-warning-200 dark:border-warning-500/30 bg-warning-50 dark:bg-warning-500/10 p-3 text-sm text-warning-800 dark:text-warning-200">
+                {notice}{" "}
+                <a href="https://trainings.aztu.edu.az" className="font-medium underline">
+                  Go to trainings.aztu.edu.az
+                </a>
+              </p>
+            )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
               <Field label="Email" htmlFor="email" error={errors.email?.message}>
@@ -140,9 +160,9 @@ export default function SignInPage() {
                 </div>
               </Field>
 
-              {/* No "remember me": the session is deliberately tab-scoped — the access
-                  token lives in sessionStorage and the refresh cookie is not readable
-                  here, so a checkbox promising a persisted login would be a lie. */}
+              {/* No "remember me": the access token is tab-scoped (sessionStorage).
+                  A new tab restores the session from the httpOnly refresh cookie
+                  instead — see AuthBootstrap — so there is nothing to opt into. */}
               <div className="flex items-center justify-end text-sm">
                 <Link
                   to={ROUTES.forgotPassword}
@@ -164,8 +184,8 @@ export default function SignInPage() {
 
             <p className="mt-8 text-xs text-gray-500 dark:text-gray-400 text-center">
               Trouble signing in? Contact the IT helpdesk at{" "}
-              <a href="mailto:helpdesk@aztu.edu.az" className="text-brand-700 dark:text-brand-300 hover:underline">
-                helpdesk@aztu.edu.az
+              <a href={`mailto:${HELPDESK_EMAIL}`} className="text-brand-700 dark:text-brand-300 hover:underline">
+                {HELPDESK_EMAIL}
               </a>
             </p>
           </div>

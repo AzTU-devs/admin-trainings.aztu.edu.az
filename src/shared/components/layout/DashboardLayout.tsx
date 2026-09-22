@@ -1,9 +1,12 @@
-import { Outlet } from "react-router";
+import { Suspense } from "react";
+import { Outlet, useLocation } from "react-router";
 import { useAppSelector } from "@lib/redux/hooks";
 import { cn } from "@shared/lib/cn";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { useNotificationStream } from "@features/notifications/hooks/useNotificationStream";
+import { ErrorBoundary } from "@shared/components/feedback/ErrorBoundary";
+import { RouteFallback } from "@shared/components/feedback/RouteFallback";
 
 /**
  * Top-level authenticated shell:
@@ -22,9 +25,16 @@ import { useNotificationStream } from "@features/notifications/hooks/useNotifica
  * container, a long unbroken string) makes the document scroll sideways, and
  * the sticky header — sized to the viewport — stops short of the content's
  * right edge. Clipping keeps the bar spanning the full column at every width.
+ *
+ * Each page renders inside its own error boundary and Suspense. The only
+ * boundary used to wrap the whole app outside the router, so any page error —
+ * or a lazy chunk missing after a deploy — replaced the sidebar and header too,
+ * leaving nothing to navigate away with. Keyed by path, so leaving a broken page
+ * clears the error.
  */
 export function DashboardLayout() {
   const collapsed = useAppSelector((s) => s.ui.sidebarCollapsed);
+  const { pathname } = useLocation();
   useNotificationStream();
 
   return (
@@ -38,7 +48,11 @@ export function DashboardLayout() {
       >
         <Header />
         <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-          <Outlet />
+          <ErrorBoundary key={pathname} variant="page">
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

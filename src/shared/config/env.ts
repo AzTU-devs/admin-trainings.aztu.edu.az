@@ -45,7 +45,6 @@ export const env = {
     // missing from a build environment the access token must die with the tab
     // rather than silently start persisting on disk on the SUPER_ADMIN surface.
     storage: str("VITE_AUTH_TOKEN_STORAGE", "sessionStorage") as TokenStorage,
-    refreshBeforeExpiryS: num("VITE_REFRESH_BEFORE_EXPIRY_S", 60),
     /**
      * DEV ONLY — skips ProtectedRoute and injects a synthetic super-user.
      * Hard-pinned to false in production builds so a stray VITE_AUTH_BYPASS=true
@@ -65,9 +64,12 @@ export const env = {
     maxVideoMb: num("VITE_UPLOAD_MAX_VIDEO_MB", 512),
     maxDocumentMb: num("VITE_UPLOAD_MAX_DOCUMENT_MB", 25),
   },
+  // VITE_ENABLE_DARK_MODE and VITE_REFRESH_BEFORE_EXPIRY_S were read here and
+  // never used — the theme toggle always showed, and tokens are refreshed on a
+  // 401 or before a socket connect, not on a timer. Removed so a setting that
+  // does nothing can't be mistaken for one that does.
   features: {
     wsNotifications: bool("VITE_ENABLE_WS_NOTIFICATIONS", true),
-    darkMode: bool("VITE_ENABLE_DARK_MODE", true),
   },
 } as const;
 

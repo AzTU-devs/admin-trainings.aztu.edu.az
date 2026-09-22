@@ -18,6 +18,12 @@ interface ImageUploaderProps {
   aspect?: "square" | "video" | "wide";
   disabled?: boolean;
   className?: string;
+  /**
+   * Whether the X is offered. The course form turns it off for an already-saved
+   * cover: the API cannot clear one yet, so removing it said "Saved" and kept
+   * the image. Clicking the image still picks a replacement.
+   */
+  removable?: boolean;
 }
 
 /**
@@ -35,6 +41,7 @@ export function ImageUploader({
   aspect = "wide",
   disabled,
   className,
+  removable = true,
 }: ImageUploaderProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +132,9 @@ export function ImageUploader({
         className={cn(
           "relative w-full rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer transition-colors",
           aspectCls,
-          preview ? "border-transparent" : "border-gray-200 dark:border-gray-700 hover:border-brand-500",
+          preview
+            ? "border-transparent"
+            : "border-gray-200 dark:border-gray-700 hover:border-brand-500",
           isDragActive && "border-brand-500 bg-brand-50 dark:bg-brand-500/10",
           !preview && error && "border-error-400 dark:border-error-500/60",
           disabled && "opacity-60 cursor-not-allowed",
@@ -135,18 +144,20 @@ export function ImageUploader({
         {preview ? (
           <>
             <img src={preview} alt="" className="absolute inset-0 size-full object-cover" />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setError(null);
-                onChange?.(null);
-              }}
-              aria-label="Remove image"
-              className="absolute top-2 right-2 size-9 rounded-xl bg-gray-900/70 text-white inline-flex items-center justify-center hover:bg-gray-900"
-            >
-              <X className="size-4" />
-            </button>
+            {removable && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setError(null);
+                  onChange?.(null);
+                }}
+                aria-label="Remove image"
+                className="absolute top-2 right-2 size-9 rounded-xl bg-gray-900/70 text-white inline-flex items-center justify-center hover:bg-gray-900"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">

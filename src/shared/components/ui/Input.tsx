@@ -33,7 +33,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               {leftIcon}
             </span>
           )}
-          <input ref={ref} className={field} {...props} />
+          <input ref={ref} className={field} aria-invalid={invalid || undefined} {...props} />
           {rightSlot && (
             <span className="absolute right-2 top-1/2 -translate-y-1/2">{rightSlot}</span>
           )}
@@ -41,7 +41,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       );
     }
 
-    return <input ref={ref} className={cn(field, className)} {...props} />;
+    return <input ref={ref} className={cn(field, className)} aria-invalid={invalid || undefined} {...props} />;
   },
 );
 Input.displayName = "Input";

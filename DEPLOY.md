@@ -7,7 +7,7 @@ Vite + React 19 SPA, built to static assets and served by nginx on port **8081**
 ```bash
 docker build --build-arg VITE_API_BASE_URL=https://api.example.com/api \
   -t eduplatform-admin:latest .
-docker run -p 8081:8081 eduplatform-admin:latest
+docker run -p 127.0.0.1:8081:8081 eduplatform-admin:latest
 ```
 
 In production use the compose file instead — it pins host networking, logging
@@ -111,61 +111,64 @@ token storage, feature flags. See [.env.example](.env.example) for the full list
 ## TLS / reverse proxy
 
 **Nothing in this repo terminates TLS.** The container listens on plain HTTP on
-`8081` under host networking. Something in front of it — the university's
-ingress, or an nginx/Caddy on this host — has to serve
-`https://dashboard-trainings.aztu.edu.az` and proxy to `127.0.0.1:8081`.
+`8081` under host networking. The host's nginx serves
+`https://dashboard-trainings.aztu.edu.az` and proxies to `127.0.0.1:8081`. Its
+config for all three hostnames lives in the API repo, as
+`deploy/nginx/trainings.conf` (on the server:
+`/opt/trainings/api-trainings.aztu.edu.az/deploy/nginx/trainings.conf`), and that
+repo's `docs/operations/deployment.md` §6 installs it. Use it as it is. The
+requirements below explain why its dashboard block looks the way it does, and
+what any other terminator would have to match.
 
-What that terminator owns:
+What the terminator must do for this portal. All three were missing on the live
+server while its dashboard vhost was a bare `proxy_pass`:
 
-- the certificate, and the `http → https` redirect;
-- **HSTS**. It is deliberately *not* set here. Served from
-  `admin-trainings.aztu.edu.az` it pins that host — and with `includeSubDomains`
-  everything beneath it — to HTTPS in every visitor's browser for the whole
-  `max-age`, and there is no way to withdraw it early. The case that takes other
-  services down with it is a terminator that also serves the apex `aztu.edu.az`
-  (or one shared wildcard vhost) with `includeSubDomains`: that pins every
-  *sibling* subdomain too, so one still-plain-HTTP `*.aztu.edu.az` service becomes
-  unreachable in every browser that saw the header. Enable it per host once that
-  host serves HTTPS, add `includeSubDomains` at the apex only once every
-  `aztu.edu.az` subdomain does, and ramp `max-age` (300 → 86400 → 15768000)
-  rather than starting at a year.
-- **A request body limit of its own.** This nginx allows `550m`, but the
-  terminator is the *outer* limit and its default is far smaller (1 MB for stock
-  nginx, less on most managed ingresses) — so a 512 MB lesson video is rejected
-  there with a 413 that never appears in this container's logs and never reaches
-  the backend's typed error. Give it the same ceiling and comparable body
-  timeouts: for nginx that is `client_max_body_size 550m;
-  client_body_timeout 300s; proxy_read_timeout 600s;` plus
+- **Pass the WebSocket upgrade.** The notification socket is
+  `wss://dashboard-trainings.aztu.edu.az/ws`, and it goes through the terminator
+  before it reaches this container's `location /ws`. nginx proxies with HTTP/1.0
+  and drops `Upgrade` and `Connection` by default, so the backend answered the
+  handshake with `400 Can "Upgrade" only to "WebSocket"` and notifications never
+  connected. It needs `proxy_http_version 1.1;`,
+  `proxy_set_header Upgrade $http_upgrade;`,
+  `proxy_set_header Connection <upgrade when Upgrade is present>;` (a `map`, as in
+  `nginx/nginx.conf`), and a `proxy_read_timeout` longer than the 10s heartbeat
+  gap (the host config uses 3600s). Setting any `proxy_set_header` in a location
+  discards the inherited ones, so `Host`, `X-Real-IP`, `X-Forwarded-For` and
+  `X-Forwarded-Proto` have to be repeated next to them.
+- **Allow the same request body size.** This nginx allows `550m`, but the
+  terminator is the *outer* limit, and stock nginx allows 1 MB. Every cover over
+  1 MB, every document and every lesson video was rejected there with a 413 that
+  never appears in this container's logs and never reaches the backend's typed
+  error. Give it `client_max_body_size 550m; client_body_timeout 300s;` and
   `proxy_request_buffering off;` so it does not spool half a gigabyte to disk
   before this container sees byte one. See
   [Upload sizes](#upload-sizes-three-numbers-that-must-agree).
+- **Serve HSTS** for this host. It is deliberately not set in this repo: whether
+  a host can be pinned to HTTPS is decided where TLS is. The host config sends
+  `Strict-Transport-Security: max-age=31536000; includeSubDomains` on every
+  response and hides the backend's copy on `/api/`, so each response has exactly
+  one. On this host `includeSubDomains` covers only names under
+  `dashboard-trainings.aztu.edu.az`. The case to avoid is the one that takes
+  other services down: a terminator that also serves the apex `aztu.edu.az`, or
+  one shared wildcard vhost, sending `includeSubDomains` there would pin every
+  *sibling* subdomain too, and any `*.aztu.edu.az` service still on plain HTTP
+  would become unreachable in every browser that saw it.
 
 What this config needs **from** that terminator:
 
 - `X-Forwarded-Proto` — `nginx/nginx.conf` prefers it over `$scheme` (which is
-  always `http` here), and the backend runs with
-  `server.forward-headers-strategy=framework`, so without it Spring believes the
-  request arrived over plain HTTP.
+  always `http` here) and passes it on. The backend believes it from a loopback
+  peer (Tomcat's `RemoteIpValve`, `server.forward-headers-strategy=native`), so
+  without it Spring believes the request arrived over plain HTTP.
 - `X-Forwarded-For`, **and its address added to `set_real_ip_from`** in
   `nginx/nginx.conf` if it is not on loopback. That list is the trust boundary:
-  nginx rewrites `$remote_addr` from the forwarded header only for proxies in
-  it, and forwards a single clean value onward. The backend's rate limiter, IP
-  blocklist and audit log all key on the *first* `X-Forwarded-For` entry with
-  `TRUST_FORWARD_HEADERS=true`, so a client-supplied header that survived to the
-  backend would let anyone forge their own address. If the terminator runs on
-  another machine and you forget to list it, the opposite happens: every request
-  looks like it comes from the load balancer and one user's traffic rate-limits
-  everyone.
-
-One caveat on HSTS: nginx sets none, but the backend can. Spring Security emits
-`Strict-Transport-Security` by default on any request it considers secure, and
-`X-Forwarded-Proto: https` from the terminator plus
-`server.forward-headers-strategy=framework` is exactly that — so the header can
-reach the browser *on this origin* through `/api/` responses although no file in
-this repo sets it. Browsers ignore HSTS received over plain HTTP, so it is inert
-until TLS is actually in front; once it is, the decision above has effectively
-been made for this host, and the place to change it is the API's config, not this
-one.
+  nginx rewrites `$remote_addr` from the forwarded header only for proxies in it,
+  and then sends the backend a single, clean `X-Forwarded-For: $remote_addr`. The
+  backend reads that header right to left and trusts only loopback and
+  private-range peers (see "Client IP" in the API's `DEPLOY.md`), and its rate
+  limiter, IP blocklist and audit log key on the result. If the terminator runs
+  on another machine and you forget to list it, every request looks like it
+  comes from the load balancer and one user's traffic rate-limits everyone.
 
 While the portal is still plain HTTP the notification socket is `ws://`, not
 `wss://`. The SPA CSP allows that — `connect-src 'self'` covers a same-host,
@@ -235,9 +238,12 @@ the header of `docker-compose.prod.yml`.
   nginx 503 does none of that, and a second limiter in front would make the
   effective budget two numbers living in two repos. What this config owes that
   limiter is a *truthful* client address, which is what `set_real_ip_from` and the
-  single-valued `X-Forwarded-For` in `nginx/nginx.conf` are for: without them the
-  backend reads an attacker-supplied first hop, and both the limiter and the IP
-  blocklist can be sidestepped by sending a header.
+  single-valued `X-Forwarded-For` in `nginx/nginx.conf` are for: the backend gets
+  one address this nginx has already checked, instead of a list the client
+  started. The backend's own right-to-left reading of that list is safe for
+  internet clients but walks past a client whose address is itself private (an
+  on-campus machine), into whatever that client prepended; the single value
+  closes that for everything coming through the portal.
 - `nginx -t` runs during the image build, so a malformed config (or a missing
   snippet) fails the build rather than the container.
 - Containers run with `no-new-privileges`. Dropping capabilities further

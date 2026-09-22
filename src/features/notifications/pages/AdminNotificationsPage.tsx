@@ -19,9 +19,12 @@ import {
   type BroadcastTarget,
   type RoleCode,
 } from "@features/notifications/api/broadcastApi";
+import { UserMultiSelect } from "@features/users/components/UserMultiSelect";
+import type { AdminUser } from "@features/users/types";
+import { apiErrorMessage } from "@shared/lib/apiError";
 
 const ROLE_OPTIONS: { value: RoleCode; label: string }[] = [
-  { value: "USER", label: "Students" },
+  { value: "USER", label: "İştirakçilər (participants)" },
   { value: "TUTOR", label: "Tutors" },
   { value: "ADMIN", label: "Admins" },
   { value: "SUPER_ADMIN", label: "Super admins" },
@@ -29,21 +32,19 @@ const ROLE_OPTIONS: { value: RoleCode; label: string }[] = [
 
 /**
  * Broadcast composer — fans out an in-app notification to a target audience via
- * `POST /api/admin/notifications/broadcast`.
+ * `POST /api/admin/notifications/broadcast`. Titled "Broadcasts" like its menu
+ * item; it used to call itself "Notifications", the name of the inbox page.
  */
 export default function AdminNotificationsPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [target, setTarget] = useState<BroadcastTarget>("ALL");
   const [role, setRole] = useState<RoleCode>("USER");
-  const [userIdsRaw, setUserIdsRaw] = useState("");
+  const [recipients, setRecipients] = useState<AdminUser[]>([]);
 
   const [broadcast, { isLoading }] = useBroadcastNotificationMutation();
 
-  const userIds = userIdsRaw
-    .split(/[,\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const userIds = recipients.map((u) => u.id);
 
   const canSend =
     title.trim().length > 0 &&
@@ -60,20 +61,27 @@ export default function AdminNotificationsPage() {
         role: target === "ROLE" ? role : undefined,
         userIds: target === "USERS" ? userIds : undefined,
       }).unwrap();
-      toast.success(`Broadcast sent to ${res.recipients.toLocaleString()} recipient(s)`);
+      // Nobody matched (every picked account disabled, an empty role): the API
+      // answers 200 with zero recipients, which used to read as a success and
+      // clear the form. Keep the message so it can be retargeted.
+      if (res.recipients === 0) {
+        toast.warning("Nobody received it — no active account matches this audience.");
+        return;
+      }
+      toast.success(`Broadcast sent to ${res.recipients.toLocaleString()} recipient${res.recipients === 1 ? "" : "s"}`);
       setTitle("");
       setBody("");
-      setUserIdsRaw("");
-    } catch {
-      toast.error("Could not send broadcast");
+      setRecipients([]);
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Could not send the broadcast"));
     }
   };
 
   return (
     <>
       <PageHeader
-        title="Notifications"
-        description="Broadcast an in-app notification to a target audience."
+        title="Broadcasts"
+        description="Send an in-app notification to everyone, a role, or chosen people."
       />
 
       <Card className="max-w-2xl">
@@ -130,15 +138,11 @@ export default function AdminNotificationsPage() {
 
           {target === "USERS" && (
             <div className="space-y-1.5">
-              <Label htmlFor="bc-users">User IDs</Label>
-              <Textarea
-                id="bc-users"
-                rows={3}
-                value={userIdsRaw}
-                onChange={(e) => setUserIdsRaw(e.target.value)}
-                placeholder="Comma- or newline-separated user UUIDs"
-              />
-              <p className="text-xs text-gray-500">{userIds.length} user(s) targeted.</p>
+              <Label>Recipients</Label>
+              <UserMultiSelect value={recipients} onChange={setRecipients} />
+              <p className="text-xs text-gray-500">
+                {userIds.length} {userIds.length === 1 ? "person" : "people"} selected.
+              </p>
             </div>
           )}
 

@@ -34,6 +34,20 @@ interface VideoUploaderProps {
   maxSizeMb?: number;
   disabled?: boolean;
   className?: string;
+  /**
+   * Whether an already-stored video may be removed with the X. The course form
+   * turns it off in edit mode: the API cannot clear a saved trailer yet, so the
+   * X used to say "Saved" and remove nothing. Replacing it still works.
+   */
+  removable?: boolean;
+  /** What to call a stored video in the card, e.g. its library title. */
+  storedLabel?: string;
+  /**
+   * What the video is, for the X's accessible name: "Remove trailer". The X
+   * was labelled "Cancel", so a screen reader announced "Cancel" for the
+   * button that deletes the saved trailer.
+   */
+  noun?: string;
 }
 
 type Status = "idle" | "selected" | "uploading" | "stopped" | "done" | "error";
@@ -57,6 +71,9 @@ export function VideoUploader({
   maxSizeMb = env.uploads.maxVideoMb,
   disabled,
   className,
+  removable = true,
+  storedLabel,
+  noun = "video",
 }: VideoUploaderProps) {
   /**
    * The picked file is kept here and not only handed to `onChange`, because
@@ -66,9 +83,12 @@ export function VideoUploader({
    * button never appeared and nothing could ever be uploaded.
    */
   const [picked, setPicked] = useState<File | null>(value instanceof File ? value : null);
-  const [storedUrl, setStoredUrl] = useState<string | null>(
-    typeof value === "string" && value ? value : null,
-  );
+  // Starts empty even for a stored video: the stored URL is the authenticated
+  // /media/{id}/content route, and putting it in <video src> for the first render
+  // (before the effect below swaps in a blob URL) fired an unauthenticated GET
+  // that the browser blocked as ERR_BLOCKED_BY_ORB on every page load. `phase`
+  // already says "done" for a stored value, so nothing waits on this.
+  const [storedUrl, setStoredUrl] = useState<string | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>(typeof value === "string" && value ? "done" : null);
   const [progress, setProgress] = useState(0);
@@ -291,7 +311,7 @@ export function VideoUploader({
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                {picked ? picked.name : "Uploaded video"}
+                {picked ? picked.name : (storedLabel ?? "Uploaded video")}
               </p>
               <p
                 className={cn(
@@ -325,14 +345,17 @@ export function VideoUploader({
                   <Square className="size-4" />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={cancel}
-                className="size-9 rounded-xl text-gray-400 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 inline-flex items-center justify-center"
-                aria-label="Cancel"
-              >
-                <X className="size-4" />
-              </button>
+              {(removable || picked || status !== "done") && (
+                <button
+                  type="button"
+                  onClick={cancel}
+                  className="size-9 rounded-xl text-gray-400 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 inline-flex items-center justify-center"
+                  aria-label={status === "uploading" ? "Cancel upload" : `Remove ${noun}`}
+                  title={status === "uploading" ? "Cancel upload" : `Remove ${noun}`}
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
           </div>
           {status === "uploading" && (

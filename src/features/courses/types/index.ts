@@ -6,14 +6,24 @@ import type {
   UUID,
 } from "@shared/types/lms";
 
+/*
+ * Nullability: the API serializes an unset column as an explicit JSON `null`,
+ * never by leaving the key out. Typing those fields `?: T` told the compiler they
+ * could only be absent, so `thumbnailMediaId: initial?.thumbnailMediaId` passed
+ * the type check while handing zod a null its `.optional()` schema rejects —
+ * which silently blocked "Update course" for almost every course. Fields the API
+ * can return as null are typed `T | null` so every consumer has to decide.
+ */
+
 /** Mirror of backend LessonDto. */
 export interface LessonDto {
   id: UUID;
   title: string;
-  description?: string;
+  description?: string | null;
   contentType: LessonContentType;
-  videoMediaId?: UUID;
-  videoUrl?: string;
+  videoMediaId?: UUID | null;
+  /** Meeting link / external video. A lesson PUT is a full replacement: resend it. */
+  videoUrl?: string | null;
   durationSeconds: number;
   orderIndex: number;
   preview: boolean;
@@ -23,7 +33,7 @@ export interface LessonDto {
 export interface ModuleDto {
   id: UUID;
   title: string;
-  description?: string;
+  description?: string | null;
   orderIndex: number;
   lessons: LessonDto[];
 }
@@ -41,7 +51,8 @@ export interface LessonUpsertRequest {
   description?: string;
   contentType: LessonContentType;
   videoMediaId?: UUID;
-  videoUrl?: string;
+  /** null clears it — the PUT replaces the whole lesson. */
+  videoUrl?: string | null;
   durationSeconds: number;
   orderIndex: number;
   preview: boolean;
@@ -54,20 +65,20 @@ export interface OnlineDetailsDto {
 }
 
 export interface OfflineDetailsDto {
-  startDate?: string;
-  endDate?: string;
-  weeklyHours?: number;
-  totalHours?: number;
-  studentLimit?: number;
-  enrolledCount?: number;
-  city?: string;
-  addressLine?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  weeklyHours?: number | null;
+  totalHours?: number | null;
+  studentLimit?: number | null;
+  enrolledCount?: number | null;
+  city?: string | null;
+  addressLine?: string | null;
 }
 
 /** Mirror of backend CourseTutorDto — one tutor on a course's teaching roster. */
 export interface CourseTutorDto {
   tutorId: UUID;
-  displayName?: string;
+  displayName?: string | null;
   /** The single tutor allowed to edit this course. */
   authorized: boolean;
 }
@@ -77,13 +88,13 @@ export interface CourseDto {
   id: UUID;
   slug: string;
   title: string;
-  subtitle?: string;
-  description?: string;
-  requirements?: string;
-  learningOutcomes?: string;
-  syllabus?: string;
-  thumbnailMediaId?: UUID;
-  trailerMediaId?: UUID;
+  subtitle?: string | null;
+  description?: string | null;
+  requirements?: string | null;
+  learningOutcomes?: string | null;
+  syllabus?: string | null;
+  thumbnailMediaId?: UUID | null;
+  trailerMediaId?: UUID | null;
   courseType: CourseType;
   level: CourseLevel;
   language: string;
@@ -91,19 +102,28 @@ export interface CourseDto {
   price: number;
   currency: string;
   status: CourseStatus;
-  publishedAt?: string;
-  ratingAvg?: number;
+  publishedAt?: string | null;
+  /** When it was last submitted for review; null if never. */
+  submittedAt?: string | null;
+  /** The moderator's note when it was sent back — for its tutors and staff only. */
+  rejectionReason?: string | null;
+  ratingAvg?: number | null;
   ratingCount: number;
   enrolledCount: number;
   tutorId: UUID;
-  tutorDisplayName?: string;
+  tutorDisplayName?: string | null;
   /** Full teaching roster; `tutorId` above is the one authorised to edit. */
   tutors: CourseTutorDto[];
   categoryIds: UUID[];
   tagIds: UUID[];
-  onlineDetails?: OnlineDetailsDto;
-  offlineDetails?: OfflineDetailsDto;
+  onlineDetails?: OnlineDetailsDto | null;
+  offlineDetails?: OfflineDetailsDto | null;
   modules: ModuleDto[];
+  /**
+   * Optimistic-lock version. Sent back on PATCH, a save based on an out-of-date
+   * copy is refused with 409 STALE_RESOURCE. Absent on an API that predates it.
+   */
+  version?: number;
 }
 
 /** Mirror of backend CourseSummaryDto (catalog card). */
@@ -111,7 +131,7 @@ export interface CourseSummaryDto {
   id: UUID;
   slug: string;
   title: string;
-  subtitle?: string;
+  subtitle?: string | null;
   courseType: CourseType;
   level: CourseLevel;
   language: string;
@@ -119,12 +139,16 @@ export interface CourseSummaryDto {
   price: number;
   currency: string;
   status: CourseStatus;
-  ratingAvg?: number;
+  ratingAvg?: number | null;
   ratingCount: number;
   enrolledCount: number;
   tutorId: UUID;
-  tutorDisplayName?: string;
-  publishedAt?: string;
+  tutorDisplayName?: string | null;
+  publishedAt?: string | null;
+  submittedAt?: string | null;
+  rejectionReason?: string | null;
+  /** Present on the API's summary; lets the tutor list tell owned rows from co-taught ones. */
+  tutors?: CourseTutorDto[] | null;
 }
 
 export interface CreateCourseRequest {
@@ -172,9 +196,16 @@ export interface OfflineDetailsRequest {
  * The backend's UpdateCourseRequest has no `courseType` — a course's type is
  * fixed at creation — but it does accept the type-specific detail blocks.
  */
-export type UpdateCourseRequest = Partial<
-  Omit<CreateCourseRequest, "slug" | "courseType">
->;
+export type UpdateCourseRequest = Partial<Omit<CreateCourseRequest, "slug" | "courseType">> & {
+  /**
+   * Remove the cover / the trailer. An absent media id means "keep", so without
+   * these a removal saved as "keep" and the form said "Saved".
+   */
+  clearThumbnail?: boolean;
+  clearTrailer?: boolean;
+  /** The course version this edit is based on (see CourseDto.version). */
+  version?: number;
+};
 
 /**
  * Mirror of backend AdminCreateCourseRequest. The tutors are stated explicitly

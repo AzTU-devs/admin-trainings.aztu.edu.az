@@ -4,6 +4,7 @@ import { UploadCloud, X, FileCheck2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@shared/lib/cn";
 import { useUploadMediaMutation } from "@shared/api/mediaApi";
+import { apiErrorMessage } from "@shared/lib/apiError";
 import type { MediaFileDto } from "@shared/types/media";
 
 interface FileDropzoneProps {
@@ -16,28 +17,40 @@ interface FileDropzoneProps {
   onUploaded: (media: MediaFileDto) => void;
   onClear?: () => void;
   disabled?: boolean;
+  /**
+   * Size and type check run before the upload; returns the message to show, or
+   * null. Without one, a file past the API's multipart cap was sent in full and
+   * came back as a 413 reported only as "Upload failed".
+   */
+  validate?: (file: File) => string | null;
 }
 
 /**
  * Drag-and-drop (or click) file upload. Uploads the dropped file to `/media`
  * and reports the resulting {@link MediaFileDto} via {@link onUploaded}.
  */
-export function FileDropzone({ accept, hint, current, onUploaded, onClear, disabled }: FileDropzoneProps) {
+export function FileDropzone({ accept, hint, current, onUploaded, onClear, disabled, validate }: FileDropzoneProps) {
   const [uploadMedia, { isLoading }] = useUploadMediaMutation();
 
   const onDrop = useCallback(
     async (accepted: File[]) => {
       const file = accepted[0];
       if (!file) return;
+      const problem = validate?.(file);
+      if (problem) {
+        toast.error(problem);
+        return;
+      }
       try {
         const media = await uploadMedia(file).unwrap();
         onUploaded(media);
         toast.success("File uploaded");
-      } catch {
-        toast.error("Upload failed");
+      } catch (e) {
+        // The API says why — UPLOAD_TOO_LARGE, MEDIA_TYPE_MISMATCH, NOT_A_PDF.
+        toast.error(apiErrorMessage(e, "Upload failed"));
       }
     },
-    [uploadMedia, onUploaded],
+    [uploadMedia, onUploaded, validate],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

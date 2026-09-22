@@ -56,6 +56,12 @@ export function ExpertProfileSection() {
         <div className="min-w-0">
           <CardTitle>Expert profile</CardTitle>
           <CardDescription>{VISIBILITY[data.approvalStatus]}</CardDescription>
+          {/* The reviewer's reason was stored and never shown to the expert. */}
+          {data.approvalStatus === TUTOR_APPROVAL_STATUS.REJECTED && data.rejectionReason && (
+            <p className="mt-2 text-sm text-error-700 dark:text-error-300 whitespace-pre-wrap">
+              Reviewer's note: {data.rejectionReason}
+            </p>
+          )}
         </div>
         <TutorStatusBadge status={data.approvalStatus} />
       </CardHeader>

@@ -11,9 +11,11 @@ import {
 import { Badge } from "@shared/components/ui/Badge";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
 import { useGetSystemHealthQuery } from "@features/system-monitoring/api/systemApi";
 import type { ServiceState, SystemIncident } from "@features/system-monitoring/types";
 import { cn } from "@shared/lib/cn";
+import { enumLabel } from "@shared/constants/enumLabels";
 
 const STATE_TONE: Record<ServiceState, "success" | "warning" | "danger"> = {
   UP: "success",
@@ -51,12 +53,10 @@ export default function SystemMonitoringPage() {
 
       {isFetching && !data ? (
         <div className="flex justify-center py-12"><Spinner /></div>
-      ) : error || !data ? (
-        <EmptyState
-          title="Health data unavailable"
-          description="The monitoring endpoint did not respond. Check the backend status."
-          action={<button onClick={() => refetch()} className="text-sm font-medium text-brand-700 hover:underline">Retry</button>}
-        />
+      ) : error ? (
+        <QueryErrorState error={error} onRetry={refetch} what="system health" />
+      ) : !data ? (
+        <EmptyState title="Health data unavailable" description="The monitoring endpoint returned nothing." />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
@@ -110,7 +110,7 @@ export default function SystemMonitoringPage() {
                         {s.latencyMs !== undefined && (
                           <span className="text-xs font-mono text-gray-500">{s.latencyMs} ms</span>
                         )}
-                        <Badge tone={STATE_TONE[s.state]} dot>{s.state}</Badge>
+                        <Badge tone={STATE_TONE[s.state] ?? "warning"} dot>{enumLabel("serviceState", s.state)}</Badge>
                       </div>
                     </li>
                   ))}
@@ -130,13 +130,13 @@ export default function SystemMonitoringPage() {
                     <li key={i.id} className="rounded-xl border border-gray-100 dark:border-gray-800 p-3">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">{i.title}</p>
-                        <Badge tone={SEVERITY_TONE[i.severity]}>{i.severity}</Badge>
+                        <Badge tone={SEVERITY_TONE[i.severity] ?? "neutral"}>{enumLabel("severity", i.severity)}</Badge>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         {new Date(i.startedAt).toLocaleString()}
                         {i.resolvedAt ? ` · resolved` : (
                           <span className={cn("ml-1 font-medium", i.state === "OPEN" ? "text-error-600" : "text-warning-600")}>
-                            · {i.state}
+                            · {enumLabel("incidentState", i.state).toLowerCase()}
                           </span>
                         )}
                       </p>

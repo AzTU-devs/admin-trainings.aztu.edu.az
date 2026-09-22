@@ -56,6 +56,9 @@ export function makeStorage(kind: StorageKind = "sessionStorage") {
 /** Default app storage (picks the backend declared in env). */
 export const appStorage = makeStorage(env.auth.storage);
 
+/** Shared across tabs; only for non-secret hints such as STORAGE_KEYS.sessionHint. */
+export const persistentStorage = makeStorage("localStorage");
+
 /**
  * Storage keys — keep here so they don't drift across modules.
  *
@@ -68,6 +71,13 @@ export const appStorage = makeStorage(env.auth.storage);
 export const STORAGE_KEYS = {
   accessToken: "aztu.auth.accessToken",
   user: "aztu.auth.user",
+  /**
+   * "This browser has signed in and not signed out" — a bare flag, no credential.
+   * Kept in localStorage so a new tab knows whether trying the refresh cookie is
+   * worth a request; without it every first visit to the sign-in page fired a
+   * refresh that could only 401.
+   */
+  sessionHint: "aztu.auth.hadSession",
   theme: "aztu.ui.theme",
   sidebarCollapsed: "aztu.ui.sidebarCollapsed",
 } as const;

@@ -13,7 +13,7 @@ export interface CourseParticipantDto {
   userId: UUID;
   fullName: string;
   email: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   status: EnrollmentStatus;
   source?: EnrollmentSource;
   enrolledAt: string;

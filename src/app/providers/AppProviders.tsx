@@ -3,8 +3,9 @@ import { Provider as ReduxProvider } from "react-redux";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "sonner";
 import { store } from "@lib/redux/store";
+import { baseApi } from "@lib/query/baseApi";
 import { useAppDispatch, useAppSelector } from "@lib/redux/hooks";
-import { logout } from "@features/auth/store/authSlice";
+import { logout, tokenRefreshed } from "@features/auth/store/authSlice";
 import { ErrorBoundary } from "@shared/components/feedback/ErrorBoundary";
 import { DevAuthBootstrap } from "./DevAuthBootstrap";
 import { AuthBootstrap } from "./AuthBootstrap";
@@ -58,14 +59,30 @@ function ThemeSync() {
   return null;
 }
 
-/** Listens for `auth:logout` window events from the axios refresh failure path. */
+/**
+ * Bridges the axios layer (which cannot import the store) to the auth slice:
+ * `auth:logout` when a silent refresh fails, `auth:token` when one succeeds —
+ * without the latter the slice kept the token it signed in with while storage
+ * moved on.
+ */
 function AuthEventBridge() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const handler = () => dispatch(logout());
-    window.addEventListener("auth:logout", handler as EventListener);
-    return () => window.removeEventListener("auth:logout", handler as EventListener);
+    const onLogout = () => {
+      dispatch(logout());
+      dispatch(baseApi.util.resetApiState());
+    };
+    const onToken = (e: Event) => {
+      const token = (e as CustomEvent<{ accessToken?: string }>).detail?.accessToken;
+      if (token) dispatch(tokenRefreshed(token));
+    };
+    window.addEventListener("auth:logout", onLogout);
+    window.addEventListener("auth:token", onToken);
+    return () => {
+      window.removeEventListener("auth:logout", onLogout);
+      window.removeEventListener("auth:token", onToken);
+    };
   }, [dispatch]);
 
   return null;

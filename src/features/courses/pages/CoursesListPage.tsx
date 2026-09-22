@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
 import { courseColumns } from "@features/courses/components/courseColumns";
 import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
+import { useGetMyTutorProfileQuery } from "@features/tutors/api/tutorsApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
 import { ROUTES } from "@shared/constants/routes";
@@ -43,7 +44,8 @@ export default function CoursesListPage() {
   // so a tutor past page one could not find a course by name.
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  const { data, isFetching } = useListMyCoursesQuery({
+  const { data: me } = useGetMyTutorProfileQuery();
+  const { currentData: data, isFetching, isError, error, refetch } = useListMyCoursesQuery({
     page,
     size: 10,
     status: status === "ALL" ? undefined : status,
@@ -56,13 +58,13 @@ export default function CoursesListPage() {
   // when the tutor has plenty and simply mistyped a search.
   const activeFilter = debouncedSearch.trim().length > 0 || status !== "ALL";
 
-  const columns = useMemo(() => courseColumns(), []);
+  const columns = useMemo(() => courseColumns({ coTutorOf: me?.id }), [me?.id]);
 
   return (
     <>
       <PageHeader
         title="My courses"
-        description="Every course you've created, across all statuses."
+        description="Every course you teach, across all statuses."
         actions={
           <Button leftIcon={<Plus className="size-4" />} onClick={() => navigate(ROUTES.tutorCourseNew)}>
             New course
@@ -103,7 +105,11 @@ export default function CoursesListPage() {
       <DataTable<CourseSummaryDto>
         data={rows}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="your courses"
         emptyTitle={activeFilter ? "No matching courses" : "No courses yet"}
         emptyDescription={
           activeFilter

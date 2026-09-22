@@ -1,14 +1,14 @@
 import { Badge } from "@shared/components/ui/Badge";
 import { ROOM_STATUS, type RoomStatus } from "@shared/types/lms";
+import { enumLabel } from "@shared/constants/enumLabels";
 
-const MAP: Record<RoomStatus, { tone: "success" | "warning" | "brand" | "neutral"; label: string }> = {
-  [ROOM_STATUS.AVAILABLE]: { tone: "success", label: "Available" },
-  [ROOM_STATUS.MAINTENANCE]: { tone: "warning", label: "Maintenance" },
-  [ROOM_STATUS.RESERVED]: { tone: "brand", label: "Reserved" },
-  [ROOM_STATUS.RETIRED]: { tone: "neutral", label: "Retired" },
+const TONE: Record<RoomStatus, "success" | "warning" | "brand" | "neutral"> = {
+  [ROOM_STATUS.AVAILABLE]: "success",
+  [ROOM_STATUS.MAINTENANCE]: "warning",
+  [ROOM_STATUS.RESERVED]: "brand",
+  [ROOM_STATUS.RETIRED]: "neutral",
 };
 
 export function RoomStatusBadge({ status }: { status: RoomStatus }) {
-  const m = MAP[status];
-  return <Badge tone={m.tone} dot>{m.label}</Badge>;
+  return <Badge tone={TONE[status] ?? "neutral"} dot>{enumLabel("roomStatus", status)}</Badge>;
 }

@@ -30,7 +30,13 @@ export default function AdminCoursesListPage() {
   const [status, setStatus] = useState<CourseStatus>(COURSE_STATUS.PUBLISHED);
   const [page, setPage] = useState(0);
 
-  const { data, isFetching } = useListModerationCoursesQuery({ status, page, size: 10 });
+  // `currentData`: while the next tab loads, `data` still holds the previous
+  // tab's rows, which rendered under the new tab's label.
+  const { currentData: data, isFetching, isError, error, refetch } = useListModerationCoursesQuery({
+    status,
+    page,
+    size: 10,
+  });
 
   const columns = useMemo(() => courseColumns({ showTutor: true }), []);
 
@@ -68,7 +74,11 @@ export default function AdminCoursesListPage() {
       <DataTable<CourseSummaryDto>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="courses"
         emptyTitle={`No ${statusLabel} courses`}
         emptyDescription="Pick another status, or create a course."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}

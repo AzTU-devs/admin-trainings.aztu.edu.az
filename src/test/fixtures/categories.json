@@ -1,0 +1,42 @@
+[
+  {
+    "id": "5acf18e6-805d-40dd-bdb5-0c9e53935ad4",
+    "parentId": null,
+    "slug": "information-technology",
+    "name": "Information Technology",
+    "description": "Information Technology",
+    "iconUrl": "",
+    "sortOrder": 0,
+    "active": true
+  },
+  {
+    "id": "7d1c2b3a-0000-4000-8000-00000000c0de",
+    "parentId": "5acf18e6-805d-40dd-bdb5-0c9e53935ad4",
+    "slug": "fixture-databases",
+    "name": "Databases",
+    "description": null,
+    "iconUrl": null,
+    "sortOrder": 0,
+    "active": true
+  },
+  {
+    "id": "7d1c2b3a-0000-4000-8000-000000000001",
+    "parentId": null,
+    "slug": "fixture-hidden",
+    "name": "Hidden topic",
+    "description": null,
+    "iconUrl": "",
+    "sortOrder": 9,
+    "active": false
+  },
+  {
+    "id": "7d1c2b3a-0000-4000-8000-000000000002",
+    "parentId": "7d1c2b3a-0000-4000-8000-0000000dead0",
+    "slug": "fixture-orphan",
+    "name": "Orphaned topic",
+    "description": null,
+    "iconUrl": null,
+    "sortOrder": 5,
+    "active": true
+  }
+]

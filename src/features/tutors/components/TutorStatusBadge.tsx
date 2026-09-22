@@ -1,14 +1,14 @@
 import { Badge } from "@shared/components/ui/Badge";
 import { TUTOR_APPROVAL_STATUS, type TutorApprovalStatus } from "@shared/types/lms";
+import { enumLabel } from "@shared/constants/enumLabels";
 
-const MAP: Record<TutorApprovalStatus, { tone: "warning" | "success" | "danger" | "neutral"; label: string }> = {
-  [TUTOR_APPROVAL_STATUS.PENDING]: { tone: "warning", label: "Pending" },
-  [TUTOR_APPROVAL_STATUS.APPROVED]: { tone: "success", label: "Approved" },
-  [TUTOR_APPROVAL_STATUS.REJECTED]: { tone: "danger", label: "Rejected" },
-  [TUTOR_APPROVAL_STATUS.SUSPENDED]: { tone: "neutral", label: "Suspended" },
+const TONE: Record<TutorApprovalStatus, "warning" | "success" | "danger" | "neutral"> = {
+  [TUTOR_APPROVAL_STATUS.PENDING]: "warning",
+  [TUTOR_APPROVAL_STATUS.APPROVED]: "success",
+  [TUTOR_APPROVAL_STATUS.REJECTED]: "danger",
+  [TUTOR_APPROVAL_STATUS.SUSPENDED]: "neutral",
 };
 
 export function TutorStatusBadge({ status }: { status: TutorApprovalStatus }) {
-  const m = MAP[status];
-  return <Badge tone={m.tone} dot>{m.label}</Badge>;
+  return <Badge tone={TONE[status] ?? "neutral"} dot>{enumLabel("tutorApprovalStatus", status)}</Badge>;
 }

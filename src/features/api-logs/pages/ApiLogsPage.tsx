@@ -41,7 +41,7 @@ export default function ApiLogsPage() {
   const [method, setMethod] = useState<HttpMethod | "ALL">("ALL");
   const [errorsOnly, setErrorsOnly] = useState(false);
 
-  const { data, isFetching } = useListApiLogsQuery({
+  const { currentData: data, isFetching, isError, error, refetch } = useListApiLogsQuery({
     page,
     size: 30,
     search: search || undefined,
@@ -123,7 +123,11 @@ export default function ApiLogsPage() {
       <DataTable<ApiLogEntry>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="API logs"
         emptyTitle="No requests in this window"
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}

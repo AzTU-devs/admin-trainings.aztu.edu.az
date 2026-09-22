@@ -5,12 +5,15 @@ import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
 import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { levelColumn, typeColumn } from "@features/courses/components/courseColumns";
 import { useListMyCoursesQuery } from "@features/courses/api/coursesApi";
 import type { CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
 import { ROUTES } from "@shared/constants/routes";
 
 type Filter = Extract<CourseStatus, "IN_REVIEW" | "REJECTED" | "PUBLISHED">;
+
+const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString() : "—");
 
 /**
  * Tracks the review status of a tutor's own submissions.
@@ -21,7 +24,7 @@ export default function ApprovalsPage() {
   const [status, setStatus] = useState<Filter>(COURSE_STATUS.IN_REVIEW);
   const [page, setPage] = useState(0);
 
-  const { data, isFetching } = useListMyCoursesQuery({ status, page, size: 10 });
+  const { currentData: data, isFetching, isError, error, refetch } = useListMyCoursesQuery({ status, page, size: 10 });
 
   const columns = useMemo<ColumnDef<CourseSummaryDto>[]>(
     () => [
@@ -35,15 +38,34 @@ export default function ApprovalsPage() {
         ),
       },
       { header: "Status", cell: ({ row }) => <CourseStatusBadge status={row.original.status} /> },
-      { header: "Type", accessorKey: "courseType" },
-      { header: "Level", accessorKey: "level" },
-      {
-        header: "Submitted",
-        cell: ({ row }) =>
-          row.original.publishedAt ? new Date(row.original.publishedAt).toLocaleDateString() : "—",
-      },
+      typeColumn,
+      levelColumn,
+      // "Submitted" used to show publishedAt, which is empty for everything in
+      // review or rejected. Each tab now shows the date that belongs to it.
+      status === COURSE_STATUS.PUBLISHED
+        ? {
+            header: "Published",
+            cell: ({ row }) => fmtDate(row.original.publishedAt),
+          }
+        : {
+            header: "Submitted",
+            cell: ({ row }) => fmtDate(row.original.submittedAt),
+          },
+      // Why it was sent back — stored with the rejection and never shown before.
+      ...(status === COURSE_STATUS.REJECTED
+        ? [
+            {
+              header: "Reason",
+              cell: ({ row }) => (
+                <span className="block max-w-xs whitespace-normal text-sm text-gray-600 dark:text-gray-300">
+                  {row.original.rejectionReason || "—"}
+                </span>
+              ),
+            } as ColumnDef<CourseSummaryDto>,
+          ]
+        : []),
     ],
-    [],
+    [status],
   );
 
   return (
@@ -71,7 +93,11 @@ export default function ApprovalsPage() {
       <DataTable<CourseSummaryDto>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="your courses"
         emptyTitle={
           status === COURSE_STATUS.IN_REVIEW
             ? "Nothing awaiting review"

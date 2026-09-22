@@ -9,6 +9,8 @@ interface Props {
   hideBreadcrumbs?: boolean;
   /** Document title — defaults to `<title> · AzTU Portal`. */
   documentTitle?: string;
+  /** Names for dynamic path segments in the breadcrumbs, e.g. `{ [id]: course.title }`. */
+  crumbLabels?: Record<string, string>;
 }
 
 export function PageHeader({
@@ -17,6 +19,7 @@ export function PageHeader({
   actions,
   hideBreadcrumbs,
   documentTitle,
+  crumbLabels,
 }: Props) {
   return (
     <div className="mb-6">
@@ -25,7 +28,7 @@ export function PageHeader({
       </Helmet>
       {!hideBreadcrumbs && (
         <div className="mb-3">
-          <Breadcrumbs />
+          <Breadcrumbs labels={crumbLabels} />
         </div>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

@@ -1,0 +1,37 @@
+{
+  "id": "7dff4c35-55dc-4e96-8b0b-94e44dc3f9ee",
+  "email": "fixture-me@example.com",
+  "firstName": "Fixture",
+  "lastName": "User",
+  "phone": null,
+  "locale": "en",
+  "status": "ACTIVE",
+  "emailVerified": true,
+  "lastLoginAt": "2026-09-21T20:39:56.506563Z",
+  "roles": [
+    "ADMIN"
+  ],
+  "permissions": [
+    "room:read",
+    "course:publish",
+    "tag:manage",
+    "analytics:read",
+    "tutor:approve",
+    "user:manage",
+    "room:manage",
+    "course:manage",
+    "notification:manage",
+    "category:manage",
+    "room:approve",
+    "notification:read_own",
+    "review:moderate",
+    "course:approve",
+    "course:create_any",
+    "course:read",
+    "user:read",
+    "category:read",
+    "payment:manage",
+    "tutor:manage",
+    "enrollment:manage"
+  ]
+}

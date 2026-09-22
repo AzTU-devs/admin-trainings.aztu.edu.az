@@ -5,6 +5,7 @@ import { Badge } from "@shared/components/ui/Badge";
 import { Checkbox } from "@shared/components/ui/Checkbox";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { useListCategoriesQuery } from "@features/categories/api/categoriesApi";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
 import type { UUID } from "@shared/types/lms";
 
 interface Props {
@@ -15,15 +16,19 @@ interface Props {
 
 /**
  * Multi-select category picker backed by `categoriesApi.listCategories`.
- * Replaces the old comma-separated UUID input.
+ * Replaces the old comma-separated UUID input. Sub-categories are listed as
+ * "Parent › Child", so two "Databases" under different parents stay distinct.
  */
 export function CategoryMultiSelect({ value, onChange, invalid }: Props) {
-  const { data: categories, isLoading } = useListCategoriesQuery();
+  // Staff see hidden categories too (a course may already sit in one); tutors
+  // get what the public catalogue lists.
+  const { can } = usePermissions();
+  const { data: categories, isLoading } = useListCategoriesQuery(can("category:manage") ? "admin" : "public");
   const [query, setQuery] = useState("");
 
   const byId = useMemo(() => {
     const m = new Map<string, string>();
-    (categories ?? []).forEach((c) => m.set(c.id, c.name));
+    (categories ?? []).forEach((c) => m.set(c.id, c.path));
     return m;
   }, [categories]);
 
@@ -31,7 +36,7 @@ export function CategoryMultiSelect({ value, onChange, invalid }: Props) {
     const list = (categories ?? []).filter((c) => c.active);
     if (!query) return list;
     const q = query.toLowerCase();
-    return list.filter((c) => c.name.toLowerCase().includes(q));
+    return list.filter((c) => c.path.toLowerCase().includes(q));
   }, [categories, query]);
 
   const toggle = (id: UUID) => {
@@ -84,7 +89,7 @@ export function CategoryMultiSelect({ value, onChange, invalid }: Props) {
                 className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5"
               >
                 <Checkbox checked={value.includes(c.id)} onCheckedChange={() => toggle(c.id)} />
-                <span className="text-sm text-gray-700 dark:text-gray-200">{c.name}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-200">{c.path}</span>
               </label>
             ))
           )}

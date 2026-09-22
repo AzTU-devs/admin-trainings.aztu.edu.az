@@ -16,6 +16,8 @@ import {
 } from "@shared/components/ui/Dialog";
 import { Textarea } from "@shared/components/ui/Textarea";
 import { RoomRequestStatusBadge } from "@features/room-requests/components/RoomRequestStatusBadge";
+import { RoomStatusBadge } from "@features/rooms/components/RoomStatusBadge";
+import { apiErrorMessage } from "@shared/lib/apiError";
 import {
   useDecideRoomBookingMutation,
   useListAdminRoomBookingsQuery,
@@ -29,12 +31,39 @@ export default function AdminRoomRequestsPage() {
   const [decision, setDecision] = useState<{ b: RoomBookingDto; kind: "APPROVED" | "REJECTED" } | null>(null);
   const [note, setNote] = useState("");
 
-  const { data, isFetching } = useListAdminRoomBookingsQuery({ status: tab, page, size: 10 });
+  // `currentData`: `data` still holds the previous tab's rows while the next
+  // loads (and after it fails), which put Approve/Reject buttons for pending
+  // bookings under the "Approved" label.
+  const { currentData: data, isFetching, isError, error, refetch } = useListAdminRoomBookingsQuery({
+    status: tab,
+    page,
+    size: 10,
+  });
   const [decide, { isLoading: deciding }] = useDecideRoomBookingMutation();
 
   const columns = useMemo<ColumnDef<RoomBookingDto>[]>(
     () => [
-      { header: "Room", accessorKey: "roomName" },
+      {
+        header: "Room",
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <p className="font-medium text-gray-900 dark:text-white truncate">{row.original.roomName}</p>
+            {row.original.roomStatus && row.original.roomStatus !== "AVAILABLE" && (
+              <RoomStatusBadge status={row.original.roomStatus} />
+            )}
+          </div>
+        ),
+      },
+      {
+        header: "Requested by",
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <p className="text-sm text-gray-900 dark:text-white truncate">{row.original.tutorName ?? "—"}</p>
+            {row.original.tutorEmail && <p className="text-xs text-gray-500 truncate">{row.original.tutorEmail}</p>}
+          </div>
+        ),
+      },
+      { header: "Course", cell: ({ row }) => <span className="text-sm">{row.original.offlineCourseTitle ?? "—"}</span> },
       {
         header: "When",
         cell: ({ row }) => (
@@ -43,7 +72,6 @@ export default function AdminRoomRequestsPage() {
           </span>
         ),
       },
-      { header: "Recurrence", cell: ({ row }) => row.original.recurrenceRule ?? "—" },
       { header: "Fee", cell: ({ row }) => `${row.original.totalFee} ${row.original.currency}` },
       { header: "Status", cell: ({ row }) => <RoomRequestStatusBadge status={row.original.status} /> },
       {
@@ -76,7 +104,11 @@ export default function AdminRoomRequestsPage() {
           <DataTable<RoomBookingDto>
             data={data?.content ?? []}
             columns={columns}
-            isLoading={isFetching}
+            isLoading={isFetching && !data}
+            isError={isError}
+            error={error}
+            onRetry={refetch}
+            errorWhat="bookings"
             emptyTitle={`No ${tab.toLowerCase()} bookings`}
             pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
             onPageChange={setPage}
@@ -110,8 +142,10 @@ export default function AdminRoomRequestsPage() {
                   await decide({ id: decision.b.id, decision: decision.kind, note: note.trim() || undefined }).unwrap();
                   toast.success(decision.kind === "APPROVED" ? "Booking approved" : "Booking rejected");
                   setDecision(null);
-                } catch {
-                  toast.error("Could not save decision");
+                } catch (e) {
+                  // e.g. ROOM_TIME_TAKEN when another approval took the slot.
+                  toast.error(apiErrorMessage(e, "Could not save the decision"));
+                  void refetch();
                 }
               }}
             >

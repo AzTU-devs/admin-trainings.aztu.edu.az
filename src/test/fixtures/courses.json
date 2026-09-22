@@ -1,0 +1,176 @@
+[
+  {
+    "id": "f561b6d6-b566-4ee1-a916-d09de07eaf24",
+    "slug": "fixture-online-no-media",
+    "title": "Fixture online course without media",
+    "subtitle": null,
+    "description": null,
+    "requirements": null,
+    "learningOutcomes": null,
+    "syllabus": null,
+    "thumbnailMediaId": null,
+    "trailerMediaId": null,
+    "courseType": "ONLINE",
+    "level": "BEGINNER",
+    "language": "az",
+    "free": true,
+    "price": 0.0,
+    "currency": "AZN",
+    "status": "DRAFT",
+    "publishedAt": null,
+    "submittedAt": null,
+    "rejectionReason": null,
+    "ratingAvg": 0.0,
+    "ratingCount": 0,
+    "enrolledCount": 0,
+    "tutorId": "d305ebd5-08b5-4606-9624-cfb94b89419e",
+    "tutorDisplayName": "Fixture Tutor",
+    "tutors": [
+      {
+        "tutorId": "d305ebd5-08b5-4606-9624-cfb94b89419e",
+        "displayName": "Fixture Tutor",
+        "authorized": true
+      }
+    ],
+    "categoryIds": [
+      "5acf18e6-805d-40dd-bdb5-0c9e53935ad4"
+    ],
+    "tagIds": [],
+    "onlineDetails": {
+      "totalVideoSeconds": 0,
+      "hasCertificate": false,
+      "dripEnabled": false
+    },
+    "offlineDetails": null,
+    "modules": [],
+    "version": 6
+  },
+  {
+    "id": "eb674fb9-ebde-480c-93d2-b9abed2ba0c2",
+    "slug": "fixture-offline-no-hours",
+    "title": "Fixture offline course without hours",
+    "subtitle": "Meets on campus",
+    "description": null,
+    "requirements": null,
+    "learningOutcomes": null,
+    "syllabus": null,
+    "thumbnailMediaId": null,
+    "trailerMediaId": null,
+    "courseType": "OFFLINE",
+    "level": "BEGINNER",
+    "language": "az",
+    "free": true,
+    "price": 0.0,
+    "currency": "AZN",
+    "status": "DRAFT",
+    "publishedAt": null,
+    "submittedAt": null,
+    "rejectionReason": null,
+    "ratingAvg": 0.0,
+    "ratingCount": 0,
+    "enrolledCount": 0,
+    "tutorId": "d305ebd5-08b5-4606-9624-cfb94b89419e",
+    "tutorDisplayName": "Fixture Tutor",
+    "tutors": [
+      {
+        "tutorId": "d305ebd5-08b5-4606-9624-cfb94b89419e",
+        "displayName": "Fixture Tutor",
+        "authorized": true
+      }
+    ],
+    "categoryIds": [
+      "5acf18e6-805d-40dd-bdb5-0c9e53935ad4"
+    ],
+    "tagIds": [],
+    "onlineDetails": null,
+    "offlineDetails": {
+      "startDate": "2026-12-01",
+      "endDate": "2026-12-20",
+      "weeklyHours": null,
+      "totalHours": null,
+      "studentLimit": 10,
+      "enrolledCount": 0,
+      "city": "Baku",
+      "addressLine": null
+    },
+    "modules": [],
+    "version": 2
+  },
+  {
+    "id": "c5d00ce4-c641-4712-b9df-0c7d5b9409ba",
+    "slug": "fixture-online-with-lessons",
+    "title": "Fixture online course with lessons",
+    "subtitle": null,
+    "description": null,
+    "requirements": null,
+    "learningOutcomes": null,
+    "syllabus": null,
+    "thumbnailMediaId": null,
+    "trailerMediaId": "7ef86122-ce80-4e2f-92af-dbdd7e1e8c9d",
+    "courseType": "ONLINE",
+    "level": "BEGINNER",
+    "language": "az",
+    "free": true,
+    "price": 0.0,
+    "currency": "AZN",
+    "status": "IN_REVIEW",
+    "publishedAt": null,
+    "submittedAt": "2026-09-21T20:00:44.414319Z",
+    "rejectionReason": null,
+    "ratingAvg": 0.0,
+    "ratingCount": 0,
+    "enrolledCount": 0,
+    "tutorId": "d305ebd5-08b5-4606-9624-cfb94b89419e",
+    "tutorDisplayName": "Fixture Tutor",
+    "tutors": [
+      {
+        "tutorId": "d305ebd5-08b5-4606-9624-cfb94b89419e",
+        "displayName": "Fixture Tutor",
+        "authorized": true
+      }
+    ],
+    "categoryIds": [
+      "5acf18e6-805d-40dd-bdb5-0c9e53935ad4"
+    ],
+    "tagIds": [],
+    "onlineDetails": {
+      "totalVideoSeconds": 0,
+      "hasCertificate": false,
+      "dripEnabled": false
+    },
+    "offlineDetails": null,
+    "modules": [
+      {
+        "id": "5e02e4e7-61f2-45f3-a847-8ef3538f8517",
+        "title": "Fixture module",
+        "description": "",
+        "orderIndex": 0,
+        "lessons": [
+          {
+            "id": "b4d28931-a1b4-4311-9f0f-6b44344ff696",
+            "title": "Fixture lesson 1",
+            "description": "",
+            "contentType": "VIDEO",
+            "videoMediaId": "f046c282-1575-4c7f-9e39-e006d39c8e6d",
+            "videoUrl": "https://meet.example.com/abc",
+            "durationSeconds": 0,
+            "orderIndex": 0,
+            "preview": false
+          },
+          {
+            "id": "f2b2effa-e8c8-482d-b4d4-5c366dad0294",
+            "title": "Fixture lesson 2",
+            "description": "",
+            "contentType": "VIDEO",
+            "videoMediaId": "f046c282-1575-4c7f-9e39-e006d39c8e6d",
+            "videoUrl": null,
+            "durationSeconds": 0,
+            "orderIndex": 1,
+            "preview": false
+          }
+        ]
+      }
+    ],
+    "version": 4
+  }
+]

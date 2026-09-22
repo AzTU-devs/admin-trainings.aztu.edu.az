@@ -20,10 +20,19 @@ export interface ApiPage<T> {
   totalPages: number;
 }
 
+/** One entry of the API's validation error list (backend `FieldErrorItem`). */
+export interface ApiFieldError {
+  field: string;
+  code?: string;
+  message?: string;
+  rejectedValue?: unknown;
+}
+
 /**
  * Backend error body (RFC-7807-ish):
  *   { "status": 401, "code": "UNAUTHENTICATED", "message": "...", "path": "...", "timestamp": "..." }
- * Validation errors add a `fieldErrors` / `errors` map.
+ * Validation errors (400 VALIDATION_FAILED) add `errors`, an ARRAY of
+ * `{ field, code, message }` — not a map. `normalizeError` folds it into one.
  */
 export interface ApiErrorBody {
   timestamp: string;
@@ -32,8 +41,8 @@ export interface ApiErrorBody {
   error?: string;
   message: string;
   path?: string;
-  errors?: Record<string, string>;
-  fieldErrors?: Record<string, string>;
+  errors?: ApiFieldError[] | Record<string, string>;
+  fieldErrors?: ApiFieldError[] | Record<string, string>;
 }
 
 export interface PageRequest {

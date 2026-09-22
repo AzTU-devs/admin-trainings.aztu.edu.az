@@ -22,6 +22,7 @@ export const authApi = baseApi.injectEndpoints({
       transformResponse: (res: BackendAuthTokens): LoginResult => ({
         user: toAuthUser(res.user),
         accessToken: res.accessToken,
+        firstLogin: !res.user?.lastLoginAt,
       }),
       invalidatesTags: ["Me"],
     }),
@@ -58,9 +59,26 @@ export const authApi = baseApi.injectEndpoints({
       invalidatesTags: ["Me"],
     }),
 
-    /** Request a password reset link — backend `POST /api/auth/password/forgot` (always 202). */
+    /**
+     * Request a password reset link — backend `POST /api/auth/password/forgot`.
+     * 202 whether or not the account exists; it can still fail (400 for a
+     * malformed address, 429 when rate-limited, or no network at all).
+     */
     forgotPassword: build.mutation<void, { email: string }>({
       query: (body) => ({ url: "/auth/password/forgot", method: "POST", data: body, skipAuth: true }),
+    }),
+
+    /**
+     * Change my password — backend `POST /api/auth/password/change`. Every other
+     * session is signed out; this one keeps its refresh cookie.
+     */
+    changePassword: build.mutation<void, { currentPassword: string; newPassword: string }>({
+      query: (body) => ({ url: "/auth/password/change", method: "POST", data: body }),
+    }),
+
+    /** Email me a verification link — backend `POST /api/auth/email/verify/request` (202). */
+    requestEmailVerification: build.mutation<void, void>({
+      query: () => ({ url: "/auth/email/verify/request", method: "POST", data: {} }),
     }),
   }),
   overrideExisting: false,
@@ -74,4 +92,6 @@ export const {
   useMeProfileQuery,
   useUpdateMeMutation,
   useForgotPasswordMutation,
+  useRequestEmailVerificationMutation,
+  useChangePasswordMutation,
 } = authApi;

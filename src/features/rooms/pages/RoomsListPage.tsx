@@ -10,10 +10,12 @@ import { DataTable } from "@shared/components/tables/DataTable";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@shared/components/ui/Dialog";
+import { apiErrorMessage, toastApiError } from "@shared/lib/apiError";
 import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
@@ -38,8 +40,8 @@ import {
 } from "@features/rooms/api/roomsApi";
 import { roomSchema, type RoomFormValues } from "@features/rooms/schemas/room.schema";
 import type { RoomDto } from "@features/rooms/types";
-import type { NormalizedError } from "@lib/axios/httpClient";
 import { ROOM_STATUS } from "@shared/types/lms";
+import { enumLabel } from "@shared/constants/enumLabels";
 
 export default function RoomsListPage() {
   const [page, setPage] = useState(0);
@@ -47,7 +49,7 @@ export default function RoomsListPage() {
   const [editing, setEditing] = useState<RoomDto | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
 
-  const { data, isFetching } = useListRoomsQuery({ page, size: 10 });
+  const { currentData: data, isFetching, isError, error, refetch } = useListRoomsQuery({ page, size: 10 });
   const [createRoom] = useCreateRoomMutation();
   const [updateRoom] = useUpdateRoomMutation();
   const [deleteRoom] = useDeleteRoomMutation();
@@ -127,7 +129,11 @@ export default function RoomsListPage() {
       <DataTable<RoomDto>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="rooms"
         emptyTitle="No rooms yet"
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
         onPageChange={setPage}
@@ -138,6 +144,7 @@ export default function RoomsListPage() {
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit room" : "New room"}</DialogTitle>
+            <DialogDescription className="sr-only">Details, rate, status and photos of the room.</DialogDescription>
           </DialogHeader>
           <Form
             form={form}
@@ -151,13 +158,7 @@ export default function RoomsListPage() {
                 // A bare "Save failed" hides why: a duplicate room number and
                 // a rejected image both looked identical. Surface the server's
                 // message, and pin field errors to their inputs.
-                const err = e as NormalizedError;
-                if (err.fieldErrors) {
-                  for (const [k, v] of Object.entries(err.fieldErrors)) {
-                    form.setError(k as keyof RoomFormValues, { message: v });
-                  }
-                }
-                toast.error(err.message || "Save failed");
+                toastApiError(e, "Save failed", form);
               }
             }}
           >
@@ -179,10 +180,9 @@ export default function RoomsListPage() {
                   <Select value={field.value as string} onValueChange={field.onChange}>
                     <SelectTrigger invalid={invalid}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ROOM_STATUS.AVAILABLE}>Available</SelectItem>
-                      <SelectItem value={ROOM_STATUS.MAINTENANCE}>Maintenance</SelectItem>
-                      <SelectItem value={ROOM_STATUS.RESERVED}>Reserved</SelectItem>
-                      <SelectItem value={ROOM_STATUS.RETIRED}>Retired</SelectItem>
+                      {Object.values(ROOM_STATUS).map((s) => (
+                        <SelectItem key={s} value={s}>{enumLabel("roomStatus", s)}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -231,7 +231,7 @@ export default function RoomsListPage() {
             await deleteRoom(delId).unwrap();
             toast.success("Deleted");
           } catch (e) {
-            toast.error((e as NormalizedError).message || "Could not delete the room");
+            toast.error(apiErrorMessage(e, "Could not delete the room"));
           }
         }}
       />

@@ -32,10 +32,14 @@ export interface TutorProfileDto {
   orcid?: string;
   githubUrl?: string;
   approvalStatus: TutorApprovalStatus;
-  approvedAt?: string;
+  approvedAt?: string | null;
+  /** Why the application was rejected — shown to the expert so they know what to change. */
+  rejectionReason?: string | null;
   ratingAvg?: number;
   ratingCount: number;
   expertiseCategoryIds: UUID[];
+  /** Optimistic-lock version; absent on an API that predates it. */
+  version?: number;
 }
 
 /**
@@ -64,4 +68,6 @@ export interface UpdateTutorProfileRequest {
   orcid?: string;
   githubUrl?: string;
   expertiseCategoryIds?: UUID[];
+  /** The profile version this edit is based on; a stale one is refused with 409 STALE_RESOURCE. */
+  version?: number;
 }

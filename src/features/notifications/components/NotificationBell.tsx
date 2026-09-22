@@ -4,6 +4,8 @@ import { useNavigate } from "react-router";
 import { ROUTES } from "@shared/constants/routes";
 import { cn } from "@shared/lib/cn";
 import { Spinner } from "@shared/components/ui/Spinner";
+import { toast } from "sonner";
+import { apiErrorMessage } from "@shared/lib/apiError";
 import {
   useListNotificationsQuery,
   useMarkAllReadMutation,
@@ -28,12 +30,24 @@ const isUnread = (n: NotificationDto) => !n.readAt && n.status !== NOTIFICATION_
 export function NotificationBell() {
   const navigate = useNavigate();
   const { data: unread } = useUnreadCountQuery();
-  const { data, isFetching } = useListNotificationsQuery({ page: 0, size: 6 });
+  const { data, isFetching, isError, refetch } = useListNotificationsQuery({ page: 0, size: 6 });
   const [markRead] = useMarkReadMutation();
   const [markAllRead, { isLoading: markingAll }] = useMarkAllReadMutation();
 
   const count = unread?.count ?? 0;
   const items = data?.content ?? [];
+
+  const read = (n: NotificationDto) => {
+    if (!isUnread(n)) return;
+    markRead(n.id)
+      .unwrap()
+      .catch((e) => toast.error(apiErrorMessage(e, "Could not mark the notification as read")));
+  };
+  const readAll = () => {
+    markAllRead()
+      .unwrap()
+      .catch((e) => toast.error(apiErrorMessage(e, "Could not mark notifications as read")));
+  };
 
   return (
     <Popover.Root>
@@ -62,7 +76,7 @@ export function NotificationBell() {
             {count > 0 && (
               <button
                 type="button"
-                onClick={() => markAllRead()}
+                onClick={readAll}
                 disabled={markingAll}
                 className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 dark:text-brand-300 hover:underline disabled:opacity-50"
               >
@@ -74,6 +88,14 @@ export function NotificationBell() {
           <div className="max-h-[380px] overflow-y-auto custom-scrollbar">
             {isFetching && items.length === 0 ? (
               <div className="flex justify-center py-10"><Spinner /></div>
+            ) : isError && items.length === 0 ? (
+              // Not "You're all caught up": that was said even when the list failed.
+              <div className="py-8 px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                <p>Couldn't load notifications.</p>
+                <button type="button" onClick={() => void refetch()} className="mt-2 font-medium text-brand-700 dark:text-brand-300 hover:underline">
+                  Retry
+                </button>
+              </div>
             ) : items.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">You're all caught up.</p>
             ) : (
@@ -82,7 +104,7 @@ export function NotificationBell() {
                   <li key={n.id}>
                     <button
                       type="button"
-                      onClick={() => { if (isUnread(n)) markRead(n.id); }}
+                      onClick={() => read(n)}
                       className={cn(
                         "w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors flex gap-3",
                         isUnread(n) && "bg-brand-50/40 dark:bg-brand-500/5",

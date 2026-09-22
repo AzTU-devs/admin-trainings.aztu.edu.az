@@ -5,6 +5,7 @@ import type { Accept } from "react-dropzone";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
 import { Textarea } from "@shared/components/ui/Textarea";
@@ -13,18 +14,29 @@ import { Checkbox } from "@shared/components/ui/Checkbox";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { Label } from "@shared/components/ui/Label";
 import { FileDropzone } from "@shared/components/forms/FileDropzone";
+import { VideoUploader } from "@shared/components/upload/VideoUploader";
 import {
   ANY_MEDIA_ACCEPT,
   DOCUMENT_ACCEPT,
   DOCUMENT_FORMATS_LABEL,
+  MULTIPART_MAX_MB,
   VIDEO_ACCEPT,
   VIDEO_FORMATS_LABEL,
+  validateAnyMediaFile,
+  validateDocumentFile,
+  validateVideoFile,
 } from "@shared/components/upload/uploadConstraints";
-import { env } from "@shared/config/env";
+import { env, resolveApiUrl } from "@shared/config/env";
+import { toastApiError } from "@shared/lib/apiError";
 import type { LessonContentType } from "@shared/types/lms";
+import { enumLabel } from "@shared/constants/enumLabels";
+import { useStreamingVideoUpload } from "@features/videos/hooks/useStreamingVideoUpload";
+import { useCanStreamVideo } from "@features/videos/hooks/useCanStreamVideo";
+import { VideoLibraryPicker } from "@features/videos/components/VideoLibraryPicker";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -53,7 +65,17 @@ import {
   useUpdateModuleMutation,
 } from "@features/courses/api/modulesApi";
 
-const CONTENT_TYPES = Object.values(LESSON_CONTENT_TYPE);
+/**
+ * What a new lesson can be. QUIZ and LIVE_SESSION exist in the API's enum, but
+ * there are no quiz tables or endpoints and no time or link fields for a session,
+ * so offering them created lessons no learner could take. An existing lesson of
+ * either type still shows — and keeps — its type.
+ */
+const NEW_LESSON_TYPES: LessonContentType[] = [
+  LESSON_CONTENT_TYPE.VIDEO,
+  LESSON_CONTENT_TYPE.TEXT,
+  LESSON_CONTENT_TYPE.PDF,
+];
 
 /**
  * Restrict the dropzone to the types the API will actually store for this lesson.
@@ -64,35 +86,41 @@ const CONTENT_TYPES = Object.values(LESSON_CONTENT_TYPE);
  * refusal to after the transfer. See uploadConstraints.
  */
 function acceptFor(contentType: LessonContentType): Accept {
-  switch (contentType) {
-    case "VIDEO":
-      return VIDEO_ACCEPT;
-    case "PDF":
-      return DOCUMENT_ACCEPT;
-    default:
-      return ANY_MEDIA_ACCEPT; // TEXT / QUIZ / LIVE_SESSION — any storable attachment
-  }
+  if (contentType === "PDF") return DOCUMENT_ACCEPT;
+  if (contentType === "VIDEO") return VIDEO_ACCEPT;
+  return ANY_MEDIA_ACCEPT;
 }
 
 /**
- * Per-kind size caps, read from config rather than written in prose: the hint used
- * to promise "up to 100MB" for every kind, which matched no limit on either side
- * (the real ceilings are 512 MB video, 25 MB PDF, 10 MB image).
+ * Attachments other than a VIDEO lesson's video go through multipart
+ * `POST /api/media`, which the API caps at 32 MB — so a video attached there is
+ * held to that cap, not to the streaming limit, and the hint says so. (It used to
+ * promise 512 MB for every kind, and every real recording failed with a 413.)
  */
-const ACCEPT_HINT: Record<LessonContentType, string> = {
-  VIDEO: `${VIDEO_FORMATS_LABEL}, up to ${env.uploads.maxVideoMb} MB`,
-  PDF: `${DOCUMENT_FORMATS_LABEL} document, up to ${env.uploads.maxDocumentMb} MB`,
-  TEXT: anyMediaHint(),
-  QUIZ: anyMediaHint(),
-  LIVE_SESSION: anyMediaHint(),
+const multipartVideoMb = Math.min(env.uploads.maxVideoMb, MULTIPART_MAX_MB);
+const multipartLimits = {
+  maxImageMb: Math.min(env.uploads.maxImageMb, MULTIPART_MAX_MB),
+  maxVideoMb: multipartVideoMb,
+  maxDocumentMb: Math.min(env.uploads.maxDocumentMb, MULTIPART_MAX_MB),
 };
 
-function anyMediaHint(): string {
+function hintFor(contentType: LessonContentType): string {
+  if (contentType === "PDF") return `${DOCUMENT_FORMATS_LABEL} document, up to ${multipartLimits.maxDocumentMb} MB`;
+  if (contentType === "VIDEO") return `${VIDEO_FORMATS_LABEL}, up to ${multipartVideoMb} MB from this account`;
   return (
-    `Image up to ${env.uploads.maxImageMb} MB, ` +
-    `PDF up to ${env.uploads.maxDocumentMb} MB, ` +
-    `or video up to ${env.uploads.maxVideoMb} MB`
+    `Image up to ${multipartLimits.maxImageMb} MB, ` +
+    `PDF up to ${multipartLimits.maxDocumentMb} MB, ` +
+    `or a short video up to ${multipartVideoMb} MB`
   );
+}
+
+function validateFor(contentType: LessonContentType) {
+  return (file: File) =>
+    contentType === "PDF"
+      ? validateDocumentFile(file, multipartLimits.maxDocumentMb)
+      : contentType === "VIDEO"
+        ? validateVideoFile(file, multipartVideoMb)
+        : validateAnyMediaFile(file, multipartLimits);
 }
 
 type ModuleDialogState = { open: boolean; editing: ModuleDto | null };
@@ -105,7 +133,7 @@ type LessonDialogState = { open: boolean; moduleId: UUID; lessonCount: number; e
  * tree so the list stays in sync.
  */
 export function ModulesEditor({ courseId }: { courseId: UUID }) {
-  const { data: modules, isLoading, isError } = useListModulesQuery(courseId);
+  const { data: modules, isLoading, isError, error, refetch } = useListModulesQuery(courseId);
 
   const [addModule] = useAddModuleMutation();
   const [updateModule] = useUpdateModuleMutation();
@@ -113,6 +141,13 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
   const [addLesson] = useAddLessonMutation();
   const [updateLesson] = useUpdateLessonMutation();
   const [deleteLesson] = useDeleteLessonMutation();
+
+  const streamUpload = useStreamingVideoUpload();
+  // Without the streaming video endpoints a VIDEO lesson falls back to multipart,
+  // held to its 30 MB cap (and without the library, which lives there too).
+  const canStreamVideo = useCanStreamVideo();
+  /** Title of the attached video when known (a pick or an upload), for the attached row. */
+  const [materialLabel, setMaterialLabel] = useState<string | null>(null);
 
   const [moduleDialog, setModuleDialog] = useState<ModuleDialogState>({ open: false, editing: null });
   const [lessonDialog, setLessonDialog] = useState<LessonDialogState | null>(null);
@@ -123,9 +158,18 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
     resolver: zodResolver(moduleSchema),
     defaultValues: { title: "", description: "" },
   });
+  const emptyLesson: LessonFormValues = {
+    title: "",
+    description: "",
+    contentType: "VIDEO",
+    videoMediaId: undefined,
+    videoUrl: "",
+    durationSeconds: 0,
+    preview: false,
+  };
   const lessonForm = useForm<LessonFormValues>({
     resolver: zodResolver(lessonSchema),
-    defaultValues: { title: "", description: "", contentType: "VIDEO", videoMediaId: undefined, durationSeconds: 0, preview: false },
+    defaultValues: emptyLesson,
   });
 
   const openModuleCreate = () => {
@@ -137,7 +181,8 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
     setModuleDialog({ open: true, editing: m });
   };
   const openLessonCreate = (m: ModuleDto) => {
-    lessonForm.reset({ title: "", description: "", contentType: "VIDEO", videoMediaId: undefined, durationSeconds: 0, preview: false });
+    lessonForm.reset(emptyLesson);
+    setMaterialLabel(null);
     setLessonDialog({ open: true, moduleId: m.id, lessonCount: m.lessons.length, editing: null });
   };
   const openLessonEdit = (m: ModuleDto, l: LessonDto) => {
@@ -146,10 +191,25 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
       description: l.description ?? "",
       contentType: l.contentType,
       videoMediaId: l.videoMediaId ?? undefined,
+      // Loaded so it survives the save: the PUT replaces the whole lesson.
+      videoUrl: l.videoUrl ?? "",
       durationSeconds: l.durationSeconds,
       preview: l.preview,
     });
+    setMaterialLabel(null);
     setLessonDialog({ open: true, moduleId: m.id, lessonCount: m.lessons.length, editing: l });
+  };
+
+  /** VIDEO lessons stream their video; VideoUploader wants a URL back. */
+  const lessonVideoUploader = async (file: File, onProgress: (pct: number) => void, signal: AbortSignal) => {
+    const asset = await streamUpload(file, onProgress, signal);
+    lessonForm.setValue("videoMediaId", asset.id, { shouldValidate: true, shouldDirty: true });
+    setMaterialLabel(asset.title);
+    // Seed the duration when the API measured one and the tutor has not typed one.
+    if (asset.durationSeconds > 0 && !lessonForm.getValues("durationSeconds")) {
+      lessonForm.setValue("durationSeconds", asset.durationSeconds);
+    }
+    return resolveApiUrl(asset.url);
   };
 
   const submitModule = async (values: ModuleFormValues) => {
@@ -163,8 +223,8 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
       }
       toast.success(editing ? "Module updated" : "Module added");
       setModuleDialog({ open: false, editing: null });
-    } catch {
-      toast.error("Could not save module");
+    } catch (e) {
+      toastApiError(e, "Could not save the module", moduleForm);
     }
   };
 
@@ -172,7 +232,9 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
     if (!lessonDialog) return;
     const { editing, moduleId, lessonCount } = lessonDialog;
     const orderIndex = editing ? editing.orderIndex : lessonCount;
-    const body = { ...values, orderIndex };
+    // null, not undefined, for an emptied link: the PUT is a full replacement and
+    // null is how the API is told to clear it.
+    const body = { ...values, videoUrl: values.videoUrl?.trim() || null, orderIndex };
     try {
       if (editing) {
         await updateLesson({ courseId, lessonId: editing.id, body }).unwrap();
@@ -181,13 +243,13 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
       }
       toast.success(editing ? "Lesson updated" : "Lesson added");
       setLessonDialog(null);
-    } catch {
-      toast.error("Could not save lesson");
+    } catch (e) {
+      toastApiError(e, "Could not save the lesson", lessonForm);
     }
   };
 
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
-  if (isError) return <p className="text-sm text-error-600">Could not load modules.</p>;
+  if (isError) return <QueryErrorState error={error} onRetry={refetch} what="the modules" />;
 
   const sorted = [...(modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
 
@@ -230,7 +292,7 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
                     <li key={l.id} className="flex items-center gap-2 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-2">
                       <span className="text-xs font-mono text-gray-400">#{l.orderIndex}</span>
                       <span className="text-sm text-gray-900 dark:text-gray-100">{l.title}</span>
-                      <Badge tone="neutral">{l.contentType}</Badge>
+                      <Badge tone="neutral">{enumLabel("lessonContentType", l.contentType)}</Badge>
                       {l.preview && <Badge tone="success">preview</Badge>}
                       <div className="ml-auto flex gap-1">
                         <Button variant="ghost" size="icon" aria-label="Edit lesson" onClick={() => openLessonEdit(m, l)}>
@@ -263,6 +325,7 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{moduleDialog.editing ? "Edit module" : "Add module"}</DialogTitle>
+            <DialogDescription className="sr-only">A module groups the lessons of one part of the course.</DialogDescription>
           </DialogHeader>
           <Form form={moduleForm} onSubmit={submitModule}>
             <FormField<ModuleFormValues> name="title" label="Title" required>
@@ -288,37 +351,100 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{lessonDialog?.editing ? "Edit lesson" : "Add lesson"}</DialogTitle>
+            <DialogDescription className="sr-only">The lesson's title, type, material and link.</DialogDescription>
           </DialogHeader>
           <Form form={lessonForm} onSubmit={submitLesson}>
             <FormField<LessonFormValues> name="title" label="Title" required>
               {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} />}
             </FormField>
             <FormField<LessonFormValues> name="contentType" label="Content type" required>
-              {({ field, invalid }) => (
-                <Select value={field.value as string} onValueChange={field.onChange}>
-                  <SelectTrigger invalid={invalid}>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONTENT_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {({ field, invalid }) => {
+                // Keep an existing QUIZ / LIVE_SESSION lesson's own type selectable.
+                const current = lessonDialog?.editing?.contentType;
+                const types =
+                  current && !NEW_LESSON_TYPES.includes(current) ? [...NEW_LESSON_TYPES, current] : NEW_LESSON_TYPES;
+                return (
+                  <Select
+                    value={field.value as string}
+                    onValueChange={(v) => {
+                      // Material uploaded for another type (a PDF on a lesson now
+                      // marked VIDEO) would be refused by the API on save.
+                      if (v !== field.value && lessonForm.getValues("videoMediaId")) {
+                        lessonForm.setValue("videoMediaId", undefined);
+                        setMaterialLabel(null);
+                      }
+                      field.onChange(v);
+                    }}
+                  >
+                    <SelectTrigger invalid={invalid}>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {types.map((t) => (
+                        <SelectItem key={t} value={t}>{enumLabel("lessonContentType", t)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                );
+              }}
             </FormField>
-            <div>
+            <div data-form-field>
               <Label>Material</Label>
-              <div className="mt-1.5">
-                <FileDropzone
-                  accept={acceptFor(lessonForm.watch("contentType"))}
-                  hint={ACCEPT_HINT[lessonForm.watch("contentType")]}
-                  current={lessonForm.watch("videoMediaId") ? "File attached" : null}
-                  onUploaded={(m) => lessonForm.setValue("videoMediaId", m.id, { shouldValidate: true })}
-                  onClear={() => lessonForm.setValue("videoMediaId", undefined, { shouldValidate: true })}
-                />
+              <div className="mt-1.5 space-y-2">
+                {lessonForm.watch("videoMediaId") ? (
+                  // Removing it is truthful here: the lesson PUT is a full
+                  // replacement, so an absent id clears the stored one.
+                  <FileDropzone
+                    current={materialLabel ?? (lessonForm.watch("contentType") === "VIDEO" ? "Video attached" : "File attached")}
+                    onUploaded={() => undefined}
+                    onClear={() => {
+                      lessonForm.setValue("videoMediaId", undefined, { shouldValidate: true });
+                      setMaterialLabel(null);
+                    }}
+                  />
+                ) : lessonForm.watch("contentType") === "VIDEO" && canStreamVideo ? (
+                  <>
+                    <VideoUploader uploader={lessonVideoUploader} />
+                    <VideoLibraryPicker
+                      onSelect={(v) => {
+                        lessonForm.setValue("videoMediaId", v.id, { shouldValidate: true, shouldDirty: true });
+                        setMaterialLabel(v.title);
+                        if (v.durationSeconds > 0 && !lessonForm.getValues("durationSeconds")) {
+                          lessonForm.setValue("durationSeconds", v.durationSeconds);
+                        }
+                      }}
+                    />
+                  </>
+                ) : (
+                  <FileDropzone
+                    accept={acceptFor(lessonForm.watch("contentType"))}
+                    hint={hintFor(lessonForm.watch("contentType"))}
+                    validate={validateFor(lessonForm.watch("contentType"))}
+                    onUploaded={(m) => {
+                      lessonForm.setValue("videoMediaId", m.id, { shouldValidate: true });
+                      setMaterialLabel(null);
+                    }}
+                  />
+                )}
               </div>
             </div>
+            <FormField<LessonFormValues>
+              name="videoUrl"
+              label="Link (meeting or external video)"
+              description="Optional. A full https:// address, e.g. a meeting room or a hosted video."
+            >
+              {({ field, invalid }) => (
+                <Input
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://"
+                  {...field}
+                  value={(field.value as string) ?? ""}
+                  invalid={invalid}
+                  maxLength={512}
+                />
+              )}
+            </FormField>
             <FormField<LessonFormValues> name="durationSeconds" label="Duration (seconds)">
               {({ field, invalid }) => (
                 <Input
@@ -364,12 +490,8 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
         destructive
         onConfirm={async () => {
           if (!delModule) return;
-          try {
-            await deleteModule({ courseId, moduleId: delModule.id }).unwrap();
-            toast.success("Module deleted");
-          } catch {
-            toast.error("Could not delete module");
-          }
+          await deleteModule({ courseId, moduleId: delModule.id }).unwrap();
+          toast.success("Module deleted");
         }}
       />
 
@@ -382,12 +504,9 @@ export function ModulesEditor({ courseId }: { courseId: UUID }) {
         destructive
         onConfirm={async () => {
           if (!delLesson) return;
-          try {
-            await deleteLesson({ courseId, lessonId: delLesson.id }).unwrap();
-            toast.success("Lesson deleted");
-          } catch {
-            toast.error("Could not delete lesson");
-          }
+          // A failure is reported by ConfirmDialog, which keeps the dialog open.
+          await deleteLesson({ courseId, lessonId: delLesson.id }).unwrap();
+          toast.success("Lesson deleted");
         }}
       />
     </div>

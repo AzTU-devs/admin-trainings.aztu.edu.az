@@ -8,6 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 import { Logo } from "./Logo";
 import { NotificationBell } from "@features/notifications/components/NotificationBell";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
 
 /**
  * Top bar of the authenticated shell.
@@ -19,6 +20,11 @@ import { NotificationBell } from "@features/notifications/components/Notificatio
 export function Header() {
   const dispatch = useAppDispatch();
   const searchRef = useRef<HTMLInputElement>(null);
+  // The search submits to the tutor's own course list, which only a TUTOR may
+  // open. It used to be shown to everyone, so an admin's search landed on /403
+  // outside the shell. Staff have no searchable course list to send it to yet
+  // (the admin course endpoint takes no free-text filter), so it is hidden for them.
+  const { isTutor: canSearch, can } = usePermissions();
 
   const focusSearch = useCallback(() => {
     searchRef.current?.focus();
@@ -26,6 +32,7 @@ export function Header() {
 
   // The ⌘K hint rendered in the field has to actually do something.
   useEffect(() => {
+    if (!canSearch) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -34,7 +41,7 @@ export function Header() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusSearch]);
+  }, [focusSearch, canSearch]);
 
   return (
     <header className="sticky top-0 z-30 w-full border-b border-gray-200 bg-white/85 backdrop-blur-md dark:border-gray-800 dark:bg-gray-dark/85">
@@ -53,13 +60,20 @@ export function Header() {
           <Logo showText={false} />
         </NavLink>
 
-        <div className="hidden min-w-0 flex-1 md:flex">
-          <SearchBox inputRef={searchRef} />
-        </div>
-        <div className="flex-1 md:hidden" />
+        {canSearch ? (
+          <>
+            <div className="hidden min-w-0 flex-1 md:flex">
+              <SearchBox inputRef={searchRef} />
+            </div>
+            <div className="flex-1 md:hidden" />
+          </>
+        ) : (
+          <div className="flex-1" />
+        )}
 
         <div className="flex shrink-0 items-center gap-1">
-          <NotificationBell />
+          {/* Only for accounts with an inbox — an ADMIN has none on the API. */}
+          {can("notification:read_own") && <NotificationBell />}
           <ThemeToggle compact />
           <span className="mx-1 hidden h-8 w-px bg-gray-200 md:block dark:bg-gray-800" />
           <UserMenu />
@@ -68,9 +82,11 @@ export function Header() {
 
       {/* Below md the field moves to its own row rather than being hidden behind
           a magnifier button that had nowhere to open a search UI. */}
-      <div className="border-t border-gray-100 px-4 pb-2.5 pt-1 md:hidden dark:border-gray-800">
-        <SearchBox />
-      </div>
+      {canSearch && (
+        <div className="border-t border-gray-100 px-4 pb-2.5 pt-1 md:hidden dark:border-gray-800">
+          <SearchBox />
+        </div>
+      )}
     </header>
   );
 }

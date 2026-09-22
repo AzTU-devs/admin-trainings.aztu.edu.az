@@ -28,8 +28,12 @@ interface Props {
   /** Sends the partial update; resolves to the profile as saved. */
   onSave: (body: UpdateTutorProfileRequest) => Promise<TutorProfileDto>;
   onSaved?: (saved: TutorProfileDto) => void;
+  /** Save even with no field changed — resubmitting a rejected application is itself the action. */
+  allowUnchanged?: boolean;
   onCancel?: () => void;
   submitLabel?: string;
+  /** Toast after a successful save; a resubmission is more than a saved profile. */
+  successMessage?: string;
 }
 
 /** The API's refusals of a photo id — the same codes as a course cover — shown on the photo. */
@@ -53,6 +57,8 @@ export function ExpertProfileForm({
   onSaved,
   onCancel,
   submitLabel = "Save profile",
+  successMessage = "Profile saved",
+  allowUnchanged,
 }: Props) {
   const [uploadMedia] = useUploadMediaMutation();
   const [uploading, setUploading] = useState(false);
@@ -96,19 +102,29 @@ export function ExpertProfileForm({
 
   const handle = async (values: ExpertProfileFormValues) => {
     const body = toUpdateRequest(values, saved);
-    if (Object.keys(body).length === 0) {
+    if (Object.keys(body).length === 0 && !allowUnchanged) {
       toast.info("No changes to save");
       return;
     }
+    // The version this form was based on, so an admin and the expert editing at
+    // once cannot silently overwrite each other (409 STALE_RESOURCE instead).
+    if (typeof saved.version === "number") body.version = saved.version;
 
     try {
       const next = await onSave(body);
       setSaved(next);
       form.reset(toFormValues(next));
-      toast.success("Profile saved");
+      toast.success(successMessage);
       onSaved?.(next);
     } catch (e) {
       const err = e as NormalizedError;
+      if (err.code === "STALE_RESOURCE") {
+        toast.error("Someone else changed this profile while you were editing.", {
+          description: "Reload the page to see their changes, then make yours again.",
+          duration: 15_000,
+        });
+        return;
+      }
       for (const [field, message] of serverFieldErrors(err)) {
         if (EXPERT_PROFILE_FIELDS.has(field)) form.setError(field as FieldName, { message });
       }

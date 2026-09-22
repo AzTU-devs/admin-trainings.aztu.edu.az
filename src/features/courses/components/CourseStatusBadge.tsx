@@ -1,18 +1,15 @@
 import { Badge } from "@shared/components/ui/Badge";
 import { COURSE_STATUS, type CourseStatus } from "@shared/types/lms";
+import { enumLabel } from "@shared/constants/enumLabels";
 
-const MAP: Record<
-  CourseStatus,
-  { tone: "neutral" | "brand" | "gold" | "success" | "warning" | "danger" | "outline"; label: string }
-> = {
-  [COURSE_STATUS.DRAFT]: { tone: "neutral", label: "Draft" },
-  [COURSE_STATUS.IN_REVIEW]: { tone: "warning", label: "In review" },
-  [COURSE_STATUS.PUBLISHED]: { tone: "success", label: "Published" },
-  [COURSE_STATUS.REJECTED]: { tone: "danger", label: "Rejected" },
-  [COURSE_STATUS.ARCHIVED]: { tone: "outline", label: "Archived" },
+const TONE: Record<CourseStatus, "neutral" | "brand" | "gold" | "success" | "warning" | "danger" | "outline"> = {
+  [COURSE_STATUS.DRAFT]: "neutral",
+  [COURSE_STATUS.IN_REVIEW]: "warning",
+  [COURSE_STATUS.PUBLISHED]: "success",
+  [COURSE_STATUS.REJECTED]: "danger",
+  [COURSE_STATUS.ARCHIVED]: "outline",
 };
 
 export function CourseStatusBadge({ status }: { status: CourseStatus }) {
-  const m = MAP[status];
-  return <Badge tone={m.tone} dot>{m.label}</Badge>;
+  return <Badge tone={TONE[status] ?? "neutral"} dot>{enumLabel("courseStatus", status)}</Badge>;
 }

@@ -2,27 +2,31 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, LogOut, Settings, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useAuth } from "@features/auth/hooks/useAuth";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
+import { useGetMyTutorProfileQuery } from "@features/tutors/api/tutorsApi";
+import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
+import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
 import { ROUTES } from "@shared/constants/routes";
+import { ROLES, type Role } from "@shared/constants/roles";
+import { enumLabel } from "@shared/constants/enumLabels";
 import { cn } from "@shared/lib/cn";
 
-function initials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
+/** The role that best describes the account — roles[0] was often USER for an expert. */
+const ROLE_RANK: Role[] = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.TUTOR, ROLES.USER];
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
+  const { isTutor } = usePermissions();
   const navigate = useNavigate();
+  // An expert's own photo, not initials: nothing ever set AuthUser.avatarUrl,
+  // so the header showed initials even after a photo was uploaded.
+  const { data: tutor } = useGetMyTutorProfileQuery(undefined, { skip: !isTutor });
 
   if (!user) return null;
 
   const fullName = user.fullName || user.email;
-  const roleLabel = (user.roles[0] ?? "USER").replace("_", " ").toLowerCase();
+  const top = ROLE_RANK.find((r) => user.roles.includes(r));
+  const roleLabel = top ? enumLabel("role", top) : "";
 
   return (
     <DropdownMenu.Root>
@@ -31,16 +35,15 @@ export function UserMenu() {
           type="button"
           className="inline-flex items-center gap-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 pl-1 pr-2.5 py-1 transition-colors"
         >
-          {user.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" className="size-9 rounded-full object-cover" />
-          ) : (
-            <span className="size-9 rounded-full bg-brand-700 text-white text-xs font-semibold inline-flex items-center justify-center">
-              {initials(fullName)}
-            </span>
-          )}
+          <TutorAvatar
+            src={tutor ? tutorAvatarSrc(tutor) : null}
+            name={fullName}
+            className="size-9"
+            fallbackClassName="bg-brand-700 text-white text-xs font-semibold"
+          />
           <span className="hidden md:block text-left leading-tight">
             <span className="block text-sm font-medium text-gray-900 dark:text-white truncate max-w-[140px]">{fullName}</span>
-            <span className="block text-[11px] text-gray-500 dark:text-gray-400 capitalize">{roleLabel}</span>
+            <span className="block text-[11px] text-gray-500 dark:text-gray-400">{roleLabel}</span>
           </span>
           <ChevronDown className="size-4 text-gray-400" />
         </button>

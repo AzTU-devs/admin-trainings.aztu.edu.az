@@ -64,6 +64,8 @@ export const TAGS = [
   "ApiLog",
   "Analytics",
   "Me",
+  "SecurityOverview",
+  "BlockedIps",
 ] as const;
 
 export type ApiTag = (typeof TAGS)[number];

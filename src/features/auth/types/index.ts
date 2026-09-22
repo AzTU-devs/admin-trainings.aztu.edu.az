@@ -24,11 +24,11 @@ export interface BackendUserDto {
   email: string;
   firstName: string;
   lastName: string;
-  phone?: string;
-  locale?: string;
+  phone?: string | null;
+  locale?: string | null;
   status: string;
   emailVerified: boolean;
-  lastLoginAt?: string;
+  lastLoginAt?: string | null;
   roles: string[];
   permissions?: string[];
 }
@@ -52,6 +52,11 @@ export interface BackendAuthTokens {
 export interface LoginResult {
   user: AuthUser;
   accessToken: string;
+  /**
+   * No previous sign-in on record. The login response carries the user as it was
+   * before this sign-in was recorded, so a null `lastLoginAt` means a first visit.
+   */
+  firstLogin: boolean;
 }
 
 /** Maps a backend UserDto into the app's AuthUser shape. */
@@ -63,5 +68,6 @@ export function toAuthUser(dto: BackendUserDto): AuthUser {
     email: dto.email,
     fullName,
     roles: dto.roles as Role[],
+    permissions: dto.permissions,
   };
 }

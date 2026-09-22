@@ -3,7 +3,9 @@ import { Client, type IMessage } from "@stomp/stompjs";
 import { toast } from "sonner";
 import { env } from "@shared/config/env";
 import { appStorage, STORAGE_KEYS } from "@lib/storage";
-import { useAppDispatch } from "@lib/redux/hooks";
+import { useAppDispatch, useAppSelector } from "@lib/redux/hooks";
+import { refreshAccessToken } from "@lib/axios/httpClient";
+import { isTokenExpired } from "@lib/auth/jwt";
 import { notificationsApi } from "@features/notifications/api/notificationsApi";
 
 /**
@@ -19,13 +21,16 @@ import { notificationsApi } from "@features/notifications/api/notificationsApi";
  */
 export function useNotificationStream() {
   const dispatch = useAppDispatch();
+  // Restart the client when the signed-in user changes (sign-in, sign-out,
+  // another account) — not on every token refresh, which beforeConnect handles.
+  const userId = useAppSelector((s) => (s.auth.status === "authenticated" ? s.auth.user?.id : undefined));
+  // No inbox, no stream (an ADMIN lacks notification:read_own).
+  const hasInbox = useAppSelector((s) => s.auth.user?.permissions?.includes("notification:read_own") ?? true);
 
   useEffect(() => {
     if (!env.features.wsNotifications) return;
     if (typeof WebSocket === "undefined") return;
-
-    const token = appStorage.get<string>(STORAGE_KEYS.accessToken);
-    if (!token) return;
+    if (!userId || !hasInbox) return;
 
     const brokerURL = resolveWsUrl(env.api.baseUrl);
     if (!brokerURL) return;
@@ -41,8 +46,28 @@ export function useNotificationStream() {
 
     const client = new Client({
       brokerURL,
-      // STOMP CONNECT auth — the backend reads this header on the CONNECT frame.
-      connectHeaders: { Authorization: `Bearer ${token}` },
+      /*
+       * STOMP CONNECT auth — the backend reads this header on the CONNECT frame.
+       *
+       * Set before EVERY connect, not once. The token used to be read on mount
+       * into static connectHeaders, which stompjs resends unchanged on each
+       * reconnect; any reconnect after the 15-minute access-token lifetime was
+       * refused, and the client retried every 5 s with the dead token forever —
+       * live notifications stopped for the rest of the session.
+       */
+      beforeConnect: async (c) => {
+        let token = appStorage.get<string>(STORAGE_KEYS.accessToken);
+        if (!token || isTokenExpired(token)) {
+          try {
+            token = await refreshAccessToken();
+          } catch {
+            // The session is over; the 401 path signs the user out.
+            await c.deactivate();
+            return;
+          }
+        }
+        c.connectHeaders = { Authorization: `Bearer ${token}` };
+      },
       reconnectDelay: 5_000,
       heartbeatIncoming: 10_000,
       heartbeatOutgoing: 10_000,
@@ -67,7 +92,7 @@ export function useNotificationStream() {
     return () => {
       void client.deactivate();
     };
-  }, [dispatch]);
+  }, [dispatch, userId, hasInbox]);
 }
 
 /**

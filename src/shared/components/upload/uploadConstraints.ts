@@ -65,6 +65,18 @@ export const ANY_MEDIA_ACCEPT: Accept = {
   ...DOCUMENT_ACCEPT,
 };
 
+/**
+ * Ceiling for anything sent as multipart to `POST /api/media`.
+ *
+ * The API caps a multipart body at 32 MB on purpose (application.properties:
+ * a 512 MB multipart limit would hand every signed-in account a large
+ * disk-write primitive), so video bigger than this has to go through the
+ * streaming `PUT /api/videos/{id}/content` instead. 30 leaves headroom for the
+ * multipart envelope. Anything above it that is offered to a multipart picker
+ * fails as a 413, so pickers check against this before sending.
+ */
+export const MULTIPART_MAX_MB = 30;
+
 /** Human wording for each allowlist — used in help text and rejection messages. */
 export const IMAGE_FORMATS_LABEL = "JPEG, PNG, GIF, WebP or AVIF";
 export const VIDEO_FORMATS_LABEL = "MP4, WebM or MOV";

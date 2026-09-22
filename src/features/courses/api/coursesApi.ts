@@ -38,6 +38,17 @@ const adminCourseTags = (id: UUID, res?: CourseDto): { type: "Course"; id: strin
   ...(res ? [{ type: "Course" as const, id: res.slug }] : []),
 ];
 
+/**
+ * A course detail is cached under both of its keys, id and slug. The tutor page
+ * loads it by slug and the admin page by id, while each write knows only what
+ * it has: module and lesson edits carry just the course id. Tagged by the
+ * lookup key alone, the tutor's cached course kept its old outline after a
+ * lesson was added, so "Submit for review" still warned that it had no lessons
+ * (and would not warn again after every lesson was deleted) until a reload.
+ */
+export const courseDetailTags = (key: string, course?: Pick<CourseDto, "id" | "slug">) =>
+  [...new Set([key, ...(course ? [course.id, course.slug] : [])])].map((id) => ({ type: "Course" as const, id }));
+
 export const coursesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     /* Public catalog (PUBLISHED only) — the only list endpoints the backend exposes. */
@@ -51,7 +62,7 @@ export const coursesApi = baseApi.injectEndpoints({
     }),
     getCourseBySlug: build.query<CourseDto, string>({
       query: (slug) => ({ url: `/public/courses/${slug}`, method: "GET" }),
-      providesTags: (_r, _e, slug) => [{ type: "Course", id: slug }],
+      providesTags: (res, _e, slug) => courseDetailTags(slug, res),
     }),
 
     /* Tutor portal — MY OWN courses (all statuses), optionally filtered by status. */
@@ -78,12 +89,16 @@ export const coursesApi = baseApi.injectEndpoints({
       invalidatesTags: (res) =>
         res ? [{ type: "Course", id: res.slug }, { type: "Course", id: res.id }, { type: "Course", id: "MINE" }] : [],
     }),
-    archiveCourse: build.mutation<void, UUID>({
-      query: (id) => ({ url: `/portal/courses/${id}/archive`, method: "POST" }),
-      invalidatesTags: (_r, _e, id) => [
+    archiveCourse: build.mutation<void, { id: UUID; slug: string }>({
+      query: ({ id }) => ({ url: `/portal/courses/${id}/archive`, method: "POST" }),
+      // The tutor's edit page reads the course by slug, so that entry must go too
+      // or the page keeps showing the old status after archiving.
+      invalidatesTags: (_r, _e, { id, slug }) => [
         { type: "Course", id: "PUBLIC-LIST" },
         { type: "Course", id: "MINE" },
+        { type: "Course", id: "MODERATION" },
         { type: "Course", id },
+        { type: "Course", id: slug },
       ],
     }),
 
@@ -96,7 +111,7 @@ export const coursesApi = baseApi.injectEndpoints({
     /* Admin course detail — full CourseDto for ANY status (requires course:approve). */
     getAdminCourseById: build.query<CourseDto, UUID>({
       query: (id) => ({ url: `/admin/courses/${id}`, method: "GET" }),
-      providesTags: (_r, _e, id) => [{ type: "Course", id }],
+      providesTags: (res, _e, id) => courseDetailTags(id, res),
     }),
 
     /* Admin authoring — any course, any tutor, any status. Distinct from the
@@ -120,6 +135,15 @@ export const coursesApi = baseApi.injectEndpoints({
     unpublishCourse: build.mutation<CourseDto, UUID>({
       query: (id) => ({ url: `/admin/courses/${id}/unpublish`, method: "POST" }),
       invalidatesTags: (res, _e, id) => adminCourseTags(id, res),
+    }),
+    /**
+     * `POST /admin/courses/{id}/archive` — staff archive any course. The tutor
+     * endpoint above is owner-only, so without this an admin could see the
+     * Archived tab but never put a course in it.
+     */
+    archiveAdminCourse: build.mutation<CourseDto | void, UUID>({
+      query: (id) => ({ url: `/admin/courses/${id}/archive`, method: "POST" }),
+      invalidatesTags: (res, _e, id) => adminCourseTags(id, res ?? undefined),
     }),
     setCourseTutors: build.mutation<CourseDto, { id: UUID; body: SetCourseTutorsRequest }>({
       query: ({ id, body }) => ({ url: `/admin/courses/${id}/tutors`, method: "PUT", data: body }),
@@ -158,6 +182,7 @@ export const {
   useUpdateAdminCourseMutation,
   usePublishCourseMutation,
   useUnpublishCourseMutation,
+  useArchiveAdminCourseMutation,
   useSetCourseTutorsMutation,
   useSubmitForReviewMutation,
   useArchiveCourseMutation,

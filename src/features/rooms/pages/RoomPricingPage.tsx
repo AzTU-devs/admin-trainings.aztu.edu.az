@@ -8,10 +8,13 @@ import { Input } from "@shared/components/ui/Input";
 import { Label } from "@shared/components/ui/Label";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
+import { apiErrorMessage } from "@shared/lib/apiError";
 import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -63,7 +66,13 @@ export default function RoomPricingPage() {
     if (!roomId && rooms?.content?.length) setRoomId(rooms.content[0].id);
   }, [rooms, roomId]);
 
-  const { data: rules, isFetching: rulesLoading } = useListPricingRulesQuery(roomId, { skip: !roomId });
+  const {
+    currentData: rules,
+    isFetching: rulesLoading,
+    isError: rulesFailed,
+    error: rulesError,
+    refetch: refetchRules,
+  } = useListPricingRulesQuery(roomId, { skip: !roomId });
 
   const [createRule] = useCreatePricingRuleMutation();
   const [updateRule] = useUpdatePricingRuleMutation();
@@ -123,8 +132,9 @@ export default function RoomPricingPage() {
         toast.success("Pricing rule added");
       }
       setOpen(false);
-    } catch {
-      toast.error("Could not save rule");
+    } catch (e) {
+      // e.g. INVALID_TIME_RANGE for an end before the start.
+      toast.error(apiErrorMessage(e, "Could not save the rule"));
     } finally {
       setSaving(false);
     }
@@ -162,8 +172,10 @@ export default function RoomPricingPage() {
 
       {!roomId ? (
         <EmptyState title="No room selected" description="Choose a room to manage its pricing rules." />
-      ) : rulesLoading ? (
+      ) : rulesLoading && !rules ? (
         <div className="flex justify-center py-12"><Spinner /></div>
+      ) : rulesFailed ? (
+        <QueryErrorState error={rulesError} onRetry={refetchRules} what="the pricing rules" />
       ) : (rules?.length ?? 0) === 0 ? (
         <EmptyState
           title="No pricing rules"
@@ -211,6 +223,7 @@ export default function RoomPricingPage() {
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit pricing rule" : "New pricing rule"}</DialogTitle>
+            <DialogDescription className="sr-only">When the rule applies and the hourly rate it sets.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2 space-y-1.5">
@@ -276,13 +289,9 @@ export default function RoomPricingPage() {
         destructive
         onConfirm={async () => {
           if (!toDelete || !roomId) return;
-          try {
-            await deleteRule({ roomId, ruleId: toDelete.id }).unwrap();
-            toast.success("Rule deleted");
-            setToDelete(null);
-          } catch {
-            toast.error("Could not delete rule");
-          }
+          // A refusal is shown by ConfirmDialog, which keeps the dialog open.
+          await deleteRule({ roomId, ruleId: toDelete.id }).unwrap();
+          toast.success("Rule deleted");
         }}
       />
     </>

@@ -4,6 +4,7 @@ import { UploadCloud, X, Loader2, Star } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@shared/lib/cn";
 import { useUploadMediaMutation } from "@shared/api/mediaApi";
+import { apiErrorMessage } from "@shared/lib/apiError";
 import { MediaImage } from "@shared/components/ui/MediaImage";
 import {
   IMAGE_ACCEPT,
@@ -47,8 +48,9 @@ export function ImageUploader({ value, onChange, min = 2, disabled }: ImageUploa
       try {
         const uploaded = await Promise.all(accepted.map((f) => uploadMedia(f).unwrap()));
         onChange([...value, ...uploaded.map((m) => m.id)]);
-      } catch {
-        toast.error("One or more images failed to upload");
+      } catch (e) {
+        // The API says which rule the file broke (MEDIA_TYPE_MISMATCH, UPLOAD_TOO_LARGE…).
+        toast.error(apiErrorMessage(e, "One or more images failed to upload"));
       }
     },
     [uploadMedia, onChange, value],

@@ -30,6 +30,14 @@ export const tutorsApi = baseApi.injectEndpoints({
       // LIST too: an admin who is also a tutor sees their own row in the tutors table.
       invalidatesTags: [{ type: "Tutor", id: "ME" }, { type: "Tutor", id: "LIST" }],
     }),
+    /**
+     * A rejected applicant edits the application and sends it back to the queue —
+     * backend `POST /api/portal/tutor/me/resubmit` (409 TUTOR_NOT_REJECTED otherwise).
+     */
+    resubmitMyTutorProfile: build.mutation<TutorProfileDto, UpdateTutorProfileRequest>({
+      query: (body) => ({ url: "/portal/tutor/me/resubmit", method: "POST", data: body }),
+      invalidatesTags: [{ type: "Tutor", id: "ME" }, { type: "Tutor", id: "LIST" }],
+    }),
     /** An admin edits any expert's profile — backend `PATCH /api/admin/tutors/{tutorId}`. */
     updateTutorProfile: build.mutation<TutorProfileDto, { id: UUID; body: UpdateTutorProfileRequest }>({
       query: ({ id, body }) => ({ url: `/admin/tutors/${id}`, method: "PATCH", data: body }),
@@ -44,5 +52,6 @@ export const {
   useDecideTutorMutation,
   useGetMyTutorProfileQuery,
   useUpdateMyTutorProfileMutation,
+  useResubmitMyTutorProfileMutation,
   useUpdateTutorProfileMutation,
 } = tutorsApi;

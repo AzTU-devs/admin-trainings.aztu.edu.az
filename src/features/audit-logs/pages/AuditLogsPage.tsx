@@ -21,6 +21,7 @@ import {
 } from "@shared/components/ui/Dialog";
 import { useListAuditLogsQuery } from "@features/audit-logs/api/auditLogsApi";
 import type { AuditAction, AuditLogEntry } from "@features/audit-logs/types";
+import { enumLabel } from "@shared/constants/enumLabels";
 
 const ACTION_TONE: Record<AuditAction, "brand" | "warning" | "danger" | "success" | "gold" | "neutral"> = {
   CREATE: "brand",
@@ -46,7 +47,7 @@ export default function AuditLogsPage() {
   const [action, setAction] = useState<AuditAction | "ALL">("ALL");
   const [detail, setDetail] = useState<AuditLogEntry | null>(null);
 
-  const { data, isFetching } = useListAuditLogsQuery({
+  const { currentData: data, isFetching, isError, error, refetch } = useListAuditLogsQuery({
     page,
     size: 20,
     search: search || undefined,
@@ -74,14 +75,15 @@ export default function AuditLogsPage() {
       },
       {
         header: "Action",
-        cell: ({ row }) => <Badge tone={ACTION_TONE[row.original.action]} dot>{row.original.action}</Badge>,
+        cell: ({ row }) => <Badge tone={ACTION_TONE[row.original.action] ?? "neutral"} dot>{enumLabel("auditAction", row.original.action)}</Badge>,
       },
       {
         header: "Resource",
         cell: ({ row }) => (
-          <code className="text-xs text-gray-700 dark:text-gray-300">
-            {row.original.resourceType}{row.original.resourceId !== undefined ? `#${row.original.resourceId}` : ""}
-          </code>
+          <span className="text-xs text-gray-700 dark:text-gray-300">
+            {enumLabel("auditResource", row.original.resourceType)}
+            {row.original.resourceId !== undefined && <code className="ml-1 text-gray-500">#{row.original.resourceId}</code>}
+          </span>
         ),
       },
       { header: "IP", cell: ({ row }) => <span className="text-xs text-gray-500">{row.original.ipAddress ?? "—"}</span> },
@@ -105,7 +107,7 @@ export default function AuditLogsPage() {
           <SelectTrigger className="sm:max-w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All actions</SelectItem>
-            {ACTIONS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            {ACTIONS.map((a) => <SelectItem key={a} value={a}>{enumLabel("auditAction", a)}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -113,7 +115,11 @@ export default function AuditLogsPage() {
       <DataTable<AuditLogEntry>
         data={data?.content ?? []}
         columns={columns}
-        isLoading={isFetching}
+        isLoading={isFetching && !data}
+        isError={isError}
+        error={error}
+        onRetry={refetch}
+        errorWhat="audit entries"
         emptyTitle="No audit entries"
         emptyDescription="Nothing matched your filters."
         pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
@@ -134,8 +140,8 @@ export default function AuditLogsPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Field label="Actor" value={`${detail.actorName} · ${detail.actorEmail}`} />
-                <Field label="Action" value={detail.action} />
-                <Field label="Resource" value={`${detail.resourceType}${detail.resourceId !== undefined ? `#${detail.resourceId}` : ""}`} />
+                <Field label="Action" value={enumLabel("auditAction", detail.action)} />
+                <Field label="Resource" value={`${enumLabel("auditResource", detail.resourceType)}${detail.resourceId !== undefined ? ` #${detail.resourceId}` : ""}`} />
                 <Field label="IP" value={detail.ipAddress ?? "—"} />
                 <Field label="User agent" value={detail.userAgent ?? "—"} className="col-span-2 truncate" />
               </div>

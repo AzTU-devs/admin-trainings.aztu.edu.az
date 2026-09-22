@@ -7,17 +7,19 @@ import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
+import { QueryErrorState } from "@shared/components/feedback/QueryErrorState";
+import { toastApiError } from "@shared/lib/apiError";
 import { MediaImage } from "@shared/components/ui/MediaImage";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@shared/components/ui/Dialog";
 import { Form, FormSection } from "@shared/components/forms/Form";
-import { FormField } from "@shared/components/forms/FormField";
-import { Input } from "@shared/components/ui/Input";
+import { BookingFields } from "@features/room-requests/components/BookingFields";
 import { useListPortalRoomsQuery } from "@features/rooms/api/roomsApi";
 import { useCreateRoomBookingMutation } from "@features/room-requests/api/roomRequestsApi";
 import {
@@ -28,17 +30,17 @@ import type { RoomDto } from "@features/rooms/types";
 
 export default function BrowseRoomsPage() {
   const [page, setPage] = useState(0);
-  const { data, isLoading } = useListPortalRoomsQuery({ page, size: 12 });
+  const { currentData: data, isFetching, isError, error, refetch } = useListPortalRoomsQuery({ page, size: 12 });
   const [borrowRoom, setBorrowRoom] = useState<RoomDto | null>(null);
   const [createBooking] = useCreateRoomBookingMutation();
 
   const form = useForm<RoomBookingFormValues>({
     resolver: zodResolver(roomBookingSchema),
-    defaultValues: { roomId: "", offlineCourseId: "", startsAt: "", endsAt: "", recurrenceRule: "" },
+    defaultValues: { roomId: "", offlineCourseId: "", startsAt: "", endsAt: "" },
   });
 
   const openBorrow = (room: RoomDto) => {
-    form.reset({ roomId: room.id, offlineCourseId: "", startsAt: "", endsAt: "", recurrenceRule: "" });
+    form.reset({ roomId: room.id, offlineCourseId: "", startsAt: "", endsAt: "" });
     setBorrowRoom(room);
   };
 
@@ -51,8 +53,10 @@ export default function BrowseRoomsPage() {
         description="Find an available classroom and request to borrow it for a session."
       />
 
-      {isLoading ? (
+      {isFetching && !data ? (
         <div className="flex justify-center py-12"><Spinner /></div>
+      ) : isError ? (
+        <QueryErrorState error={error} onRetry={refetch} what="the rooms" />
       ) : rooms.length === 0 ? (
         <EmptyState title="No rooms available" description="Check back later — no rooms are currently available to borrow." />
       ) : (
@@ -108,6 +112,7 @@ export default function BrowseRoomsPage() {
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>Request to borrow{borrowRoom ? ` · ${borrowRoom.name}` : ""}</DialogTitle>
+            <DialogDescription>An administrator reviews the request before the room is booked.</DialogDescription>
           </DialogHeader>
           <Form
             form={form}
@@ -118,28 +123,16 @@ export default function BrowseRoomsPage() {
                   offlineCourseId: values.offlineCourseId || undefined,
                   startsAt: new Date(values.startsAt).toISOString(),
                   endsAt: new Date(values.endsAt).toISOString(),
-                  recurrenceRule: values.recurrenceRule || undefined,
                 }).unwrap();
                 toast.success("Booking requested — an admin will review it");
                 setBorrowRoom(null);
-              } catch {
-                toast.error("Could not request booking");
+              } catch (e) {
+                toastApiError(e, "Could not request the booking", form);
               }
             }}
           >
             <FormSection title="">
-              <FormField<RoomBookingFormValues> name="startsAt" label="Starts at" required>
-                {({ field, invalid }) => <Input type="datetime-local" {...field} value={field.value as string} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="endsAt" label="Ends at" required>
-                {({ field, invalid }) => <Input type="datetime-local" {...field} value={field.value as string} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="offlineCourseId" label="Offline course ID" description="Optional — link this booking to one of your offline courses.">
-                {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="recurrenceRule" label="Recurrence (RRULE)" description="Optional, e.g. FREQ=WEEKLY;COUNT=8">
-                {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
-              </FormField>
+              <BookingFields showRoom={false} />
             </FormSection>
             <DialogFooter>
               <Button variant="secondary" type="button" onClick={() => setBorrowRoom(null)}>Cancel</Button>

@@ -1,4 +1,5 @@
-import { useForm } from "react-hook-form";
+import { useRef, useState } from "react";
+import { useForm, type FieldNamesMarkedBoolean } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Form, FormSection } from "@shared/components/forms/Form";
@@ -16,18 +17,33 @@ import {
 } from "@shared/components/ui/Select";
 import { ImageUploader } from "@shared/components/upload/ImageUploader";
 import { VideoUploader } from "@shared/components/upload/VideoUploader";
+import { MULTIPART_MAX_MB } from "@shared/components/upload/uploadConstraints";
 import { useUploadMediaMutation, mediaContentUrl } from "@shared/api/mediaApi";
+import { env, resolveApiUrl } from "@shared/config/env";
+import { apiErrorMessage, toastApiError } from "@shared/lib/apiError";
 import { CategoryMultiSelect } from "@features/courses/components/CategoryMultiSelect";
 import { courseSchema, type CourseFormValues } from "@features/courses/schemas/course.schema";
 import { COURSE_LEVEL, COURSE_TYPE } from "@shared/types/lms";
-import type { CourseDto } from "@features/courses/types";
-import type { NormalizedError } from "@lib/axios/httpClient";
+import type { CourseDto, UpdateCourseRequest } from "@features/courses/types";
+import { useStreamingVideoUpload } from "@features/videos/hooks/useStreamingVideoUpload";
+import { useCanStreamVideo } from "@features/videos/hooks/useCanStreamVideo";
+import { VideoLibraryPicker } from "@features/videos/components/VideoLibraryPicker";
 
 interface Props {
   initial?: CourseDto;
   /** Hide slug on edit (backend UpdateCourseRequest has no slug). */
   editing?: boolean;
-  onSubmit: (values: CourseFormValues) => Promise<unknown>;
+  /**
+   * `values` is the whole validated form, for a create. `update` is what an edit
+   * sends: only the fields the user touched, any media removal, and the version
+   * the form was loaded at. Two people editing the same course (an admin and its
+   * tutor, say) no longer overwrite each other: disjoint changes both survive,
+   * and a save based on a stale copy is refused with 409 STALE_RESOURCE.
+   * Resolve with the saved course so the next save carries its new version.
+   */
+  onSubmit: (values: CourseFormValues, update: UpdateCourseRequest) => Promise<CourseDto | unknown>;
+  /** The server reported someone else's newer edit (409 STALE_RESOURCE): reload. */
+  onStale?: () => void;
   submitLabel?: string;
   /**
    * Extra sections rendered above the submit button — the admin create screen
@@ -37,11 +53,53 @@ interface Props {
   extra?: React.ReactNode;
 }
 
-export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save", extra }: Props) {
+/** True when a dirty-fields node (boolean, object or array of them) holds any change. */
+function anyDirty(node: unknown): boolean {
+  if (node === true) return true;
+  if (Array.isArray(node)) return node.some(anyDirty);
+  if (node && typeof node === "object") return Object.values(node).some(anyDirty);
+  return false;
+}
+
+/**
+ * The admin endpoints nest the course under `course` (AdminCreateCourseRequest),
+ * so their field errors arrive as `course.title`; the form's field is `title`.
+ */
+const courseField = (apiField: string) => apiField.replace(/^course\./, "");
+
+export function CourseDetailsForm({ initial, editing, onSubmit, onStale, submitLabel = "Save", extra }: Props) {
   const [uploadMedia] = useUploadMediaMutation();
+  const streamUpload = useStreamingVideoUpload();
+  // Video larger than the multipart cap can only go through the streaming video
+  // endpoints; anyone who may not use them falls back to multipart, capped honestly.
+  const canStreamVideo = useCanStreamVideo();
+  // An API that versions courses also accepts clearThumbnail / clearTrailer.
+  // Against an older one a removal cannot be saved, so it is not offered there.
+  const canClearMedia = typeof initial?.version === "number";
+  /** The version this form's content is based on: the loaded course, then each of our own saves. */
+  const version = useRef<number | undefined>(initial?.version);
+  const trailerMaxMb = canStreamVideo ? env.uploads.maxVideoMb : MULTIPART_MAX_MB;
+  const [trailerLabel, setTrailerLabel] = useState<string | undefined>(undefined);
+
+  /**
+   * The media ids the server currently holds. Removing a saved cover or trailer
+   * is sent as an explicit clear flag — an absent id means "keep", so the X used
+   * to say "Saved" and remove nothing. Against an API without the flags the X
+   * on saved media is hidden instead, and removing a fresh upload falls back to
+   * these ids rather than to "no media", which the server would still be showing.
+   */
+  const saved = useRef({
+    thumbnailMediaId: initial?.thumbnailMediaId ?? undefined,
+    trailerMediaId: initial?.trailerMediaId ?? undefined,
+  });
 
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
+    // Every nullable field is normalised here. The API sends an unset column as
+    // an explicit JSON null, and zod's `.optional()` accepts undefined, not null:
+    // copying `thumbnailMediaId: null` or `weeklyHours: null` straight in failed
+    // validation on submit, so "Update course" did nothing for any course without
+    // both a cover and a trailer (36 of 38 on the dev database).
     defaultValues: {
       slug: initial?.slug ?? "",
       title: initial?.title ?? "",
@@ -57,8 +115,9 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       price: initial?.price ?? 0,
       currency: initial?.currency ?? "AZN",
       categoryIds: initial?.categoryIds ?? [],
-      thumbnailMediaId: initial?.thumbnailMediaId,
-      trailerMediaId: initial?.trailerMediaId,
+      // Omitted means "keep" to the API, so undefined is also the right thing to send.
+      thumbnailMediaId: initial?.thumbnailMediaId ?? undefined,
+      trailerMediaId: initial?.trailerMediaId ?? undefined,
       onlineDetails: {
         hasCertificate: initial?.onlineDetails?.hasCertificate ?? false,
         dripEnabled: initial?.onlineDetails?.dripEnabled ?? false,
@@ -66,8 +125,8 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       offlineDetails: {
         startDate: initial?.offlineDetails?.startDate ?? "",
         endDate: initial?.offlineDetails?.endDate ?? "",
-        weeklyHours: initial?.offlineDetails?.weeklyHours,
-        totalHours: initial?.offlineDetails?.totalHours,
+        weeklyHours: initial?.offlineDetails?.weeklyHours ?? undefined,
+        totalHours: initial?.offlineDetails?.totalHours ?? undefined,
         studentLimit: initial?.offlineDetails?.studentLimit ?? 20,
         city: initial?.offlineDetails?.city ?? "",
         addressLine: initial?.offlineDetails?.addressLine ?? "",
@@ -86,16 +145,42 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       const media = await uploadMedia(file).unwrap();
       form.setValue(field, media.id, { shouldDirty: true });
       toast.success("Uploaded");
-    } catch {
-      toast.error("Upload failed");
+    } catch (e) {
+      toast.error(apiErrorMessage(e, "Upload failed"));
     }
   };
 
-  // VideoUploader expects an uploader that returns a URL; reuse the media upload.
-  const trailerUploader = async (file: File): Promise<string> => {
-    const media = await uploadMedia(file).unwrap();
-    form.setValue("trailerMediaId", media.id, { shouldDirty: true });
-    return mediaContentUrl(media.id);
+  /**
+   * Streams the trailer through the video endpoints (no 32 MB multipart cap) for
+   * anyone allowed to; otherwise uploads it as multipart within that cap.
+   * VideoUploader wants a URL back; the form wants the media id.
+   */
+  const trailerUploader = async (
+    file: File,
+    onProgress: (pct: number) => void,
+    signal: AbortSignal,
+  ): Promise<string> => {
+    if (canStreamVideo) {
+      const asset = await streamUpload(file, onProgress, signal);
+      form.setValue("trailerMediaId", asset.id, { shouldDirty: true });
+      setTrailerLabel(asset.title);
+      return resolveApiUrl(asset.url);
+    }
+    try {
+      const media = await uploadMedia(file).unwrap();
+      form.setValue("trailerMediaId", media.id, { shouldDirty: true });
+      setTrailerLabel(undefined);
+      return mediaContentUrl(media.id);
+    } catch (e) {
+      // VideoUploader shows `Error.message`; keep the API's reason in it.
+      throw new Error(apiErrorMessage(e, "Upload failed"));
+    }
+  };
+
+  /** Remove the cover or trailer (or, where that cannot be saved, go back to the saved one). */
+  const clearMedia = (field: "thumbnailMediaId" | "trailerMediaId") => {
+    form.setValue(field, editing && !canClearMedia ? saved.current[field] : undefined, { shouldDirty: true });
+    if (field === "trailerMediaId") setTrailerLabel(undefined);
   };
 
   const handle = async (values: CourseFormValues) => {
@@ -116,17 +201,52 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           : undefined,
     };
 
+    // Only what the user changed, for an edit. A nested block (the offline
+    // schedule) goes whole when any part of it changed: the API merges it.
+    // Slug and type are fixed after creation, so never part of an edit.
+    const dirty = form.formState.dirtyFields as FieldNamesMarkedBoolean<CourseFormValues>;
+    const update: UpdateCourseRequest = {};
+    for (const key of Object.keys(payload) as (keyof CourseFormValues)[]) {
+      if (key === "slug" || key === "courseType") continue;
+      if (anyDirty(dirty[key])) (update as Record<string, unknown>)[key] = payload[key];
+    }
+    if (canClearMedia) {
+      if (saved.current.thumbnailMediaId && !values.thumbnailMediaId) update.clearThumbnail = true;
+      if (saved.current.trailerMediaId && !values.trailerMediaId) update.clearTrailer = true;
+    }
+    if (editing && Object.keys(update).length === 0) {
+      toast.info("No changes to save");
+      return;
+    }
+    if (editing && version.current !== undefined) update.version = version.current;
+
     try {
-      await onSubmit(payload);
+      const result = await onSubmit(payload, update);
       toast.success("Saved");
-    } catch (e) {
-      const err = e as NormalizedError;
-      if (err.fieldErrors) {
-        for (const [k, v] of Object.entries(err.fieldErrors)) {
-          form.setError(k as keyof CourseFormValues, { message: v });
-        }
+      if (editing) {
+        const next = (result as Partial<CourseDto> | undefined)?.version;
+        if (typeof next === "number") version.current = next;
+        saved.current = {
+          thumbnailMediaId: values.thumbnailMediaId,
+          trailerMediaId: values.trailerMediaId,
+        };
+        // What was just saved becomes the baseline, so the next save sends only
+        // what changes after this one.
+        form.reset(values);
       }
-      toast.error(err.message || "Save failed");
+    } catch (e) {
+      const code = (e as { code?: string } | null)?.code;
+      if (code === "STALE_RESOURCE") {
+        // Saving anyway would overwrite their work; reloading shows it and
+        // starts this form again from the current course.
+        toast.error("Someone else changed this course while you were editing.", {
+          description: "Reload to see their changes, then make yours again.",
+          duration: 15_000,
+          action: onStale ? { label: "Reload", onClick: onStale } : undefined,
+        });
+        return;
+      }
+      toastApiError(e, "Save failed", form, { mapField: courseField });
     }
   };
 
@@ -285,27 +405,34 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         </FormSection>
       ) : (
         <FormSection title="Online options">
-          <FormField<CourseFormValues> name="onlineDetails.hasCertificate" label="Certificate on completion">
-            {({ field }) => (
-              <div className="flex h-10 items-center gap-2">
-                <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {field.value ? "Issued" : "Not issued"}
-                </span>
-              </div>
-            )}
-          </FormField>
+          {/* The platform stores this flag but nothing issues a certificate yet,
+              so it is labelled as the plan it is rather than as "Issued". The
+              field stays so existing courses keep what they were set to. */}
           <FormField<CourseFormValues>
-            name="onlineDetails.dripEnabled"
-            label="Drip content"
-            description="Release lessons on a schedule instead of all at once."
+            name="onlineDetails.hasCertificate"
+            label="Certificate on completion (coming soon)"
+            description="Certificates are not issued yet."
           >
             {({ field }) => (
               <div className="flex h-10 items-center gap-2">
                 <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {field.value ? "Enabled" : "Disabled"}
+                  {field.value ? "Planned" : "Not planned"}
                 </span>
+              </div>
+            )}
+          </FormField>
+          {/* Nothing reads the drip flag: every lesson is released at once. A
+              working-looking switch for it was a promise the platform can't keep. */}
+          <FormField<CourseFormValues>
+            name="onlineDetails.dripEnabled"
+            label="Drip content"
+            description="Coming soon — for now all lessons are available as soon as someone enrols."
+          >
+            {({ field }) => (
+              <div className="flex h-10 items-center gap-2">
+                <Switch checked={field.value as boolean} disabled aria-readonly />
+                <span className="text-sm text-gray-500 dark:text-gray-400">Coming soon</span>
               </div>
             )}
           </FormField>
@@ -313,27 +440,52 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       )}
 
       <FormSection title="Media">
-        <FormField<CourseFormValues> name="thumbnailMediaId" label="Cover image">
+        <FormField<CourseFormValues>
+          name="thumbnailMediaId"
+          label="Cover image"
+          description={thumbnailMediaId ? "Click the image to replace it." : undefined}
+        >
           {() => (
             <ImageUploader
               value={thumbnailMediaId ? mediaContentUrl(thumbnailMediaId) : null}
               onChange={(file) => {
                 if (file) void uploadAnd(file, "thumbnailMediaId");
-                else form.setValue("thumbnailMediaId", undefined, { shouldDirty: true });
+                else clearMedia("thumbnailMediaId");
               }}
+              removable={!editing || canClearMedia || thumbnailMediaId !== saved.current.thumbnailMediaId}
               aspect="video"
             />
           )}
         </FormField>
-        <FormField<CourseFormValues> name="trailerMediaId" label="Trailer video">
+        <FormField<CourseFormValues>
+          name="trailerMediaId"
+          label="Trailer video"
+          description={
+            canStreamVideo ? undefined : `Up to ${MULTIPART_MAX_MB} MB from this account.`
+          }
+        >
           {() => (
-            <VideoUploader
-              value={trailerMediaId ? mediaContentUrl(trailerMediaId) : null}
-              uploader={trailerUploader}
-              onChange={(file) => {
-                if (!file) form.setValue("trailerMediaId", undefined, { shouldDirty: true });
-              }}
-            />
+            <div className="space-y-2">
+              <VideoUploader
+                value={trailerMediaId ? mediaContentUrl(trailerMediaId) : null}
+                uploader={trailerUploader}
+                maxSizeMb={trailerMaxMb}
+                storedLabel={trailerLabel}
+                noun="trailer"
+                removable={!editing || canClearMedia || trailerMediaId !== saved.current.trailerMediaId}
+                onChange={(file) => {
+                  if (!file) clearMedia("trailerMediaId");
+                }}
+              />
+              {canStreamVideo && (
+                <VideoLibraryPicker
+                  onSelect={(v) => {
+                    form.setValue("trailerMediaId", v.id, { shouldDirty: true });
+                    setTrailerLabel(v.title);
+                  }}
+                />
+              )}
+            </div>
           )}
         </FormField>
       </FormSection>
