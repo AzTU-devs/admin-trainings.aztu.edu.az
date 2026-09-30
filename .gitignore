@@ -17,6 +17,9 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+# macOS AppleDouble sidecars: written next to every file on non-Apple
+# filesystems (exFAT drives). Binary, so a stray ._Foo.java breaks the build.
+._*
 *.suo
 *.ntvs*
 *.njsproj

@@ -7,7 +7,14 @@ import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
-import { StatusBadge } from "@shared/components/ui/Badge";
+import { Badge, StatusBadge } from "@shared/components/ui/Badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@shared/components/ui/Select";
 import { DataTable } from "@shared/components/tables/DataTable";
 import {
   Dialog,
@@ -24,6 +31,7 @@ import { Label } from "@shared/components/ui/Label";
 import { Avatar, AvatarFallback } from "@shared/components/ui/Avatar";
 import { TooltipProvider } from "@shared/components/ui/Tooltip";
 import { IconAction } from "@features/users/components/IconAction";
+import { ViewProfileLink } from "@features/user-profile/components/ViewProfileLink";
 import { cn } from "@shared/lib/cn";
 import {
   useCreateUserMutation,
@@ -38,17 +46,19 @@ import {
   userSchema,
   type UserFormValues,
 } from "@features/users/schemas/user.schema";
-import type { AdminUser } from "@features/users/types";
-import { ALL_ROLES, type Role } from "@shared/constants/roles";
+import type { AccountRole, AdminUser } from "@features/users/types";
+import { PARTICIPANT_ROLE, ROLE_FILTERS, roleLabel } from "@features/users/lib/roles";
+import { ALL_ROLES } from "@shared/constants/roles";
 import { hueFor } from "@shared/lib/hue";
-import { formatEnum } from "@shared/lib/enums";
 
 /**
  * Role pills, loudest for the most power: super admin in gold (the website's
- * accent), admin in navy, tutor on the teal field, anything else neutral.
- * Spelled like every other enum on the dashboard (StatusBadge: "SUPER_ADMIN"
- * → "Super admin"). No other screen shows roles as pills, so these tones
- * clash with nothing and keep the powerful accounts easy to spot.
+ * accent), admin in navy, tutor on the teal field, anything else neutral —
+ * the İştirakçi (USER) role most accounts hold stays quiet. Spelled like
+ * every other enum on the dashboard ("SUPER_ADMIN" → "Super admin"), except
+ * USER, which reads "İştirakçi" as the participants are called everywhere
+ * else. No other screen shows roles as pills, so these tones clash with
+ * nothing and keep the powerful accounts easy to spot.
  */
 const ROLE_TONE: Partial<Record<string, "gold" | "brand" | "hue">> = {
   SUPER_ADMIN: "gold",
@@ -58,7 +68,11 @@ const ROLE_TONE: Partial<Record<string, "gold" | "brand" | "hue">> = {
 
 function RolePill({ role }: { role: string }) {
   const tone = ROLE_TONE[role] ?? "neutral";
-  return <StatusBadge value={role} tone={tone} dot={false} size="sm" className={cn(tone === "hue" && "k-build")} />;
+  return (
+    <Badge tone={tone} size="sm" className={cn(tone === "hue" && "k-build")}>
+      {roleLabel(role)}
+    </Badge>
+  );
 }
 
 /** Seeded like the header's user menu (email first), so a person is the same colour in both places. */
@@ -82,12 +96,19 @@ function UserIdentity({ user }: { user: AdminUser }) {
 export default function UsersPage() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<AccountRole | "ALL">("ALL");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
 
   const { isSuperAdmin } = usePermissions();
-  const { data, isFetching } = useListUsersQuery({ page, size: 10, search: search || undefined });
+  const { data, isFetching } = useListUsersQuery({
+    page,
+    size: 10,
+    search: search || undefined,
+    role: roleFilter === "ALL" ? undefined : roleFilter,
+  });
+  const filtered = !!search || roleFilter !== "ALL";
   const [createUser] = useCreateUserMutation();
   const [updateUser] = useUpdateUserMutation();
   const [setStatus] = useSetUserStatusMutation();
@@ -110,6 +131,13 @@ export default function UsersPage() {
     setOpen(true);
   }, [form]);
 
+  // The dashboard roles, plus İştirakçi for an account that already holds it:
+  // the form resends the role set on save, so a participant's own role must be
+  // shown (and kept) rather than silently dropped. Never offered to a new user.
+  const roleChoices: AccountRole[] = editing?.roles.includes(PARTICIPANT_ROLE)
+    ? [PARTICIPANT_ROLE, ...ALL_ROLES]
+    : ALL_ROLES;
+
   /**
    * The row's actions as quiet icon buttons with tooltips — shared by the
    * table's last column and the phone rows, so both do exactly the same.
@@ -117,6 +145,8 @@ export default function UsersPage() {
   const actions = useCallback(
     (u: AdminUser, className?: string) => (
       <div className={cn("flex justify-end gap-0.5", className)}>
+        {/* Super admins only (the link renders nothing for anyone else). */}
+        <ViewProfileLink userId={u.id} />
         {isSuperAdmin && u.status === "LOCKED" && (
           <IconAction label="Unlock" onClick={async (e) => {
             e.stopPropagation();
@@ -193,17 +223,28 @@ export default function UsersPage() {
     <TooltipProvider delayDuration={300}>
       <PageHeader
         title="Users"
-        description="Manage portal accounts and their roles."
+        description="Every portal account — staff, tutors and İştirakçilər — and their roles."
         actions={<Button leftIcon={<Plus className="size-4" />} onClick={openCreate}>New user</Button>}
       />
 
-      <Input
-        placeholder="Search by name or email…"
-        leftIcon={<Search className="size-4" />}
-        value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-        className="mb-5 sm:max-w-sm"
-      />
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Input
+          placeholder="Search by name or email…"
+          leftIcon={<Search className="size-4" />}
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          className="sm:max-w-sm"
+        />
+        {/* İştirakçilər (the USER role) are listed with everyone else; this
+            narrows the list to one kind of account. */}
+        <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v as AccountRole | "ALL"); setPage(0); }}>
+          <SelectTrigger aria-label="Role" className="sm:max-w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All roles</SelectItem>
+            {ROLE_FILTERS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Phones: who, then roles, then status with the actions within
           reach. The table takes over from 768px. */}
@@ -211,7 +252,8 @@ export default function UsersPage() {
         data={data?.content ?? []}
         columns={columns}
         isLoading={isFetching}
-        emptyTitle="No users yet"
+        emptyTitle={filtered ? "No matching users" : "No users yet"}
+        emptyDescription={filtered ? "Try another name, email or role." : undefined}
         pagination={pagination}
         onPageChange={setPage}
         getRowId={(r) => String(r.id)}
@@ -278,7 +320,7 @@ export default function UsersPage() {
                 {/* Each role a selectable pill (the website's filter chips): the
                     checkbox inside still carries the state and the keyboard. */}
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {ALL_ROLES.map((role) => {
+                  {roleChoices.map((role) => {
                     const on = form.watch("roles").includes(role);
                     return (
                       <label
@@ -294,10 +336,10 @@ export default function UsersPage() {
                           checked={on}
                           onCheckedChange={(c) => {
                             const cur = form.getValues("roles");
-                            form.setValue("roles", c ? [...cur, role] : cur.filter((r: Role) => r !== role), { shouldValidate: true });
+                            form.setValue("roles", c ? [...cur, role] : cur.filter((r: AccountRole) => r !== role), { shouldValidate: true });
                           }}
                         />
-                        <span>{formatEnum(role)}</span>
+                        <span>{roleLabel(role)}</span>
                       </label>
                     );
                   })}

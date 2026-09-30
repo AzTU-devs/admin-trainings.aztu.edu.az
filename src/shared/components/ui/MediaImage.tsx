@@ -26,7 +26,8 @@ export function MediaImage({ mediaId, alt = "", className }: MediaImageProps) {
     setFailed(false);
 
     httpClient
-      .get(`/media/${mediaId}/content`, { responseType: "blob" })
+      // No request timeout, as for uploads: an image can be up to 200 MB.
+      .get(`/media/${mediaId}/content`, { responseType: "blob", timeout: 0 })
       .then((res) => {
         if (revoked) return;
         objectUrl = URL.createObjectURL(res.data as Blob);

@@ -112,8 +112,8 @@ route and sidebar entry.
   sign-in screen toasts the API's own message, so a 429 reads correctly there; nothing reads
   `Retry-After` to disable the button for that long, which is the only refinement left.
 - **Uploads are allowlisted by signature**, not by extension or declared type: JPEG, PNG, WebP,
-  GIF, AVIF, MP4, WebM, QuickTime, PDF. SVG is deliberately excluded. Ceilings are 10 MB image,
-  512 MB video, 25 MB document; rejections carry `UNSUPPORTED_MEDIA_TYPE`,
+  GIF, AVIF, MP4, WebM, QuickTime, PDF. SVG is deliberately excluded. Ceilings are 200 MB image,
+  512 MB video, 200 MB document; rejections carry `UNSUPPORTED_MEDIA_TYPE`,
   `MEDIA_TYPE_MISMATCH`, `NOT_A_VIDEO`, `UNRECOGNIZED_FILE_CONTENT` or `UPLOAD_TOO_LARGE`.
   Four places have to agree on the video ceiling and currently do: `app.uploads.max-video-mb`
   and `spring.servlet.multipart.max-file-size` in the API, `VITE_UPLOAD_MAX_VIDEO_MB` here, and
@@ -121,8 +121,6 @@ route and sidebar entry.
   them and a legitimate upload dies at that hop with an error the others cannot explain.
 - **`/api/media/{id}/content` requires an `Authorization` header**, so a bare `<img src>` or
   `<video src>` cannot load it. Use `MediaImage`, which fetches the bytes through the axios
-  client and renders an object URL. Two places still hand that URL straight to an element and
-  therefore show nothing: the cover-image and trailer previews in `CourseDetailsForm` once the
-  file is stored (a freshly picked file previews fine — that is a local object URL). A
-  `MediaVideo` counterpart to `MediaImage`, or an authenticated fetch inside the uploaders,
-  would close it.
+  client and renders an object URL. The course cover and trailer uploaders do the same through
+  `resolveAuthedMediaUrl`, and a file picked in the current session keeps previewing from its
+  local object URL, so a just-uploaded 200 MB cover is not downloaded straight back.

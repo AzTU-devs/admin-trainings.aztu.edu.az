@@ -46,6 +46,7 @@ const AuditLogsPage = lazy(() => import("@features/audit-logs/pages/AuditLogsPag
 const SystemMonitoringPage = lazy(() => import("@features/system-monitoring/pages/SystemMonitoringPage"));
 const ApiLogsPage = lazy(() => import("@features/api-logs/pages/ApiLogsPage"));
 const SecurityPage = lazy(() => import("@features/security/pages/SecurityPage"));
+const UserProfilePage = lazy(() => import("@features/user-profile/pages/UserProfilePage"));
 
 /** Shown while a lazily-loaded route chunk is in flight. */
 function RouteFallback() {
@@ -124,6 +125,7 @@ export default function App() {
                 <Route path={ROUTES.superSystemMonitoring} element={<SystemMonitoringPage />} />
                 <Route path={ROUTES.superApiLogs} element={<ApiLogsPage />} />
                 <Route path={ROUTES.superSecurity} element={<SecurityPage />} />
+                <Route path={ROUTES.superUserProfile()} element={<UserProfilePage />} />
               </Route>
 
               {/* Shared authenticated pages */}

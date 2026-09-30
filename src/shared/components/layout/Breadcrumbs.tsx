@@ -9,6 +9,14 @@ import { ROUTES } from "@shared/constants/routes";
  */
 const NON_ROUTABLE = new Set(["admin", "super", "tutor"]);
 
+/**
+ * Crumbs whose own path is not a page but whose list lives elsewhere: a
+ * user's profile is /super/users/:id, while the Users list is /admin/users.
+ */
+const CRUMB_TARGETS: Record<string, string> = {
+  "/super/users": ROUTES.adminUsers,
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Collections whose next segment is a record (a UUID or a slug), not a page. */
 const RECORD_PARENTS = new Set(["courses"]);
@@ -34,13 +42,14 @@ export function Breadcrumbs({ recordLabel }: { recordLabel?: string }) {
   const crumbs: Crumb[] = parts.map((p, i) => {
     acc += `/${p}`;
     const routable = !NON_ROUTABLE.has(p);
+    const to = CRUMB_TARGETS[acc] ?? acc;
     const isRecord = UUID.test(p) || /^\d+$/.test(p) || (RECORD_PARENTS.has(parts[i - 1] ?? "") && !PAGES.has(p));
     if (isRecord) {
       return recordLabel
-        ? { kind: "text", label: recordLabel, to: acc, routable }
-        : { kind: "id", value: decodeURIComponent(p), to: acc, routable };
+        ? { kind: "text", label: recordLabel, to, routable }
+        : { kind: "id", value: decodeURIComponent(p), to, routable };
     }
-    return { kind: "text", label: humanize(p), to: acc, routable };
+    return { kind: "text", label: humanize(p), to, routable };
   });
 
   return (

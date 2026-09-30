@@ -1,22 +1,28 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { GraduationCap, Link2, Loader2, UserRound } from "lucide-react";
+import { GraduationCap, Link2, Loader2, Plus, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { Input } from "@shared/components/ui/Input";
 import { Textarea } from "@shared/components/ui/Textarea";
 import { Button } from "@shared/components/ui/Button";
+import { Badge } from "@shared/components/ui/Badge";
 import { ImageUploader } from "@shared/components/upload/ImageUploader";
 import { mediaContentUrl, useUploadMediaMutation } from "@shared/api/mediaApi";
+import { useListCategoriesQuery } from "@features/categories/api/categoriesApi";
 import { CategoryMultiSelect } from "@features/courses/components/CategoryMultiSelect";
 import { FormCard } from "@features/courses/components/FormCard";
 import { StickySaveBar } from "@features/profile/components/StickySaveBar";
 import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
 import {
+  AREAS_REQUIRED_MESSAGE,
   EXPERT_PROFILE_FIELDS,
+  OWN_AREA_LIMITS,
   expertProfileSchema,
+  normalizeOwnArea,
+  ownAreaProblem,
   toFormValues,
   toUpdateRequest,
   type ExpertProfileFormValues,
@@ -87,6 +93,24 @@ export function ExpertProfileForm({
     defaultValues: toFormValues(profile),
   });
 
+  // The names of the categories picked above: an own area may not repeat one
+  // (the API would drop it). The same cached list the picker loads.
+  const { data: categories } = useListCategoriesQuery();
+  const pickedIds = form.watch("expertiseCategoryIds");
+  const pickedCategoryNames = useMemo(() => {
+    const byId = new Map((categories ?? []).map((c) => [c.id, c.name]));
+    return (pickedIds ?? []).flatMap((id) => byId.get(id) ?? []);
+  }, [categories, pickedIds]);
+
+  /**
+   * Own areas changed. "At least one area" is reported under the category
+   * picker, so re-check it there: adding an own area must clear that message.
+   */
+  const onOwnAreasChange = (next: string[], setValue: (v: string[]) => void) => {
+    setValue(next);
+    if (form.getFieldState("expertiseCategoryIds").error) void form.trigger("expertiseCategoryIds");
+  };
+
   const avatarMediaId = form.watch("avatarMediaId");
   // The saved photo loads the way the rest of the dashboard shows it (see
   // tutorAvatarSrc); a fresh upload is not on any profile yet, so only the
@@ -135,6 +159,12 @@ export function ExpertProfileForm({
       }
       if (err.code && AVATAR_ERROR_CODES.has(err.code)) {
         form.setError("avatarMediaId", { message: err.message });
+      }
+      if (err.code === "EXPERTISE_REQUIRED") {
+        form.setError("expertiseCategoryIds", { message: err.message || AREAS_REQUIRED_MESSAGE });
+      }
+      if (err.code === "INVALID_CUSTOM_EXPERTISE") {
+        form.setError("customExpertise", { message: err.message });
       }
       toast.error(err.message || "Could not save the profile");
     }
@@ -300,6 +330,7 @@ export function ExpertProfileForm({
           <FormField<ExpertProfileFormValues>
             name="expertiseCategoryIds"
             label="Areas of expertise"
+            description="Pick from the list, add your own below, or both."
             required
             className="md:col-span-2"
           >
@@ -308,6 +339,21 @@ export function ExpertProfileForm({
                 value={(field.value as string[]) ?? []}
                 onChange={field.onChange}
                 invalid={invalid}
+              />
+            )}
+          </FormField>
+          <FormField<ExpertProfileFormValues>
+            name="customExpertise"
+            label="Add your own area"
+            className="md:col-span-2"
+          >
+            {({ field, invalid, id }) => (
+              <OwnAreasField
+                id={id}
+                value={(field.value as string[]) ?? []}
+                onChange={(next) => onOwnAreasChange(next, field.onChange)}
+                invalid={invalid}
+                pickedCategoryNames={pickedCategoryNames}
               />
             )}
           </FormField>
@@ -365,6 +411,106 @@ export function ExpertProfileForm({
 
 /** One section of the sheet: hairline above every section but the first. */
 const SECTION = "border-t border-line py-7 first:border-t-0 first:pt-0";
+
+interface OwnAreasFieldProps {
+  /** The text box's id, so the field's label names it. */
+  id: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+  invalid: boolean;
+  /** Names of the categories picked above, which an own area may not repeat. */
+  pickedCategoryNames: string[];
+}
+
+/**
+ * The expert's own areas, for when the category list lacks theirs: a text box
+ * with an Add button (Enter adds too, without submitting the whole profile),
+ * and what was added as removable chips — outlined, so they read as the
+ * expert's own words beside the category picker's coloured chips. The API's
+ * limits are checked as each one is added.
+ */
+function OwnAreasField({ id, value, onChange, invalid, pickedCategoryNames }: OwnAreasFieldProps) {
+  const [draft, setDraft] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const full = value.length >= OWN_AREA_LIMITS.count;
+  const hintId = `${id}-hint`;
+
+  const add = () => {
+    const issue = ownAreaProblem(draft, value, pickedCategoryNames);
+    if (issue) {
+      setProblem(issue);
+      return;
+    }
+    onChange([...value, normalizeOwnArea(draft)]);
+    setDraft("");
+    setProblem(null);
+  };
+
+  return (
+    <div className="space-y-2.5">
+      {value.length > 0 && (
+        <ul aria-label="Your own areas" className="flex flex-wrap gap-1.5">
+          {value.map((area, i) => (
+            <li key={`${i}-${area}`}>
+              <Badge tone="outline" className="h-7 gap-1 pl-2.5 pr-1">
+                <span className="max-w-[14rem] truncate">{area}</span>
+                <button
+                  type="button"
+                  onClick={() => onChange(value.filter((_, j) => j !== i))}
+                  aria-label={`Remove ${area}`}
+                  className="inline-flex size-5 items-center justify-center rounded-full transition-colors hover:bg-ink/10"
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (problem) setProblem(null);
+          }}
+          onKeyDown={(e) => {
+            // Enter adds the area; left alone, it would submit the whole profile.
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder={full ? "Remove one to add another" : "e.g. Computer vision"}
+          disabled={full}
+          invalid={invalid || !!problem}
+          aria-describedby={hintId}
+          aria-invalid={invalid || !!problem || undefined}
+          className="min-w-0 flex-1"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          leftIcon={<Plus className="size-4" />}
+          onClick={add}
+          disabled={full || !draft.trim()}
+          className="shrink-0"
+        >
+          Add
+        </Button>
+      </div>
+      <p
+        id={hintId}
+        aria-live="polite"
+        className={cn("text-[12.5px] leading-snug", problem ? "font-medium text-danger" : "text-ink-3")}
+      >
+        {problem ??
+          `Not in the list? Add up to ${OWN_AREA_LIMITS.count} of your own, ${OWN_AREA_LIMITS.minLength}–${OWN_AREA_LIMITS.maxLength} characters each (${value.length}/${OWN_AREA_LIMITS.count}).`}
+      </p>
+    </div>
+  );
+}
 
 /**
  * Per-field messages from a failed save. The API's validation body lists them

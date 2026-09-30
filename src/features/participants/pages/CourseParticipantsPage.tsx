@@ -35,6 +35,7 @@ import {
 } from "@features/participants/schemas/participant.schema";
 import type { CourseParticipantDto } from "@features/participants/types";
 import { DateCell, PersonCell } from "@features/participants/components/PersonCell";
+import { ViewProfileLink } from "@features/user-profile/components/ViewProfileLink";
 
 export default function CourseParticipantsPage() {
   // Route param carries the course id — ROUTES.adminCourseParticipants(courseId).
@@ -93,7 +94,9 @@ export default function CourseParticipantsPage() {
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-0.5">
+            {/* Everything about this person (super admins only; renders nothing otherwise). */}
+            <ViewProfileLink userId={row.original.userId} />
             <RemoveButton participant={row.original} onRemove={() => setRemoving(row.original)} />
           </div>
         ),
@@ -254,7 +257,8 @@ function ParticipantPhoneRow({ participant: p, onRemove }: { participant: Course
         <div className="min-w-0 flex-1">
           <PersonCell name={p.fullName} email={p.email} avatarUrl={p.avatarUrl} />
         </div>
-        <div className="-mr-1.5 shrink-0">
+        <div className="-mr-1.5 flex shrink-0 items-center">
+          <ViewProfileLink userId={p.userId} />
           <RemoveButton participant={p} onRemove={onRemove} />
         </div>
       </div>

@@ -22,13 +22,16 @@ import { COURSE_STATUS } from "@shared/types/lms";
 export default function CourseEditPage() {
   // Route param carries the course slug (the only detail lookup the backend exposes).
   const { id: slug } = useParams();
-  const { data: course, isFetching, error } = useGetCourseBySlugQuery(slug!, { skip: !slug });
+  // `isLoading` rather than `isFetching`, as on the admin editor: every save
+  // invalidates this query, and swapping the form for a spinner on the refetch
+  // threw away the author's place on the page and re-downloaded the cover.
+  const { data: course, isLoading, error } = useGetCourseBySlugQuery(slug!, { skip: !slug });
   const [updateCourse] = useUpdateCourseMutation();
   const [submitForReview, { isLoading: submitting }] = useSubmitForReviewMutation();
   // Called before the early returns (hooks rule); empty until the course loads.
   const categories = useCourseCategories(course?.categoryIds);
 
-  if (isFetching) return <div className="flex justify-center py-12"><Spinner /></div>;
+  if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
   if (error || !course) return <EmptyState tone="danger" Icon={SearchX} title="Course not found." />;
 
   const canSubmit = course.status === COURSE_STATUS.DRAFT || course.status === COURSE_STATUS.REJECTED;

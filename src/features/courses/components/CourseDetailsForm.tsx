@@ -1,14 +1,25 @@
-import { useForm } from "react-hook-form";
+import { useRef, useState } from "react";
+import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { CalendarDays, FileText, ImageIcon, MonitorPlay, Tags, Wallet } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  FileText,
+  ImageIcon,
+  ListOrdered,
+  MonitorPlay,
+  Tags,
+  Wallet,
+} from "lucide-react";
 import { Form } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
+import { RichTextEditor } from "@shared/components/forms/RichTextEditor";
 import { Input } from "@shared/components/ui/Input";
-import { Textarea } from "@shared/components/ui/Textarea";
 import { Switch } from "@shared/components/ui/Switch";
 import { Button } from "@shared/components/ui/Button";
 import { cn } from "@shared/lib/cn";
+import { isRichTextEmpty } from "@shared/lib/richText";
 import {
   Select,
   SelectContent,
@@ -18,19 +29,35 @@ import {
 } from "@shared/components/ui/Select";
 import { ImageUploader } from "@shared/components/upload/ImageUploader";
 import { VideoUploader } from "@shared/components/upload/VideoUploader";
-import { useUploadMediaMutation, mediaContentUrl } from "@shared/api/mediaApi";
+import { mediaContentUrl, uploadMediaFile } from "@shared/api/mediaApi";
+import { uploadVideoFile } from "@shared/api/videoUpload";
+import { env } from "@shared/config/env";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
 import { CategoryMultiSelect } from "@features/courses/components/CategoryMultiSelect";
 import { FormCard } from "@features/courses/components/FormCard";
-import { courseSchema, type CourseFormValues } from "@features/courses/schemas/course.schema";
-import { COURSE_LEVEL, COURSE_TYPE } from "@shared/types/lms";
-import type { CourseDto } from "@features/courses/types";
+import { SyllabusEditor } from "@features/courses/components/SyllabusEditor";
+import { legacySyllabusToItems, syllabusToLegacyText } from "@features/courses/lib/syllabus";
+import {
+  courseSchema,
+  sessionHours,
+  type CourseFormValues,
+} from "@features/courses/schemas/course.schema";
+import { COURSE_LEVEL, COURSE_TYPE, COURSE_TYPE_LABEL } from "@shared/types/lms";
+import type { CourseDto, CreateCourseRequest, UpdateCourseRequest } from "@features/courses/types";
 import type { NormalizedError } from "@lib/axios/httpClient";
+
+/**
+ * What the form hands its page: the create body, plus the two removal flags an
+ * edit needs (a partial update reads a missing media id as "keep it").
+ */
+export type CoursePayload = CreateCourseRequest &
+  Pick<UpdateCourseRequest, "clearThumbnail" | "clearTrailer">;
 
 interface Props {
   initial?: CourseDto;
   /** Hide slug on edit (backend UpdateCourseRequest has no slug). */
   editing?: boolean;
-  onSubmit: (values: CourseFormValues) => Promise<unknown>;
+  onSubmit: (values: CoursePayload) => Promise<unknown>;
   submitLabel?: string;
   /**
    * Extra sections rendered above the submit button — the admin create screen
@@ -55,103 +82,279 @@ const MEDIA_BOX = cn(
   "[&_[role=presentation]]:items-center [&_[role=presentation]]:justify-center",
 );
 
+const TYPE_HINT: Record<CourseFormValues["courseType"], string> = {
+  ONLINE: "Lessons participants take at their own pace.",
+  OFFLINE: "In person, over a date range.",
+  ONE_TIME: "In person, held once: one date with a start and an end time.",
+};
+
+/**
+ * The form's starting values from a loaded course.
+ *
+ * The API sends `null` for every unset field, and the schema used to accept
+ * only strings and numbers there — so an edit form opened with no trailer, or
+ * an offline course with no weekly hours, failed zod's "expected string,
+ * received null" on submit and never sent a request. Every nullable field is
+ * normalised here, once, before it reaches the form.
+ */
+function toFormValues(initial?: CourseDto): CourseFormValues {
+  const off = initial?.offlineDetails;
+  return {
+    slug: initial?.slug ?? "",
+    title: initial?.title ?? "",
+    subtitle: initial?.subtitle ?? "",
+    description: initial?.description ?? "",
+    requirements: initial?.requirements ?? "",
+    learningOutcomes: initial?.learningOutcomes ?? "",
+    // Items when the API has them; an older course's free-text syllabus is
+    // split into topics so it opens editable rather than invisible.
+    syllabusItems: initial?.syllabusItems?.length
+      ? initial.syllabusItems.map((i) => ({ title: i.title ?? "", description: i.description ?? "" }))
+      : legacySyllabusToItems(initial?.syllabus),
+    courseType: initial?.courseType ?? COURSE_TYPE.ONLINE,
+    level: initial?.level ?? COURSE_LEVEL.BEGINNER,
+    language: initial?.language ?? "az",
+    free: initial?.free ?? false,
+    price: Number(initial?.price ?? 0),
+    currency: initial?.currency ?? "AZN",
+    categoryIds: initial?.categoryIds ?? [],
+    thumbnailMediaId: initial?.thumbnailMediaId ?? undefined,
+    trailerMediaId: initial?.trailerMediaId ?? undefined,
+    onlineDetails: {
+      hasCertificate: initial?.onlineDetails?.hasCertificate ?? false,
+      dripEnabled: initial?.onlineDetails?.dripEnabled ?? false,
+    },
+    offlineDetails: {
+      startDate: off?.startDate ?? "",
+      endDate: off?.endDate ?? "",
+      // <input type="time"> takes "HH:mm"; the API may send "HH:mm:ss".
+      startTime: off?.startTime?.slice(0, 5) ?? "",
+      endTime: off?.endTime?.slice(0, 5) ?? "",
+      weeklyHours: off?.weeklyHours ?? undefined,
+      totalHours: off?.totalHours ?? undefined,
+      studentLimit: off?.studentLimit ?? 20,
+      city: off?.city ?? "",
+      addressLine: off?.addressLine ?? "",
+    },
+  };
+}
+
+/** The form's values as the body the API takes. */
+function toPayload(values: CourseFormValues, initial: CourseDto | undefined): CoursePayload {
+  const blankToUndefined = (s: string | null | undefined) => s?.trim() || undefined;
+  const text = (s: string | null | undefined) => (isRichTextEmpty(s) ? "" : (s as string));
+  const off = values.offlineDetails;
+  const items = values.syllabusItems.map((item) => ({
+    title: item.title.trim(),
+    description: isRichTextEmpty(item.description) ? undefined : item.description,
+  }));
+
+  // The backend rejects an ONLINE course that carries offline details and
+  // requires them for an in-person one, so only the matching block is sent.
+  let offlineDetails: CoursePayload["offlineDetails"];
+  if (values.courseType === COURSE_TYPE.OFFLINE && off) {
+    offlineDetails = {
+      startDate: off.startDate || undefined,
+      endDate: off.endDate || undefined,
+      startTime: off.startTime || undefined,
+      endTime: off.endTime || undefined,
+      weeklyHours: off.weeklyHours ?? undefined,
+      totalHours: off.totalHours ?? undefined,
+      studentLimit: off.studentLimit ?? undefined,
+      city: blankToUndefined(off.city),
+      addressLine: blankToUndefined(off.addressLine),
+    };
+  } else if (values.courseType === COURSE_TYPE.ONE_TIME && off) {
+    // One day: the end date is the start date, and the hours are the API's to
+    // derive from the times — neither is collected.
+    offlineDetails = {
+      startDate: off.startDate || undefined,
+      endDate: off.startDate || undefined,
+      startTime: off.startTime || undefined,
+      endTime: off.endTime || undefined,
+      studentLimit: off.studentLimit ?? undefined,
+      city: blankToUndefined(off.city),
+      addressLine: blankToUndefined(off.addressLine),
+    };
+  }
+
+  return {
+    slug: values.slug,
+    title: values.title.trim(),
+    subtitle: values.subtitle?.trim() ?? "",
+    description: text(values.description),
+    requirements: text(values.requirements),
+    learningOutcomes: text(values.learningOutcomes),
+    syllabusItems: items,
+    // Kept in step with the topics for readers that only know the old field
+    // (see syllabusToLegacyText); it is never edited on its own.
+    syllabus: syllabusToLegacyText(items),
+    courseType: values.courseType,
+    level: values.level,
+    language: values.language,
+    free: values.free,
+    price: values.free ? 0 : values.price,
+    currency: values.currency,
+    categoryIds: values.categoryIds,
+    thumbnailMediaId: values.thumbnailMediaId ?? undefined,
+    trailerMediaId: values.trailerMediaId ?? undefined,
+    clearThumbnail: initial?.thumbnailMediaId && !values.thumbnailMediaId ? true : undefined,
+    clearTrailer: initial?.trailerMediaId && !values.trailerMediaId ? true : undefined,
+    onlineDetails: values.courseType === COURSE_TYPE.ONLINE ? values.onlineDetails : undefined,
+    offlineDetails,
+  };
+}
+
+/** Axios reports an aborted request as a normalised ERR_CANCELED, not an AbortError. */
+function isCancel(e: unknown): boolean {
+  const err = e as { name?: string; code?: string };
+  return err?.name === "AbortError" || err?.name === "CanceledError" || err?.code === "ERR_CANCELED";
+}
+
+function errorMessage(e: unknown, fallback: string): string {
+  const message = (e as { message?: string })?.message;
+  return message && message !== "canceled" ? message : fallback;
+}
+
+/** Every message in a nested react-hook-form error tree, in field order. */
+function errorMessages(errors: FieldErrors): string[] {
+  const out: string[] = [];
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== "object") return;
+    const { message } = node as { message?: unknown };
+    if (typeof message === "string" && message) out.push(message);
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== "ref" && key !== "message" && key !== "type" && key !== "types") walk(child);
+    }
+  };
+  walk(errors);
+  return [...new Set(out)];
+}
+
 export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save", extra }: Props) {
-  const [uploadMedia] = useUploadMediaMutation();
+  const { isTutor, isSuperAdmin } = usePermissions();
 
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: {
-      slug: initial?.slug ?? "",
-      title: initial?.title ?? "",
-      subtitle: initial?.subtitle ?? "",
-      description: initial?.description ?? "",
-      requirements: initial?.requirements ?? "",
-      learningOutcomes: initial?.learningOutcomes ?? "",
-      syllabus: initial?.syllabus ?? "",
-      courseType: initial?.courseType ?? COURSE_TYPE.ONLINE,
-      level: initial?.level ?? COURSE_LEVEL.BEGINNER,
-      language: initial?.language ?? "az",
-      free: initial?.free ?? false,
-      price: initial?.price ?? 0,
-      currency: initial?.currency ?? "AZN",
-      categoryIds: initial?.categoryIds ?? [],
-      thumbnailMediaId: initial?.thumbnailMediaId,
-      trailerMediaId: initial?.trailerMediaId,
-      onlineDetails: {
-        hasCertificate: initial?.onlineDetails?.hasCertificate ?? false,
-        dripEnabled: initial?.onlineDetails?.dripEnabled ?? false,
-      },
-      offlineDetails: {
-        startDate: initial?.offlineDetails?.startDate ?? "",
-        endDate: initial?.offlineDetails?.endDate ?? "",
-        weeklyHours: initial?.offlineDetails?.weeklyHours,
-        totalHours: initial?.offlineDetails?.totalHours,
-        studentLimit: initial?.offlineDetails?.studentLimit ?? 20,
-        city: initial?.offlineDetails?.city ?? "",
-        addressLine: initial?.offlineDetails?.addressLine ?? "",
-      },
-    },
+    defaultValues: toFormValues(initial),
   });
 
-  const isFree = form.watch("free");
+  const isFree = useWatch({ control: form.control, name: "free" });
   // Only echoed in the save bar, so the bar says which course it saves.
-  const title = form.watch("title");
-  const courseType = form.watch("courseType");
-  const isOffline = courseType === COURSE_TYPE.OFFLINE;
-  const thumbnailMediaId = form.watch("thumbnailMediaId");
-  const trailerMediaId = form.watch("trailerMediaId");
+  const title = useWatch({ control: form.control, name: "title" });
+  const courseType = useWatch({ control: form.control, name: "courseType" });
+  const startTime = useWatch({ control: form.control, name: "offlineDetails.startTime" });
+  const endTime = useWatch({ control: form.control, name: "offlineDetails.endTime" });
+  const thumbnailMediaId = useWatch({ control: form.control, name: "thumbnailMediaId" });
+  const hours = sessionHours(startTime, endTime);
 
-  const uploadAnd = async (file: File, field: "thumbnailMediaId" | "trailerMediaId") => {
+  /*
+   * Media previews. A cover picked in this session is previewed from the local
+   * file for as long as the form lives: switching the preview to the stored
+   * copy the moment the upload finished downloaded the whole file straight
+   * back — up to 200 MB — only to show the same picture.
+   */
+  const [localCover, setLocalCover] = useState<File | null>(null);
+  const [coverProgress, setCoverProgress] = useState<number | null>(null);
+  const coverAbort = useRef<AbortController | null>(null);
+  // The trailer uploader keeps its own local preview; it is only handed the
+  // trailer the course had when the form opened, and only until it is removed.
+  // Frozen at mount: following a refetched course would hand it the new id
+  // after a save and make it re-download the video it has just sent.
+  const [storedTrailerId] = useState(initial?.trailerMediaId ?? null);
+  const [storedTrailerShown, setStoredTrailerShown] = useState(!!storedTrailerId);
+  const [trailerBusy, setTrailerBusy] = useState(false);
+  const uploading = coverProgress !== null || trailerBusy;
+
+  const coverValue = localCover ?? (thumbnailMediaId ? mediaContentUrl(thumbnailMediaId) : null);
+  const trailerValue = storedTrailerShown && storedTrailerId ? mediaContentUrl(storedTrailerId) : null;
+
+  // Experts (course:create) and super admins (course:create_any) may stream a
+  // video to /videos, which takes the full video ceiling. Everyone else sends
+  // the trailer as multipart /media, which is sized for images and PDFs.
+  const canStreamVideo = isTutor || isSuperAdmin;
+  const trailerMaxMb = canStreamVideo
+    ? env.uploads.maxVideoMb
+    : Math.min(env.uploads.maxVideoMb, Math.max(env.uploads.maxImageMb, env.uploads.maxDocumentMb));
+
+  const uploadCover = async (file: File) => {
+    coverAbort.current?.abort();
+    const controller = new AbortController();
+    coverAbort.current = controller;
+    setLocalCover(file);
+    setCoverProgress(0);
     try {
-      const media = await uploadMedia(file).unwrap();
-      form.setValue(field, media.id, { shouldDirty: true });
-      toast.success("Uploaded");
-    } catch {
-      toast.error("Upload failed");
+      const media = await uploadMediaFile(file, { onProgress: setCoverProgress, signal: controller.signal });
+      if (coverAbort.current !== controller) return;
+      form.setValue("thumbnailMediaId", media.id, { shouldDirty: true, shouldValidate: true });
+      toast.success("Cover image uploaded");
+    } catch (e) {
+      if (coverAbort.current !== controller || isCancel(e)) return;
+      // Nothing was stored, so the pick is dropped and the previous cover (if
+      // any) is what the course keeps.
+      setLocalCover(null);
+      toast.error(errorMessage(e, "Cover upload failed"));
+    } finally {
+      if (coverAbort.current === controller) {
+        coverAbort.current = null;
+        setCoverProgress(null);
+      }
     }
   };
 
-  // VideoUploader expects an uploader that returns a URL; reuse the media upload.
-  const trailerUploader = async (file: File): Promise<string> => {
-    const media = await uploadMedia(file).unwrap();
-    form.setValue("trailerMediaId", media.id, { shouldDirty: true });
-    return mediaContentUrl(media.id);
+  const trailerUploader = async (
+    file: File,
+    onProgress: (pct: number) => void,
+    signal: AbortSignal,
+  ): Promise<string> => {
+    try {
+      const id = canStreamVideo
+        ? await uploadVideoFile(file, onProgress, signal)
+        : (await uploadMediaFile(file, { onProgress, signal })).id;
+      form.setValue("trailerMediaId", id, { shouldDirty: true, shouldValidate: true });
+      return mediaContentUrl(id);
+    } catch (e) {
+      // VideoUploader tells a stop from a failure by the AbortError name.
+      if (isCancel(e)) throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+      throw new Error(errorMessage(e, "Upload failed"));
+    }
   };
 
   const handle = async (values: CourseFormValues) => {
-    // The backend rejects an ONLINE course that carries offline details and
-    // requires them for an OFFLINE one, so only the matching block is sent.
-    // Blank optional strings are dropped rather than posted as "".
-    const offline = values.offlineDetails;
-    const payload: CourseFormValues = {
-      ...values,
-      onlineDetails: values.courseType === COURSE_TYPE.ONLINE ? values.onlineDetails : undefined,
-      offlineDetails:
-        values.courseType === COURSE_TYPE.OFFLINE && offline
-          ? {
-              ...offline,
-              city: offline.city?.trim() || undefined,
-              addressLine: offline.addressLine?.trim() || undefined,
-            }
-          : undefined,
-    };
-
+    if (uploading) {
+      toast.error("Wait for the upload to finish, then save.");
+      return;
+    }
     try {
-      await onSubmit(payload);
+      await onSubmit(toPayload(values, initial));
       toast.success("Saved");
     } catch (e) {
       const err = e as NormalizedError;
       if (err.fieldErrors) {
         for (const [k, v] of Object.entries(err.fieldErrors)) {
-          form.setError(k as keyof CourseFormValues, { message: v });
+          // The API names list elements `syllabusItems[0].title` and nests the
+          // admin create body under `course.`; the form uses dots and no prefix.
+          const path = k.replace(/^course\./, "").replace(/\[(\d+)\]/g, ".$1");
+          form.setError(path as keyof CourseFormValues, { message: v });
         }
       }
       toast.error(err.message || "Save failed");
     }
   };
 
+  const handleInvalid = (errors: FieldErrors<CourseFormValues>) => {
+    const messages = errorMessages(errors);
+    toast.error("Some fields need attention", {
+      description: messages.slice(0, 3).join(" · ") || undefined,
+    });
+    // The first problem can be a screen away from the save bar.
+    requestAnimationFrame(() => {
+      document.querySelector("[data-field-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
   return (
-    <Form form={form} onSubmit={handle}>
+    <Form form={form} onSubmit={handle} onInvalidSubmit={handleInvalid}>
       <FormCard icon={<FileText />} title="Basics">
         <FormField<CourseFormValues> name="title" label="Title" required>
           {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} />}
@@ -170,17 +373,53 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
         </FormField>
         <FormField<CourseFormValues> name="description" label="Description" className="md:col-span-2">
-          {({ field, invalid }) => <Textarea rows={5} {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
+          {({ field, invalid }) => (
+            <RichTextEditor
+              value={field.value as string}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              invalid={invalid}
+              minHeight="lg"
+              ariaLabel="Description"
+              placeholder="What the course is about and who it is for…"
+            />
+          )}
         </FormField>
-        <FormField<CourseFormValues> name="requirements" label="Requirements">
-          {({ field, invalid }) => <Textarea rows={3} {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
+        <FormField<CourseFormValues> name="requirements" label="Requirements" className="md:col-span-2">
+          {({ field, invalid }) => (
+            <RichTextEditor
+              value={field.value as string}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              invalid={invalid}
+              minHeight="sm"
+              ariaLabel="Requirements"
+              placeholder="What participants should know or bring…"
+            />
+          )}
         </FormField>
-        <FormField<CourseFormValues> name="learningOutcomes" label="Learning outcomes">
-          {({ field, invalid }) => <Textarea rows={3} {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
+        <FormField<CourseFormValues> name="learningOutcomes" label="Learning outcomes" className="md:col-span-2">
+          {({ field, invalid }) => (
+            <RichTextEditor
+              value={field.value as string}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              invalid={invalid}
+              minHeight="sm"
+              ariaLabel="Learning outcomes"
+              placeholder="What participants will be able to do afterwards…"
+            />
+          )}
         </FormField>
-        <FormField<CourseFormValues> name="syllabus" label="Syllabus" className="md:col-span-2">
-          {({ field, invalid }) => <Textarea rows={5} {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
-        </FormField>
+      </FormCard>
+
+      <FormCard
+        icon={<ListOrdered />}
+        title="Syllabus"
+        description="The course outline, one topic at a time, in the order it is taught."
+        grid={false}
+      >
+        <SyllabusEditor />
       </FormCard>
 
       <FormCard icon={<Tags />} title="Classification">
@@ -188,14 +427,15 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           name="courseType"
           label="Type"
           required
-          description={editing ? "Type can't be changed after creation." : undefined}
+          description={editing ? "Type can't be changed after creation." : TYPE_HINT[courseType]}
         >
           {({ field, invalid }) => (
             <Select value={field.value as string} onValueChange={field.onChange} disabled={editing}>
               <SelectTrigger invalid={invalid}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={COURSE_TYPE.ONLINE}>Online</SelectItem>
-                <SelectItem value={COURSE_TYPE.OFFLINE}>Offline</SelectItem>
+                <SelectItem value={COURSE_TYPE.ONLINE}>{COURSE_TYPE_LABEL.ONLINE}</SelectItem>
+                <SelectItem value={COURSE_TYPE.OFFLINE}>{COURSE_TYPE_LABEL.OFFLINE}</SelectItem>
+                <SelectItem value={COURSE_TYPE.ONE_TIME}>{COURSE_TYPE_LABEL.ONE_TIME}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -233,7 +473,7 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         </FormField>
       </FormCard>
 
-      {isOffline ? (
+      {courseType === COURSE_TYPE.OFFLINE && (
         <FormCard icon={<CalendarDays />} title="Offline schedule">
           <FormField<CourseFormValues> name="offlineDetails.startDate" label="Start date" required>
             {({ field, invalid }) => (
@@ -246,64 +486,60 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
             )}
           </FormField>
           <FormField<CourseFormValues>
-            name="offlineDetails.studentLimit"
-            label="Seat limit"
-            required
-            description="How many İştirakçilər can enrol in this cohort."
+            name="offlineDetails.startTime"
+            label="Classes start at"
+            description="Optional daily time."
           >
             {({ field, invalid }) => (
-              <Input
-                type="number"
-                min={1}
-                {...field}
-                value={(field.value as number) ?? ""}
-                invalid={invalid}
-                onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-              />
+              <Input type="time" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
             )}
           </FormField>
-          <FormField<CourseFormValues> name="offlineDetails.weeklyHours" label="Hours per week">
+          <FormField<CourseFormValues> name="offlineDetails.endTime" label="Classes end at">
             {({ field, invalid }) => (
-              <Input
-                type="number"
-                step="0.5"
-                min={0}
-                {...field}
-                value={(field.value as number) ?? ""}
-                invalid={invalid}
-                onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-              />
+              <Input type="time" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
             )}
           </FormField>
-          <FormField<CourseFormValues> name="offlineDetails.totalHours" label="Total hours">
-            {({ field, invalid }) => (
-              <Input
-                type="number"
-                step="0.5"
-                min={0}
-                {...field}
-                value={(field.value as number) ?? ""}
-                invalid={invalid}
-                onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-              />
-            )}
-          </FormField>
-          <FormField<CourseFormValues> name="offlineDetails.city" label="City">
-            {({ field, invalid }) => (
-              <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />
-            )}
-          </FormField>
-          <FormField<CourseFormValues>
-            name="offlineDetails.addressLine"
-            label="Address"
-            className="md:col-span-2"
-          >
-            {({ field, invalid }) => (
-              <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />
-            )}
-          </FormField>
+          <SeatLimitField />
+          <NumberField name="offlineDetails.weeklyHours" label="Hours per week" />
+          <NumberField name="offlineDetails.totalHours" label="Total hours" />
+          <PlaceFields />
         </FormCard>
-      ) : (
+      )}
+
+      {courseType === COURSE_TYPE.ONE_TIME && (
+        <FormCard
+          icon={<CalendarClock />}
+          title="One-time session"
+          description="The training happens once, on this date and between these times."
+        >
+          <FormField<CourseFormValues> name="offlineDetails.startDate" label="Date" required>
+            {({ field, invalid }) => (
+              <Input type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            )}
+          </FormField>
+          <div className="grid grid-cols-2 gap-x-3">
+            <FormField<CourseFormValues> name="offlineDetails.startTime" label="Starts at" required>
+              {({ field, invalid }) => (
+                <Input type="time" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+              )}
+            </FormField>
+            <FormField<CourseFormValues>
+              name="offlineDetails.endTime"
+              label="Ends at"
+              required
+              description={hours ? `${hours} ${hours === 1 ? "hour" : "hours"}` : undefined}
+            >
+              {({ field, invalid }) => (
+                <Input type="time" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+              )}
+            </FormField>
+          </div>
+          <SeatLimitField />
+          <PlaceFields />
+        </FormCard>
+      )}
+
+      {courseType === COURSE_TYPE.ONLINE && (
         <FormCard icon={<MonitorPlay />} title="Online options">
           <FormField<CourseFormValues> name="onlineDetails.hasCertificate" label="Certificate on completion">
             {({ field }) => (
@@ -333,14 +569,26 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
       )}
 
       <FormCard icon={<ImageIcon />} title="Media">
-        <FormField<CourseFormValues> name="thumbnailMediaId" label="Cover image">
+        <FormField<CourseFormValues>
+          name="thumbnailMediaId"
+          label="Cover image"
+          description="Shown on the course card and at the top of its page."
+        >
           {() => (
             <ImageUploader
               className={MEDIA_BOX}
-              value={thumbnailMediaId ? mediaContentUrl(thumbnailMediaId) : null}
+              value={coverValue}
+              progress={coverProgress}
               onChange={(file) => {
-                if (file) void uploadAnd(file, "thumbnailMediaId");
-                else form.setValue("thumbnailMediaId", undefined, { shouldDirty: true });
+                if (file) {
+                  void uploadCover(file);
+                  return;
+                }
+                coverAbort.current?.abort();
+                coverAbort.current = null;
+                setCoverProgress(null);
+                setLocalCover(null);
+                form.setValue("thumbnailMediaId", undefined, { shouldDirty: true });
               }}
               aspect="video"
             />
@@ -350,10 +598,16 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           {() => (
             <VideoUploader
               className={MEDIA_BOX}
-              value={trailerMediaId ? mediaContentUrl(trailerMediaId) : null}
+              value={trailerValue}
+              maxSizeMb={trailerMaxMb}
               uploader={trailerUploader}
+              autoStart
+              onBusyChange={setTrailerBusy}
               onChange={(file) => {
-                if (!file) form.setValue("trailerMediaId", undefined, { shouldDirty: true });
+                if (!file) {
+                  setStoredTrailerShown(false);
+                  form.setValue("trailerMediaId", undefined, { shouldDirty: true });
+                }
               }}
             />
           )}
@@ -410,10 +664,85 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
             {title}
           </p>
         ) : null}
-        <Button type="submit" loading={form.formState.isSubmitting} className="shrink-0">
-          {submitLabel}
+        <Button
+          type="submit"
+          loading={form.formState.isSubmitting}
+          // A save while a file is still in flight would store the course without it.
+          disabled={uploading}
+          className="shrink-0"
+        >
+          {uploading ? "Uploading…" : submitLabel}
         </Button>
       </div>
     </Form>
+  );
+}
+
+/* ───────────────────── in-person fields shared by both types ───────────────────── */
+
+function SeatLimitField() {
+  return (
+    <FormField<CourseFormValues>
+      name="offlineDetails.studentLimit"
+      label="Seat limit"
+      required
+      description="How many İştirakçilər can enrol."
+    >
+      {({ field, invalid }) => (
+        <Input
+          type="number"
+          min={1}
+          {...field}
+          value={(field.value as number) ?? ""}
+          invalid={invalid}
+          onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+        />
+      )}
+    </FormField>
+  );
+}
+
+function NumberField({
+  name,
+  label,
+}: {
+  name: "offlineDetails.weeklyHours" | "offlineDetails.totalHours";
+  label: string;
+}) {
+  return (
+    <FormField<CourseFormValues> name={name} label={label}>
+      {({ field, invalid }) => (
+        <Input
+          type="number"
+          step="0.5"
+          min={0}
+          {...field}
+          value={(field.value as number) ?? ""}
+          invalid={invalid}
+          onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+        />
+      )}
+    </FormField>
+  );
+}
+
+function PlaceFields() {
+  return (
+    <>
+      <FormField<CourseFormValues> name="offlineDetails.city" label="City">
+        {({ field, invalid }) => (
+          <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} maxLength={80} />
+        )}
+      </FormField>
+      <FormField<CourseFormValues>
+        name="offlineDetails.addressLine"
+        label="Address"
+        className="md:col-span-2"
+      >
+        {({ field, invalid }) => (
+          <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} maxLength={255} />
+        )}
+      </FormField>
+    </>
   );
 }

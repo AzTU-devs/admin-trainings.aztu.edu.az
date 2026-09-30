@@ -28,7 +28,8 @@ import {
   useLazyGetCourseBySlugQuery,
   useListModerationCoursesQuery,
 } from "@features/courses/api/coursesApi";
-import type { CourseSummaryDto } from "@features/courses/types";
+import { CourseContentPreview } from "@features/courses/components/CourseContentPreview";
+import type { CourseDto, CourseSummaryDto } from "@features/courses/types";
 import { COURSE_STATUS } from "@shared/types/lms";
 
 /**
@@ -141,16 +142,7 @@ function QueueModeration() {
         ) : loadingDetail || !course ? (
           <Card className="flex justify-center py-16"><Spinner /></Card>
         ) : (
-          <ReviewCard
-            pinned
-            courseId={course.id}
-            title={course.title}
-            subtitle={course.subtitle}
-            description={course.description}
-            status={course.status}
-            tutorName={course.tutorDisplayName}
-            onDecided={() => setSelected(null)}
-          />
+          <ReviewCard pinned course={course} onDecided={() => setSelected(null)} />
         )}
       </div>
     </div>
@@ -249,14 +241,7 @@ function SlugModeration() {
         ) : error ? (
           <EmptyState tone="warning" Icon={SearchX} title="Course not found" description="Check the slug and try again." />
         ) : course ? (
-          <ReviewCard
-            courseId={course.id}
-            title={course.title}
-            subtitle={course.subtitle}
-            description={course.description}
-            status={course.status}
-            tutorName={course.tutorDisplayName}
-          />
+          <ReviewCard course={course} />
         ) : (
           <EmptyState Icon={Search} title="No course loaded" description="Enter a course slug above to begin moderation." />
         )}
@@ -277,24 +262,15 @@ function SlugModeration() {
  * course details scroll inside it while the note and the buttons stay put.
  */
 function ReviewCard({
-  courseId,
-  title,
-  subtitle,
-  description,
-  status,
-  tutorName,
+  course,
   onDecided,
   pinned = false,
 }: {
-  courseId: string;
-  title: string;
-  subtitle?: string;
-  description?: string;
-  status: CourseSummaryDto["status"];
-  tutorName?: string;
+  course: CourseDto;
   onDecided?: () => void;
   pinned?: boolean;
 }) {
+  const { id: courseId, title, subtitle, status, tutorDisplayName: tutorName } = course;
   const [decide, { isLoading: deciding }] = useDecideCourseMutation();
   const [note, setNote] = useState("");
 
@@ -343,11 +319,9 @@ function ReviewCard({
           </div>
         )}
 
-        {description && (
-          <p className="whitespace-pre-wrap break-words rounded-[18px] bg-paper-2 px-5 py-4 text-sm leading-relaxed text-ink-2">
-            {description}
-          </p>
-        )}
+        {/* Everything the course will show participants — the moderator is
+            approving all of it, not only the description. */}
+        <CourseContentPreview course={course} />
       </div>
 
       <div className={cn("space-y-4 border-t border-line p-5 sm:px-6", pinned && "lg:shrink-0")}>

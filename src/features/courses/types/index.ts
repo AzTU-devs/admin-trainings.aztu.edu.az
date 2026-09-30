@@ -53,15 +53,30 @@ export interface OnlineDetailsDto {
   dripEnabled: boolean;
 }
 
+/**
+ * In-person schedule, shared by OFFLINE (a date range) and ONE_TIME (a single
+ * date with start and end times) courses. The API sends `null` for anything
+ * unset, which the types say out loud: a form that trusted `?:` here passed
+ * those nulls straight to zod and blocked the save.
+ */
 export interface OfflineDetailsDto {
-  startDate?: string;
-  endDate?: string;
-  weeklyHours?: number;
-  totalHours?: number;
-  studentLimit?: number;
-  enrolledCount?: number;
-  city?: string;
-  addressLine?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  /** "HH:mm" or "HH:mm:ss". */
+  startTime?: string | null;
+  endTime?: string | null;
+  weeklyHours?: number | null;
+  totalHours?: number | null;
+  studentLimit?: number | null;
+  enrolledCount?: number | null;
+  city?: string | null;
+  addressLine?: string | null;
+}
+
+/** One entry of a course's syllabus; `description` is rich-text HTML. */
+export interface SyllabusItemDto {
+  title: string;
+  description?: string | null;
 }
 
 /** Mirror of backend CourseTutorDto — one tutor on a course's teaching roster. */
@@ -77,13 +92,17 @@ export interface CourseDto {
   id: UUID;
   slug: string;
   title: string;
-  subtitle?: string;
-  description?: string;
-  requirements?: string;
-  learningOutcomes?: string;
-  syllabus?: string;
-  thumbnailMediaId?: UUID;
-  trailerMediaId?: UUID;
+  subtitle?: string | null;
+  /** Rich-text HTML (or plain text on older courses), as are the next two. */
+  description?: string | null;
+  requirements?: string | null;
+  learningOutcomes?: string | null;
+  /** Legacy free-text syllabus; superseded by `syllabusItems`. */
+  syllabus?: string | null;
+  /** Ordered syllabus. Absent from APIs that predate it. */
+  syllabusItems?: SyllabusItemDto[];
+  thumbnailMediaId?: UUID | null;
+  trailerMediaId?: UUID | null;
   courseType: CourseType;
   level: CourseLevel;
   language: string;
@@ -135,6 +154,7 @@ export interface CreateCourseRequest {
   requirements?: string;
   learningOutcomes?: string;
   syllabus?: string;
+  syllabusItems?: SyllabusItemDto[];
   thumbnailMediaId?: UUID;
   trailerMediaId?: UUID;
   courseType: CourseType;
@@ -145,9 +165,9 @@ export interface CreateCourseRequest {
   currency: string;
   categoryIds: UUID[];
   tagIds?: UUID[];
-  /** Required when `courseType` is OFFLINE; rejected when it is ONLINE. */
+  /** Required when `courseType` is OFFLINE or ONE_TIME; rejected when it is ONLINE. */
   offlineDetails?: OfflineDetailsRequest;
-  /** Optional for ONLINE; rejected when the course is OFFLINE. */
+  /** Optional for ONLINE; rejected for an in-person (OFFLINE / ONE_TIME) course. */
   onlineDetails?: OnlineDetailsRequest;
 }
 
@@ -161,6 +181,9 @@ export interface OnlineDetailsRequest {
 export interface OfflineDetailsRequest {
   startDate?: string;
   endDate?: string;
+  /** "HH:mm". Required for ONE_TIME, optional daily times for OFFLINE. */
+  startTime?: string;
+  endTime?: string;
   weeklyHours?: number;
   totalHours?: number;
   studentLimit?: number;
@@ -174,7 +197,14 @@ export interface OfflineDetailsRequest {
  */
 export type UpdateCourseRequest = Partial<
   Omit<CreateCourseRequest, "slug" | "courseType">
->;
+> & {
+  /**
+   * A partial update reads a missing media id as "leave it", so removing the
+   * cover or trailer needs these explicit flags.
+   */
+  clearThumbnail?: boolean;
+  clearTrailer?: boolean;
+};
 
 /**
  * Mirror of backend AdminCreateCourseRequest. The tutors are stated explicitly

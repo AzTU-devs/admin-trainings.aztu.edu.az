@@ -1,4 +1,5 @@
 import { baseApi } from "@lib/query/baseApi";
+import { httpClient } from "@lib/axios/httpClient";
 import { env } from "@shared/config/env";
 import type { UUID } from "@shared/types/lms";
 import type { MediaFileDto } from "@shared/types/media";
@@ -23,6 +24,7 @@ export const mediaApi = baseApi.injectEndpoints({
           method: "POST",
           data: form,
           headers: { "Content-Type": "multipart/form-data" },
+          timeout: UPLOAD_TIMEOUT_MS,
         };
       },
     }),
@@ -31,6 +33,37 @@ export const mediaApi = baseApi.injectEndpoints({
 });
 
 export const { useUploadMediaMutation } = mediaApi;
+
+/**
+ * Uploads are exempt from the client's 30 s request timeout: a 200 MB image or
+ * PDF on a campus uplink takes minutes, and the timeout used to abort it
+ * part-way with a generic "timeout of 30000ms exceeded". Zero means none; a
+ * dead connection still ends in a network error.
+ */
+const UPLOAD_TIMEOUT_MS = 0;
+
+/**
+ * The same upload as {@link useUploadMediaMutation}, for callers that show
+ * progress or let the user stop it — the course cover and trailer. Resolves
+ * with the stored file's metadata; rejects with the normalised API error
+ * (or an AbortError when `signal` fires).
+ */
+export async function uploadMediaFile(
+  file: File,
+  opts: { onProgress?: (pct: number) => void; signal?: AbortSignal } = {},
+): Promise<MediaFileDto> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await httpClient.post<{ data: MediaFileDto }>("/media", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: UPLOAD_TIMEOUT_MS,
+    signal: opts.signal,
+    onUploadProgress: (e) => {
+      if (opts.onProgress && e.total) opts.onProgress((e.loaded / e.total) * 100);
+    },
+  });
+  return res.data.data;
+}
 
 /** Absolute URL for streaming a media file's bytes (auth required). */
 export function mediaContentUrl(id: UUID): string {

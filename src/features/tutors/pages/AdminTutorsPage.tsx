@@ -20,6 +20,7 @@ import { TutorStatusBadge } from "@features/tutors/components/TutorStatusBadge";
 import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
 import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
 import { EditExpertProfileDialog } from "@features/tutors/components/EditExpertProfileDialog";
+import { ViewProfileLink } from "@features/user-profile/components/ViewProfileLink";
 import {
   useDecideTutorMutation,
   useListTutorsQuery,
@@ -131,6 +132,8 @@ export default function AdminTutorsPage() {
         header: "",
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-2">
+            {/* The expert's whole account (super admins only; renders nothing otherwise). */}
+            <ViewProfileLink userId={row.original.userId} />
             <Button size="sm" variant="ghost" leftIcon={<Pencil className="size-4" />} onClick={() => setEditing(row.original)}>
               Edit
             </Button>
@@ -167,11 +170,14 @@ export default function AdminTutorsPage() {
               {!!t.ratingCount && <Rating tutor={t} />}
             </div>
           </div>
-          {!pending && (
-            <Button size="sm" variant="ghost" className="-mr-2 -mt-1 shrink-0 px-2" leftIcon={<Pencil className="size-4" />} onClick={() => setEditing(t)}>
-              Edit
-            </Button>
-          )}
+          <div className="-mr-2 -mt-1 flex shrink-0 items-center">
+            <ViewProfileLink userId={t.userId} />
+            {!pending && (
+              <Button size="sm" variant="ghost" className="px-2" leftIcon={<Pencil className="size-4" />} onClick={() => setEditing(t)}>
+                Edit
+              </Button>
+            )}
+          </div>
         </div>
         {pending && (
           <div className="mt-4 grid grid-cols-3 gap-2">

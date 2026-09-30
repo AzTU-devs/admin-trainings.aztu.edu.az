@@ -1,10 +1,17 @@
-import { MapPin, MonitorPlay, Users } from "lucide-react";
+import { MonitorPlay, Users } from "lucide-react";
 import { CourseCover } from "@shared/components/bright";
 import { Avatar, AvatarFallback } from "@shared/components/ui/Avatar";
 import { Badge } from "@shared/components/ui/Badge";
 import { cn } from "@shared/lib/cn";
-import { COURSE_LEVEL, COURSE_TYPE, type CourseLevel, type CourseStatus, type CourseType } from "@shared/types/lms";
+import {
+  COURSE_LEVEL,
+  COURSE_TYPE_LABEL,
+  type CourseLevel,
+  type CourseStatus,
+  type CourseType,
+} from "@shared/types/lms";
 import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { COURSE_TYPE_ICON } from "@features/courses/lib/courseType";
 
 /*
  * Presentational pieces shared by the course tables (admin list, tutor list,
@@ -115,11 +122,11 @@ export function TutorCell({ name }: { name?: string | null }) {
 
 /** "Online" with a screen, "Offline" with a pin — as on the website's cards. */
 export function CourseTypeValue({ type, className }: { type: CourseType; className?: string }) {
-  const Icon = type === COURSE_TYPE.OFFLINE ? MapPin : MonitorPlay;
+  const Icon = COURSE_TYPE_ICON[type] ?? MonitorPlay;
   return (
     <span className={cn("inline-flex items-center gap-2 whitespace-nowrap", className)}>
       <Icon className="size-4 shrink-0 text-ink-3" aria-hidden />
-      <EnumText>{type}</EnumText>
+      <span>{COURSE_TYPE_LABEL[type] ?? type}</span>
     </span>
   );
 }

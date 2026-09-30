@@ -10,7 +10,7 @@ import { httpClient, normalizeError, type NormalizedError } from "@lib/axios/htt
 
 type AxiosBaseQueryArgs =
   | string
-  | (Pick<AxiosRequestConfig, "url" | "method" | "params" | "headers"> & {
+  | (Pick<AxiosRequestConfig, "url" | "method" | "params" | "headers" | "timeout"> & {
       data?: unknown;
       /** Skip attaching the Authorization header (login, refresh, register). */
       skipAuth?: boolean;
@@ -30,6 +30,8 @@ const axiosBaseQuery =
               headers: args.headers,
               data: args.data,
               skipAuth: args.skipAuth,
+              // Only set by uploads, which outlast the client's default timeout.
+              ...(args.timeout !== undefined ? { timeout: args.timeout } : {}),
             };
 
       const response = await httpClient.request(config);

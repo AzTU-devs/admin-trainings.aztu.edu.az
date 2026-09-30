@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  AREAS_REQUIRED_MESSAGE,
   expertProfileSchema,
   normalizeOrcid,
+  normalizeOwnArea,
+  ownAreaProblem,
   toFormValues,
   toUpdateRequest,
 } from "./expertProfile.schema";
@@ -90,6 +93,29 @@ describe("toUpdateRequest", () => {
     const body = toUpdateRequest({ ...toFormValues(saved), headline: "New" }, saved);
     expect(body).not.toHaveProperty("approvalStatus");
   });
+
+  it("reads a profile without own areas (an API build that predates them) as none, and sends nothing for it", () => {
+    const saved = savedProfile(); // no customExpertise key at all
+    expect(toFormValues(saved).customExpertise).toEqual([]);
+    expect(toUpdateRequest(toFormValues(saved), saved)).toEqual({});
+  });
+
+  it("sends the whole list of own areas, normalised, when one is added", () => {
+    const saved = savedProfile({ customExpertise: ["Robotics"] });
+    const values = { ...toFormValues(saved), customExpertise: ["Robotics", "  Computer   vision "] };
+    expect(toUpdateRequest(values, saved)).toEqual({ customExpertise: ["Robotics", "Computer vision"] });
+  });
+
+  it("clears the own areas with an empty list, since an absent key means 'leave them'", () => {
+    const saved = savedProfile({ customExpertise: ["Robotics"] });
+    expect(toUpdateRequest({ ...toFormValues(saved), customExpertise: [] }, saved)).toEqual({ customExpertise: [] });
+  });
+
+  it("sends an empty category list when the own areas carry the profile", () => {
+    const saved = savedProfile({ customExpertise: ["Robotics"] });
+    const values = { ...toFormValues(saved), expertiseCategoryIds: [] };
+    expect(toUpdateRequest(values, saved)).toEqual({ expertiseCategoryIds: [] });
+  });
 });
 
 describe("expertProfileSchema", () => {
@@ -117,8 +143,61 @@ describe("expertProfileSchema", () => {
     expect(parse({ orcid: "0000-0002-1825-0098" }).success).toBe(false);
   });
 
-  it("requires at least one area of expertise, as the application did", () => {
-    expect(parse({ expertiseCategoryIds: [] }).success).toBe(false);
+  it("requires at least one area in total, reported under the category picker", () => {
+    const result = parse({ expertiseCategoryIds: [], customExpertise: [] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({ path: ["expertiseCategoryIds"], message: AREAS_REQUIRED_MESSAGE }),
+    ]);
+  });
+
+  it("accepts own areas in place of categories, and categories alone", () => {
+    expect(parse({ expertiseCategoryIds: [], customExpertise: ["Computer vision"] }).success).toBe(true);
+    expect(parse({ expertiseCategoryIds: [CATEGORY_A], customExpertise: [] }).success).toBe(true);
+  });
+
+  it("still asks for an area while another field is wrong, so the message is never hidden", () => {
+    const result = parse({ expertiseCategoryIds: [], customExpertise: [], githubUrl: "github.com/leyla" });
+    const paths = result.error?.issues.map((i) => i.path.join("."));
+    expect(paths).toEqual(expect.arrayContaining(["githubUrl", "expertiseCategoryIds"]));
+  });
+
+  it("holds own areas to the API's limits", () => {
+    const eleven = Array.from({ length: 11 }, (_, i) => `Area ${i + 1}`);
+    expect(parse({ customExpertise: eleven }).success).toBe(false);
+    expect(parse({ customExpertise: ["C"] }).success).toBe(false);
+    expect(parse({ customExpertise: ["x".repeat(61)] }).success).toBe(false);
+    expect(parse({ customExpertise: ["<b>AI</b>"] }).success).toBe(false);
+    expect(parse({ customExpertise: ["Robotics", "robotics"] }).success).toBe(false);
+    expect(parse({ customExpertise: ["x".repeat(60), "AI"] }).success).toBe(true);
+  });
+});
+
+describe("ownAreaProblem", () => {
+  it("accepts a new area and measures it after collapsing whitespace", () => {
+    expect(ownAreaProblem("  Computer \t vision ", [])).toBeNull();
+    expect(normalizeOwnArea("  Computer \t vision ")).toBe("Computer vision");
+    // Two letters once trimmed.
+    expect(ownAreaProblem("   AI   ", [])).toBeNull();
+    expect(ownAreaProblem(" A ", [])).toBe("At least 2 characters");
+  });
+
+  it("refuses blanks, markup and control characters", () => {
+    expect(ownAreaProblem("   ", [])).toBe("Type an area first");
+    expect(ownAreaProblem("a < b", [])).toMatch(/Plain text only/);
+    expect(ownAreaProblem("Robotics\u0007", [])).toMatch(/Plain text only/);
+  });
+
+  it("refuses a duplicate, ignoring case, and the name of a category already picked", () => {
+    expect(ownAreaProblem("ROBOTICS", ["Robotics"])).toBe("Already added");
+    expect(ownAreaProblem("information  technology", [], ["Information Technology"])).toBe(
+      "Already picked from the list above",
+    );
+  });
+
+  it("stops at ten", () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `Area ${i + 1}`);
+    expect(ownAreaProblem("One more", ten)).toBe("At most 10 areas of your own");
   });
 });
 

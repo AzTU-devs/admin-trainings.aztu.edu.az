@@ -61,9 +61,9 @@ export const env = {
    * moves the failure from an instant message to a late, opaque 413.
    */
   uploads: {
-    maxImageMb: num("VITE_UPLOAD_MAX_IMAGE_MB", 10),
+    maxImageMb: num("VITE_UPLOAD_MAX_IMAGE_MB", 200),
     maxVideoMb: num("VITE_UPLOAD_MAX_VIDEO_MB", 512),
-    maxDocumentMb: num("VITE_UPLOAD_MAX_DOCUMENT_MB", 25),
+    maxDocumentMb: num("VITE_UPLOAD_MAX_DOCUMENT_MB", 200),
   },
   features: {
     wsNotifications: bool("VITE_ENABLE_WS_NOTIFICATIONS", true),

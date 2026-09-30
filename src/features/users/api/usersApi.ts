@@ -1,11 +1,17 @@
 import { baseApi } from "@lib/query/baseApi";
 import type { ApiPage, PageRequest } from "@shared/types/api";
-import type { AdminUser, CreateUserRequest, UpdateUserRequest, UserStatus } from "@features/users/types";
-import type { Role } from "@shared/constants/roles";
+import type {
+  AccountRole,
+  AdminUser,
+  CreateUserRequest,
+  UpdateUserRequest,
+  UserStatus,
+} from "@features/users/types";
 
 interface ListArgs extends PageRequest {
   search?: string;
-  role?: Role;
+  /** Accounts holding this role; USER lists the participants (İştirakçilər). */
+  role?: AccountRole;
   status?: UserStatus;
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
-import { Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { env } from "@shared/config/env";
 import { cn } from "@shared/lib/cn";
@@ -17,6 +17,12 @@ interface ImageUploaderProps {
   maxSizeMb?: number;
   aspect?: "square" | "video" | "wide";
   disabled?: boolean;
+  /**
+   * Upload progress 0..100 while the caller is sending the picked file, or
+   * null/undefined when nothing is in flight. While set, the preview carries a
+   * progress bar and the picker is locked, so a second pick cannot race the first.
+   */
+  progress?: number | null;
   className?: string;
 }
 
@@ -34,8 +40,11 @@ export function ImageUploader({
   maxSizeMb = env.uploads.maxImageMb,
   aspect = "wide",
   disabled,
+  progress,
   className,
 }: ImageUploaderProps) {
+  const uploading = progress !== null && progress !== undefined;
+  const pct = progress ?? 0;
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +109,7 @@ export function ImageUploader({
     accept: IMAGE_ACCEPT,
     maxSize: maxSizeMb * 1024 * 1024,
     multiple: false,
-    disabled,
+    disabled: disabled || uploading,
     // Restate the reason ourselves: react-dropzone's own message is a raw byte
     // count, and its type error does not say which formats would have worked.
     onDropRejected: (rejections: FileRejection[]) => {
@@ -135,18 +144,35 @@ export function ImageUploader({
         {preview ? (
           <>
             <img src={preview} alt="" className="absolute inset-0 size-full object-cover" />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setError(null);
-                onChange?.(null);
-              }}
-              aria-label="Remove image"
-              className="absolute right-2.5 top-2.5 inline-flex size-9 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm transition-colors hover:bg-black/85"
-            >
-              <X className="size-4" />
-            </button>
+            {uploading ? (
+              <div
+                role="status"
+                className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-black/65 px-4 py-3 text-white backdrop-blur-sm"
+              >
+                <Loader2 className="size-4 shrink-0 animate-spin" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-semibold">
+                    {pct > 0 ? `Uploading… ${Math.round(pct)}%` : "Uploading…"}
+                  </p>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/25">
+                    <div className="h-full rounded-full bg-white transition-[width] duration-200" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setError(null);
+                  onChange?.(null);
+                }}
+                aria-label="Remove image"
+                className="absolute right-2.5 top-2.5 inline-flex size-9 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm transition-colors hover:bg-black/85"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">

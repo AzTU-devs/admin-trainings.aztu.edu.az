@@ -67,8 +67,9 @@ whole file:
 nginx must stay **above** the backend ceiling: it is the outermost limit, and a
 request it rejects never reaches the backend's own validation, so the user gets
 an opaque 413 instead of a typed error. The ~38 MB of headroom covers multipart
-framing and headers. Images (`10`) and documents (`25`) are far below this and
-need no separate nginx rule.
+framing and headers. Images (`200`) and documents (`200`) are below this too and
+need no separate nginx rule — they go multipart to `POST /api/media`, which the
+API caps at 210 MB per file (`spring.servlet.multipart.max-file-size`).
 
 Two related settings in the same block, both about slow connections rather than
 large ones:

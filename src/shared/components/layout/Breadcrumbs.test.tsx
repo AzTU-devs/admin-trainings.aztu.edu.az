@@ -36,6 +36,13 @@ describe("Breadcrumbs", () => {
     expect(screen.getByText("Python basics")).toHaveAttribute("aria-current", "page");
   });
 
+  it("leads a user profile's Users crumb to the Users list, and names the person", () => {
+    // /super/users is not a page: the list lives at /admin/users.
+    at("/super/users/9de8e9e1-46ec-45c2-9477-11fa4f40dd24", "Leyla Məmmədova");
+    expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/admin/users");
+    expect(screen.getByText("Leyla Məmmədova")).toHaveAttribute("aria-current", "page");
+  });
+
   it("keeps 'new' a page, not a record", () => {
     at("/admin/courses/new");
     expect(screen.getByText("New")).toHaveAttribute("aria-current", "page");

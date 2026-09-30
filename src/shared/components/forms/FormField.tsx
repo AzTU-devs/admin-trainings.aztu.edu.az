@@ -59,7 +59,7 @@ export function FormField<TFieldValues extends FieldValues>({
                 <p className="text-[12.5px] leading-snug text-ink-3">{description}</p>
               )}
               {error && (
-                <p className="text-[12.5px] font-medium leading-snug text-danger">{error}</p>
+                <p data-field-error className="text-[12.5px] font-medium leading-snug text-danger">{error}</p>
               )}
             </>
           );

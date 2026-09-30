@@ -1,17 +1,17 @@
-import { Languages, Layers, MapPin, MonitorPlay, Users, Wallet } from "lucide-react";
+import { Languages, Layers, MonitorPlay, Users, Wallet } from "lucide-react";
 import { CourseCover } from "@shared/components/bright";
 import { Card } from "@shared/components/ui/Card";
 import { MediaImage } from "@shared/components/ui/MediaImage";
 import { categoryStyle } from "@shared/lib/categoryStyle";
 import { cn } from "@shared/lib/cn";
-import { COURSE_TYPE } from "@shared/types/lms";
+import { COURSE_TYPE_LABEL } from "@shared/types/lms";
 import { useCourseCategories } from "@features/courses/hooks/useCourseCategories";
 import {
   CourseLevelValue,
   CoursePriceValue,
   CourseTypeValue,
-  EnumText,
 } from "@features/courses/components/courseCells";
+import { COURSE_TYPE_ICON } from "@features/courses/lib/courseType";
 import type { CourseDto } from "@features/courses/types";
 
 /**
@@ -30,7 +30,7 @@ import type { CourseDto } from "@features/courses/types";
  */
 export function CourseSummaryCard({ course, className }: { course: CourseDto; className?: string }) {
   const categories = useCourseCategories(course.categoryIds);
-  const TypeIcon = course.courseType === COURSE_TYPE.OFFLINE ? MapPin : MonitorPlay;
+  const TypeIcon = COURSE_TYPE_ICON[course.courseType] ?? MonitorPlay;
 
   return (
     <Card className={cn("overflow-hidden", className)}>
@@ -46,7 +46,7 @@ export function CourseSummaryCard({ course, className }: { course: CourseDto; cl
           <div className="ov left-3 top-3 hidden xl:block">
             <span className="pill pill-glass">
               <TypeIcon aria-hidden />
-              <EnumText>{course.courseType}</EnumText>
+              <span>{COURSE_TYPE_LABEL[course.courseType] ?? course.courseType}</span>
             </span>
           </div>
         </CourseCover>
@@ -79,7 +79,7 @@ export function CourseSummaryCard({ course, className }: { course: CourseDto; cl
           {/* Wide screens: label / value rows, like the website's enrol card. */}
           <dl className="mt-4 hidden border-t border-line text-[13.5px] xl:block">
             <Fact icon={<TypeIcon />} label="Type">
-              <EnumText>{course.courseType}</EnumText>
+              {COURSE_TYPE_LABEL[course.courseType] ?? course.courseType}
             </Fact>
             <Fact icon={<Layers />} label="Level">
               <CourseLevelValue level={course.level} />

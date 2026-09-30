@@ -42,6 +42,8 @@ export const ROUTES = {
   superSystemMonitoring: "/super/system-monitoring",
   superApiLogs: "/super/api-logs",
   superSecurity: "/super/security",
+  /** One account's deep profile (expert and İştirakçi data, sessions, audit). Reached from people tables, not the menu. */
+  superUserProfile: (userId: string | number = ":userId") => `/super/users/${userId}`,
 
   // Shared
   profile: "/profile",

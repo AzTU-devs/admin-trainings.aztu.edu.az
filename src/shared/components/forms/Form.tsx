@@ -1,13 +1,19 @@
-import { FormProvider, type UseFormReturn, type FieldValues } from "react-hook-form";
+import { FormProvider, type FieldErrors, type UseFormReturn, type FieldValues } from "react-hook-form";
 import { cn } from "@shared/lib/cn";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyUseFormReturn<T extends FieldValues> = UseFormReturn<T, any, any>;
 
 interface FormProps<TFieldValues extends FieldValues>
-  extends Omit<React.FormHTMLAttributes<HTMLFormElement>, "onSubmit"> {
+  extends Omit<React.FormHTMLAttributes<HTMLFormElement>, "onSubmit" | "onInvalid"> {
   form: AnyUseFormReturn<TFieldValues>;
   onSubmit: (values: TFieldValues) => void | Promise<void>;
+  /**
+   * Called instead of `onSubmit` when validation fails. A long form needs it:
+   * the failing field can sit a screen away from the save button, and without
+   * a word from the form the click looks like it did nothing.
+   */
+  onInvalidSubmit?: (errors: FieldErrors<TFieldValues>) => void;
 }
 
 /**
@@ -22,6 +28,7 @@ interface FormProps<TFieldValues extends FieldValues>
 export function Form<TFieldValues extends FieldValues>({
   form,
   onSubmit,
+  onInvalidSubmit,
   children,
   className,
   ...rest
@@ -30,7 +37,7 @@ export function Form<TFieldValues extends FieldValues>({
     <FormProvider {...form}>
       <form
         noValidate
-        onSubmit={form.handleSubmit(onSubmit)}
+        onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)}
         className={cn("space-y-5", className)}
         {...rest}
       >

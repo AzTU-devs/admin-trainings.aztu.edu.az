@@ -36,6 +36,12 @@ export interface TutorProfileDto {
   ratingAvg?: number;
   ratingCount: number;
   expertiseCategoryIds: UUID[];
+  /**
+   * The expert's own areas: free-text labels beside the catalogue categories
+   * (they create no category). Always an array from an API that has the field;
+   * absent from older builds, so read it as `?? []`.
+   */
+  customExpertise?: string[];
 }
 
 /**
@@ -43,8 +49,9 @@ export interface TutorProfileDto {
  * and `PATCH /api/admin/tutors/{tutorId}`.
  *
  * Merge-patch: an absent key leaves the stored value alone, while `null` — or
- * `""` for text — clears it. `expertiseCategoryIds` replaces the areas when sent
- * and may not be empty. Approval status is deliberately not here: it moves only
+ * `""` for text — clears it. `expertiseCategoryIds` and `customExpertise` each
+ * replace their list when sent (`[]` clears it); together they must leave at
+ * least one area. Approval status is deliberately not here: it moves only
  * through the decision endpoint.
  */
 export interface UpdateTutorProfileRequest {
@@ -64,4 +71,6 @@ export interface UpdateTutorProfileRequest {
   orcid?: string;
   githubUrl?: string;
   expertiseCategoryIds?: UUID[];
+  /** The expert's own areas, normalised by the API (trimmed, de-duplicated). */
+  customExpertise?: string[];
 }

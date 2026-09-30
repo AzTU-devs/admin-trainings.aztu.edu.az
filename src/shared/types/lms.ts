@@ -14,8 +14,24 @@ export type CourseStatus = (typeof COURSE_STATUS)[keyof typeof COURSE_STATUS];
 export const COURSE_TYPE = {
   ONLINE: "ONLINE",
   OFFLINE: "OFFLINE",
+  /** In person, held once: a single date with a start and end time. */
+  ONE_TIME: "ONE_TIME",
 } as const;
 export type CourseType = (typeof COURSE_TYPE)[keyof typeof COURSE_TYPE];
+
+export const COURSE_TYPE_LABEL: Record<CourseType, string> = {
+  ONLINE: "Online",
+  OFFLINE: "Offline",
+  ONE_TIME: "One-time",
+};
+
+/**
+ * Whether a course of this type happens in a room. ONE_TIME courses carry their
+ * date, times, seats and address in the same `offlineDetails` block as OFFLINE.
+ */
+export function isInPerson(type: CourseType | undefined | null): boolean {
+  return type === COURSE_TYPE.OFFLINE || type === COURSE_TYPE.ONE_TIME;
+}
 
 export const COURSE_LEVEL = {
   BEGINNER: "BEGINNER",

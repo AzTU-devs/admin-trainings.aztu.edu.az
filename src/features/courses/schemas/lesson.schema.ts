@@ -3,7 +3,8 @@ import { LESSON_CONTENT_TYPE } from "@shared/types/lms";
 
 export const lessonSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
-  description: z.string().max(5000).optional(),
+  // Rich-text HTML, so the API's cap counts markup.
+  description: z.string().max(20_000, "This description is too long").optional(),
   contentType: z.enum([
     LESSON_CONTENT_TYPE.VIDEO,
     LESSON_CONTENT_TYPE.TEXT,

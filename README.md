@@ -121,7 +121,7 @@ Two things about these files are deliberate rather than incidental:
 
 ### Upload ceilings
 
-`VITE_UPLOAD_MAX_IMAGE_MB` (10) and `VITE_UPLOAD_MAX_VIDEO_MB` (512) are **client-side
+`VITE_UPLOAD_MAX_IMAGE_MB` (200), `VITE_UPLOAD_MAX_DOCUMENT_MB` (200) and `VITE_UPLOAD_MAX_VIDEO_MB` (512) are **client-side
 pre-checks** so an oversized or unsupported file is refused instantly instead of after a long
 upload and an opaque 413. The real enforcement is the API's `app.uploads.max-*-mb` plus its
 signature-based allowlist, and nginx's `client_max_body_size 550m` sits above both. Raising one

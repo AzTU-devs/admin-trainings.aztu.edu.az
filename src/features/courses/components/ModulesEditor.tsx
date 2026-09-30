@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { Button } from "@shared/components/ui/Button";
 import { Input } from "@shared/components/ui/Input";
-import { Textarea } from "@shared/components/ui/Textarea";
 import { Badge } from "@shared/components/ui/Badge";
 import { Checkbox } from "@shared/components/ui/Checkbox";
 import { Spinner } from "@shared/components/ui/Spinner";
@@ -29,6 +28,9 @@ import { cn } from "@shared/lib/cn";
 import { formatEnum } from "@shared/lib/enums";
 import type { HueClass } from "@shared/lib/categoryStyle";
 import { FileDropzone } from "@shared/components/forms/FileDropzone";
+import { RichTextEditor } from "@shared/components/forms/RichTextEditor";
+import { RichTextView } from "@shared/components/ui/RichTextView";
+import { isRichTextEmpty } from "@shared/lib/richText";
 import {
   ANY_MEDIA_ACCEPT,
   DOCUMENT_ACCEPT,
@@ -93,7 +95,7 @@ function acceptFor(contentType: LessonContentType): Accept {
 /**
  * Per-kind size caps, read from config rather than written in prose: the hint used
  * to promise "up to 100MB" for every kind, which matched no limit on either side
- * (the real ceilings are 512 MB video, 25 MB PDF, 10 MB image).
+ * (the real ceilings are 512 MB video, 200 MB PDF, 200 MB image).
  */
 const ACCEPT_HINT: Record<LessonContentType, string> = {
   VIDEO: `${VIDEO_FORMATS_LABEL}, up to ${env.uploads.maxVideoMb} MB`,
@@ -217,9 +219,9 @@ export function ModulesEditor({
     const orderIndex = editing ? editing.orderIndex : (modules?.length ?? 0);
     try {
       if (editing) {
-        await updateModule({ courseId, moduleId: editing.id, body: { ...values, orderIndex } }).unwrap();
+        await updateModule({ courseId, moduleId: editing.id, body: { ...withText(values), orderIndex } }).unwrap();
       } else {
-        await addModule({ courseId, body: { ...values, orderIndex } }).unwrap();
+        await addModule({ courseId, body: { ...withText(values), orderIndex } }).unwrap();
       }
       toast.success(editing ? "Module updated" : "Module added");
       setModuleDialog({ open: false, editing: null });
@@ -232,7 +234,7 @@ export function ModulesEditor({
     if (!lessonDialog) return;
     const { editing, moduleId, lessonCount } = lessonDialog;
     const orderIndex = editing ? editing.orderIndex : lessonCount;
-    const body = { ...values, orderIndex };
+    const body = { ...withText(values), orderIndex };
     try {
       if (editing) {
         await updateLesson({ courseId, lessonId: editing.id, body }).unwrap();
@@ -281,8 +283,8 @@ export function ModulesEditor({
                   <p className="mt-0.5 text-[13.5px] text-ink-3">
                     {m.lessons.length} lesson{m.lessons.length === 1 ? "" : "s"}
                   </p>
-                  {m.description && (
-                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-2">{m.description}</p>
+                  {!isRichTextEmpty(m.description) && (
+                    <RichTextView value={m.description} className="mt-2 max-w-2xl" />
                   )}
                 </div>
                 <div className="-mr-1 flex shrink-0 items-center gap-0.5">
@@ -366,7 +368,7 @@ export function ModulesEditor({
 
       {/* Module dialog */}
       <Dialog open={moduleDialog.open} onOpenChange={(o) => setModuleDialog((s) => ({ ...s, open: o }))}>
-        <DialogContent size="md" aria-describedby={undefined}>
+        <DialogContent size="lg" aria-describedby={undefined}>
           <DialogHeader icon={<ListTree />}>
             <DialogTitle>{moduleDialog.editing ? "Edit module" : "Add module"}</DialogTitle>
           </DialogHeader>
@@ -375,7 +377,16 @@ export function ModulesEditor({
               {({ field, invalid }) => <Input {...field} value={field.value as string} invalid={invalid} />}
             </FormField>
             <FormField<ModuleFormValues> name="description" label="Description">
-              {({ field, invalid }) => <Textarea {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
+              {({ field, invalid }) => (
+                <RichTextEditor
+                  value={field.value as string}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  invalid={invalid}
+                  minHeight="sm"
+                  ariaLabel="Module description"
+                />
+              )}
             </FormField>
             <DialogFooter>
               <Button variant="secondary" type="button" onClick={() => setModuleDialog({ open: false, editing: null })}>
@@ -391,7 +402,7 @@ export function ModulesEditor({
 
       {/* Lesson dialog */}
       <Dialog open={!!lessonDialog} onOpenChange={(o) => !o && setLessonDialog(null)}>
-        <DialogContent size="md" aria-describedby={undefined}>
+        <DialogContent size="lg" aria-describedby={undefined}>
           <DialogHeader icon={<FileText />}>
             <DialogTitle>{lessonDialog?.editing ? "Edit lesson" : "Add lesson"}</DialogTitle>
           </DialogHeader>
@@ -437,7 +448,15 @@ export function ModulesEditor({
               )}
             </FormField>
             <FormField<LessonFormValues> name="description" label="Description">
-              {({ field, invalid }) => <Textarea {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
+              {({ field, invalid }) => (
+                <RichTextEditor
+                  value={field.value as string}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  invalid={invalid}
+                  ariaLabel="Lesson description"
+                />
+              )}
             </FormField>
             <div>
               <Label>Preview</Label>
@@ -498,4 +517,9 @@ export function ModulesEditor({
       />
     </div>
   );
+}
+
+/** An emptied editor still holds `<p></p>`; the API should store no description, not that. */
+function withText<T extends { description?: string }>(values: T): T {
+  return { ...values, description: isRichTextEmpty(values.description) ? "" : values.description };
 }

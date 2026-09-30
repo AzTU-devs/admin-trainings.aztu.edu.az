@@ -31,6 +31,14 @@ interface VideoUploaderProps {
    */
   uploader?: (file: File, onProgress: (pct: number) => void, signal: AbortSignal) => Promise<string>;
   onUploaded?: (url: string) => void;
+  /**
+   * Start the transfer as soon as a file passes the checks, instead of waiting
+   * for the start button. For forms that save a media id: a picked file that
+   * was never sent looks attached but saves nothing.
+   */
+  autoStart?: boolean;
+  /** Told when a transfer starts and when it settles, so a form can hold its save. */
+  onBusyChange?: (busy: boolean) => void;
   maxSizeMb?: number;
   disabled?: boolean;
   className?: string;
@@ -54,6 +62,8 @@ export function VideoUploader({
   onChange,
   uploader,
   onUploaded,
+  autoStart,
+  onBusyChange,
   maxSizeMb = env.uploads.maxVideoMb,
   disabled,
   className,
@@ -76,6 +86,7 @@ export function VideoUploader({
   const controllerRef = useRef<AbortController | null>(null);
   /** Distinguishes the stop button's abort from the cancel button's — see below. */
   const cancelledRef = useRef(false);
+  const startRef = useRef<((file: File) => Promise<void>) | null>(null);
 
   const status: Status = phase ?? (picked ? "selected" : storedUrl ? "done" : "idle");
   const preview = objectUrl ?? storedUrl;
@@ -161,8 +172,11 @@ export function VideoUploader({
       setPhase(null);
       setPicked(file);
       onChange?.(file);
+      // Through the ref: `startUpload` is declared below and recreated on every
+      // render, and the ref always holds the current one.
+      if (autoStart) void startRef.current?.(file);
     },
-    [maxSizeMb, onChange, refusePick],
+    [maxSizeMb, onChange, refusePick, autoStart],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -182,10 +196,10 @@ export function VideoUploader({
     },
   });
 
-  const startUpload = async () => {
-    if (!uploader || !picked) return;
+  const startUpload = async (file: File | null = picked) => {
+    if (!uploader || !file) return;
     // Guards against a parent that supplied the File as `value`, bypassing onDrop.
-    const problem = validateVideoFile(picked, maxSizeMb);
+    const problem = validateVideoFile(file, maxSizeMb);
     if (problem) {
       setPhase("error");
       setError(problem);
@@ -196,8 +210,9 @@ export function VideoUploader({
     cancelledRef.current = false;
     setPhase("uploading");
     setError(null);
+    onBusyChange?.(true);
     try {
-      const url = await uploader(picked, setProgress, controllerRef.current.signal);
+      const url = await uploader(file, setProgress, controllerRef.current.signal);
       setPhase("done");
       setProgress(100);
       onUploaded?.(url);
@@ -218,8 +233,12 @@ export function VideoUploader({
       setPhase("error");
       setError((e as Error).message || "Upload failed");
       toast.error((e as Error).message || "Upload failed");
+    } finally {
+      onBusyChange?.(false);
     }
   };
+
+  startRef.current = startUpload;
 
   const cancel = () => {
     cancelledRef.current = true;
@@ -306,7 +325,7 @@ export function VideoUploader({
               {(status === "selected" || status === "stopped" || status === "error") && uploader && (
                 <button
                   type="button"
-                  onClick={startUpload}
+                  onClick={() => void startUpload()}
                   className="inline-flex size-9 items-center justify-center rounded-full bg-navy text-on-navy transition-colors hover:bg-navy-hover"
                   aria-label={status === "selected" ? "Start upload" : "Restart upload"}
                 >

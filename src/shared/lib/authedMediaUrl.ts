@@ -25,7 +25,9 @@ export async function resolveAuthedMediaUrl(
   if (!needsAuth(url)) return { url, revoke: false };
 
   const path = url.startsWith(env.api.baseUrl) ? url.slice(env.api.baseUrl.length) : url;
-  const res = await httpClient.get(path, { responseType: "blob" });
+  // No request timeout: a stored cover can be up to 200 MB now, and the client's
+  // 30 s default cut large previews off on slow links, leaving an empty box.
+  const res = await httpClient.get(path, { responseType: "blob", timeout: 0 });
   return { url: URL.createObjectURL(res.data as Blob), revoke: true };
 }
 
