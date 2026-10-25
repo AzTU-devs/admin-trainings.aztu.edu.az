@@ -145,15 +145,24 @@ export default function AdminRoomRequestsPage() {
 
   const seriesActions = useCallback(
     (s: RoomBookingSeriesDto) => (
+      // Compact on purpose: with the details as a labelled icon and the decision pair
+      // stacked, the long-term table fits a 1280px screen beside the sidebar. In one
+      // row the three buttons alone took about 360px and pushed Approve/Reject out of view.
       <>
-        <Button variant="ghost" size="sm" leftIcon={<List className="size-4" />} onClick={stop(() => setDetails(s))}>
-          Details
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Details"
+          title="Details"
+          onClick={stop(() => setDetails(s))}
+        >
+          <List className="size-4" />
         </Button>
         {s.status === BOOKING_STATUS.PENDING ? (
-          <>
+          <div className="flex flex-col items-stretch gap-1">
             <ApproveButton onClick={stop(() => openSeriesDecision(s, "APPROVED"))} />
             <RejectButton onClick={stop(() => openSeriesDecision(s, "REJECTED"))} />
-          </>
+          </div>
         ) : null}
       </>
     ),
@@ -166,11 +175,12 @@ export default function AdminRoomRequestsPage() {
       {
         header: "Requested by",
         cell: ({ row }) => <TutorCell name={row.original.tutorName} email={row.original.tutorEmail} />,
-        meta: { hideBelow: "xl" },
+        // Shown in the details dialog on narrower screens.
+        meta: { hideBelow: "2xl" },
       },
       { header: "Period", cell: ({ row }) => <PeriodCell series={row.original} /> },
       { header: "Schedule", cell: ({ row }) => <ScheduleCell series={row.original} /> },
-      { header: "Fee", cell: ({ row }) => <FeeCell booking={row.original} />, meta: { hideBelow: "lg" } },
+      { header: "Fee", cell: ({ row }) => <FeeCell booking={row.original} />, meta: { hideBelow: "xl" } },
       { header: "Status", cell: ({ row }) => <SeriesStatusCell series={row.original} /> },
       {
         id: "actions",

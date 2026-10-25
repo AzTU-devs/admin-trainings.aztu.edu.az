@@ -265,9 +265,10 @@ export default function CalendarPage() {
             noEventsText="Nothing scheduled in this period."
             eventTimeFormat={TIME_FORMAT}
             slotHeaderFormat={TIME_FORMAT}
-            scrollTime="08:00:00"
+            // 07:30, not 08:00: at 08:00 the all-day row covered the 08:00 label.
+            scrollTime="07:30:00"
             // A month or an agenda grows with its content; the time grids
-            // scroll inside a fixed frame, opened at 08:00.
+            // scroll inside a fixed frame, opened at the start of the working day.
             height={timeGrid ? 720 : "auto"}
           />
         </div>
