@@ -47,6 +47,8 @@ const SystemMonitoringPage = lazy(() => import("@features/system-monitoring/page
 const ApiLogsPage = lazy(() => import("@features/api-logs/pages/ApiLogsPage"));
 const SecurityPage = lazy(() => import("@features/security/pages/SecurityPage"));
 const UserProfilePage = lazy(() => import("@features/user-profile/pages/UserProfilePage"));
+// FullCalendar and its styles only load with this route.
+const CalendarPage = lazy(() => import("@features/calendar/pages/CalendarPage"));
 
 /** Shown while a lazily-loaded route chunk is in flight. */
 function RouteFallback() {
@@ -126,6 +128,7 @@ export default function App() {
                 <Route path={ROUTES.superApiLogs} element={<ApiLogsPage />} />
                 <Route path={ROUTES.superSecurity} element={<SecurityPage />} />
                 <Route path={ROUTES.superUserProfile()} element={<UserProfilePage />} />
+                <Route path={ROUTES.superCalendar} element={<CalendarPage />} />
               </Route>
 
               {/* Shared authenticated pages */}

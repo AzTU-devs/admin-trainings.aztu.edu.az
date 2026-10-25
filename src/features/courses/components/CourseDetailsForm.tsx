@@ -42,7 +42,7 @@ import {
   sessionHours,
   type CourseFormValues,
 } from "@features/courses/schemas/course.schema";
-import { COURSE_LEVEL, COURSE_TYPE, COURSE_TYPE_LABEL } from "@shared/types/lms";
+import { COURSE_LEVEL, COURSE_TYPE, COURSE_TYPE_LABEL, type CourseType } from "@shared/types/lms";
 import type { CourseDto, CreateCourseRequest, UpdateCourseRequest } from "@features/courses/types";
 import type { NormalizedError } from "@lib/axios/httpClient";
 
@@ -63,9 +63,13 @@ interface Props {
    * Extra sections rendered above the submit button — the admin create screen
    * uses it for the teaching roster, which the backend takes alongside these
    * fields but which is not part of the course itself. Pass a <FormCard> so it
-   * sits in the stack like the other sections.
+   * sits in the stack like the other sections. As a function it is handed the
+   * selected type. For a one-time training the extras sit right under its
+   * session card instead: who leads it and who attends belong with when it is.
    */
-  extra?: React.ReactNode;
+  extra?: React.ReactNode | ((courseType: CourseType) => React.ReactNode);
+  /** The type a new course starts as (e.g. from `?type=ONE_TIME`); ignored when `initial` is given. */
+  defaultCourseType?: CourseType;
 }
 
 /*
@@ -97,7 +101,7 @@ const TYPE_HINT: Record<CourseFormValues["courseType"], string> = {
  * received null" on submit and never sent a request. Every nullable field is
  * normalised here, once, before it reaches the form.
  */
-function toFormValues(initial?: CourseDto): CourseFormValues {
+function toFormValues(initial?: CourseDto, defaultCourseType?: CourseType): CourseFormValues {
   const off = initial?.offlineDetails;
   return {
     slug: initial?.slug ?? "",
@@ -111,7 +115,7 @@ function toFormValues(initial?: CourseDto): CourseFormValues {
     syllabusItems: initial?.syllabusItems?.length
       ? initial.syllabusItems.map((i) => ({ title: i.title ?? "", description: i.description ?? "" }))
       : legacySyllabusToItems(initial?.syllabus),
-    courseType: initial?.courseType ?? COURSE_TYPE.ONLINE,
+    courseType: initial?.courseType ?? defaultCourseType ?? COURSE_TYPE.ONLINE,
     level: initial?.level ?? COURSE_LEVEL.BEGINNER,
     language: initial?.language ?? "az",
     free: initial?.free ?? false,
@@ -231,12 +235,19 @@ function errorMessages(errors: FieldErrors): string[] {
   return [...new Set(out)];
 }
 
-export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "Save", extra }: Props) {
+export function CourseDetailsForm({
+  initial,
+  editing,
+  onSubmit,
+  submitLabel = "Save",
+  extra,
+  defaultCourseType,
+}: Props) {
   const { isTutor, isSuperAdmin } = usePermissions();
 
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: toFormValues(initial),
+    defaultValues: toFormValues(initial, defaultCourseType),
   });
 
   const isFree = useWatch({ control: form.control, name: "free" });
@@ -247,6 +258,8 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
   const endTime = useWatch({ control: form.control, name: "offlineDetails.endTime" });
   const thumbnailMediaId = useWatch({ control: form.control, name: "thumbnailMediaId" });
   const hours = sessionHours(startTime, endTime);
+  const extras = typeof extra === "function" ? extra(courseType) : extra;
+  const extrasAfterSession = courseType === COURSE_TYPE.ONE_TIME;
 
   /*
    * Media previews. A cover picked in this session is previewed from the local
@@ -538,6 +551,7 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
           <PlaceFields />
         </FormCard>
       )}
+      {extrasAfterSession && extras}
 
       {courseType === COURSE_TYPE.ONLINE && (
         <FormCard icon={<MonitorPlay />} title="Online options">
@@ -642,7 +656,7 @@ export function CourseDetailsForm({ initial, editing, onSubmit, submitLabel = "S
         </FormField>
       </FormCard>
 
-      {extra}
+      {!extrasAfterSession && extras}
 
       {/* A sticky save bar: it rides the bottom of the viewport while the
           form scrolls past, so a change near the top can be saved without a

@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   BookOpen,
+  CalendarDays,
   GraduationCap,
   Video,
   Users,
@@ -125,6 +126,15 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: BookOpen,
         path: ROUTES.adminCourses,
         roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+      },
+      {
+        // Next to Courses because it is a view of them; the API's
+        // calendar:view is granted to SUPER_ADMIN only.
+        id: "training-calendar",
+        label: "Training calendar",
+        icon: CalendarDays,
+        path: ROUTES.superCalendar,
+        roles: [ROLES.SUPER_ADMIN],
       },
       {
         id: "tutors",

@@ -20,5 +20,8 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // macOS writes `._name` metadata twins next to every file on non-Apple
+    // drives; they match the pattern above but are binary, not tests.
+    exclude: ["**/node_modules/**", "**/._*"],
   },
 });

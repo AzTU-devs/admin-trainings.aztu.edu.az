@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus } from "lucide-react";
+import { CalendarPlus, Plus } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
@@ -43,9 +43,20 @@ export default function AdminCoursesListPage() {
         title="Courses"
         description="Every course on the platform. Create one, edit it and publish it."
         actions={
-          <Button leftIcon={<Plus className="size-4" />} onClick={() => navigate(ROUTES.adminCourseNew)}>
-            New course
-          </Button>
+          <>
+            {/* A one-time training opens the same form with its type, tutors
+                and İştirakçilər ready to fill in one go. */}
+            <Button
+              variant="secondary"
+              leftIcon={<CalendarPlus className="size-4" />}
+              onClick={() => navigate(ROUTES.adminCourseNewOneTime)}
+            >
+              New one-time training
+            </Button>
+            <Button leftIcon={<Plus className="size-4" />} onClick={() => navigate(ROUTES.adminCourseNew)}>
+              New course
+            </Button>
+          </>
         }
       />
 

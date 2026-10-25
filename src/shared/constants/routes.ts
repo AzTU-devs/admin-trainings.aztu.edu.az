@@ -25,6 +25,8 @@ export const ROUTES = {
   adminTutors: "/admin/tutors",
   adminCourses: "/admin/courses",
   adminCourseNew: "/admin/courses/new",
+  /** The new-course page with the type preset to ONE_TIME — a link target, not a route pattern. */
+  adminCourseNewOneTime: "/admin/courses/new?type=ONE_TIME",
   adminCourseEdit: (id: string | number = ":id") => `/admin/courses/${id}`,
   adminCourseParticipants: (courseId: string | number = ":courseId") =>
     `/admin/courses/${courseId}/participants`,
@@ -42,6 +44,8 @@ export const ROUTES = {
   superSystemMonitoring: "/super/system-monitoring",
   superApiLogs: "/super/api-logs",
   superSecurity: "/super/security",
+  /** Every training on the platform as a calendar (calendar:view). */
+  superCalendar: "/super/calendar",
   /** One account's deep profile (expert and İştirakçi data, sessions, audit). Reached from people tables, not the menu. */
   superUserProfile: (userId: string | number = ":userId") => `/super/users/${userId}`,
 

@@ -26,6 +26,16 @@ describe("filterMenuForRoles", () => {
     expect(ids).toEqual(expect.arrayContaining(["admin", "system"]));
   });
 
+  it("shows the training calendar to a super admin only, right after Courses", () => {
+    const adminItems = (roles: Parameters<typeof filterMenuForRoles>[1]) =>
+      filterMenuForRoles(MENU_GROUPS, roles)
+        .find((g) => g.id === "admin")
+        ?.items.map((i) => i.id) ?? [];
+    const superItems = adminItems([ROLES.SUPER_ADMIN]);
+    expect(superItems.indexOf("training-calendar")).toBe(superItems.indexOf("admin-courses") + 1);
+    expect(adminItems([ROLES.ADMIN])).not.toContain("training-calendar");
+  });
+
   it("always shows role-less items (the General group) to everyone", () => {
     expect(groupIds([ROLES.TUTOR])).toContain("general");
     expect(groupIds([ROLES.ADMIN])).toContain("general");

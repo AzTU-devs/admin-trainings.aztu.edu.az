@@ -1,0 +1,111 @@
+/* ==========================================================================
+   Training calendar — FullCalendar's Monarch theme on the dashboard tokens.
+
+   Monarch reads its whole palette from --fc-monarch-* variables (its own
+   palette files only set those). They are pointed at the Bright tokens here
+   instead, on :root, so they resolve against <html> — the element that
+   carries `.dark` — and follow the theme switch with no second block.
+   ========================================================================== */
+
+:root {
+  /* Event kinds. Light: a deep fill under white text (all ≥ 4.5:1). Night
+     redefines them below as pale fills under dark ink, like the night navy
+     button. */
+  --cal-one-time: var(--gold);
+  --cal-one-time-ink: var(--on-gold);
+  --cal-session: #003876;
+  --cal-session-ink: #ffffff;
+  --cal-course: oklch(0.5 0.09 172);
+  --cal-course-ink: #ffffff;
+  --cal-booking: oklch(0.5 0.15 318);
+  --cal-booking-ink: #ffffff;
+
+  --fc-monarch-primary: var(--navy);
+  --fc-monarch-primary-foreground: var(--on-navy);
+  --fc-monarch-primary-over: var(--navy-hover);
+  --fc-monarch-primary-down: var(--navy-hover);
+  --fc-monarch-secondary: var(--navy-tint);
+  --fc-monarch-secondary-foreground: var(--navy);
+  --fc-monarch-secondary-over: color-mix(in oklch, var(--navy-tint) 88%, var(--navy));
+  --fc-monarch-secondary-down: color-mix(in oklch, var(--navy-tint) 80%, var(--navy));
+  --fc-monarch-tertiary: var(--gold);
+  --fc-monarch-tertiary-foreground: var(--on-gold);
+  --fc-monarch-tertiary-over: color-mix(in oklch, var(--gold) 90%, white);
+  --fc-monarch-tertiary-down: color-mix(in oklch, var(--gold) 82%, white);
+
+  --fc-monarch-event: var(--cal-session);
+  --fc-monarch-event-contrast: var(--cal-session-ink);
+  --fc-monarch-highlight: color-mix(in oklch, var(--navy) 10%, transparent);
+  --fc-monarch-now: var(--danger);
+
+  --fc-monarch-selected: var(--navy);
+  --fc-monarch-selected-foreground: var(--on-navy);
+  --fc-monarch-selected-over: var(--navy-hover);
+  --fc-monarch-selected-down: var(--navy-hover);
+  --fc-monarch-outline: var(--focus);
+
+  --fc-monarch-popover: var(--raised);
+  --fc-monarch-popover-foreground: var(--ink);
+
+  --fc-monarch-background: var(--surface);
+  --fc-monarch-faint: color-mix(in oklch, var(--ink) 4%, transparent);
+  --fc-monarch-muted: color-mix(in oklch, var(--ink) 7%, transparent);
+  --fc-monarch-strong: color-mix(in oklch, var(--ink) 12%, transparent);
+  --fc-monarch-stronger: color-mix(in oklch, var(--ink) 16%, transparent);
+  --fc-monarch-strongest: color-mix(in oklch, var(--ink) 20%, transparent);
+
+  --fc-monarch-foreground: var(--ink);
+  --fc-monarch-strong-foreground: var(--ink);
+  --fc-monarch-muted-foreground: var(--ink-3);
+  --fc-monarch-faint-foreground: var(--ink-4);
+
+  --fc-monarch-border: var(--line);
+  --fc-monarch-strong-border: var(--line-2);
+}
+
+.dark {
+  --cal-one-time: var(--gold);
+  --cal-one-time-ink: var(--on-gold);
+  --cal-session: var(--navy);
+  --cal-session-ink: var(--on-navy);
+  --cal-course: oklch(0.8 0.09 172);
+  --cal-course-ink: oklch(0.22 0.04 172);
+  --cal-booking: oklch(0.8 0.1 318);
+  --cal-booking-ink: oklch(0.22 0.05 318);
+}
+
+/* The grid sits in a dashboard card: the dashboard's type, and its 14px base
+   rather than Monarch's 16px (the calendar's root is the wrapper's child). */
+.aztu-calendar > div {
+  font-family: var(--f-sans);
+  font-size: 14px;
+}
+
+/* A booking still waiting for a decision is drawn as tentative: stripes over
+   the kind's fill and a dashed edge, so it never reads as a confirmed slot.
+   (The fill itself is an inline variable FullCalendar sets per event, so it
+   is layered over rather than replaced.) */
+.aztu-calendar .cal-ev--pending {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, white 24%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+  outline: 1.5px dashed var(--cal-booking);
+  outline-offset: -1.5px;
+}
+
+/* The legend's pending swatch, the same pattern. */
+.cal-swatch--pending {
+  background-color: var(--cal-booking);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, white 40%, transparent) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+/* Every entry opens its details. */
+.aztu-calendar .cal-ev {
+  cursor: pointer;
+}

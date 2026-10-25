@@ -44,7 +44,7 @@ function BrandPanel() {
       {/* The soft disc in the corner — the field's one shape, as on the website. */}
       <span aria-hidden className="absolute -right-24 -top-28 -z-10 size-[380px] rounded-full bg-k-200" />
 
-      <Logo />
+      <Logo size="lg" />
 
       <div className="max-w-md">
         {/* The mosaic shrinks with the window's height (260px from ~820px

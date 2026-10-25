@@ -60,7 +60,7 @@ export function DateTile({
 }
 
 /** Two lines beside a date tile: the value in ink, the date under it in ink-3. */
-function TileCell({ tile, main, sub }: { tile?: React.ReactNode; main: React.ReactNode; sub?: React.ReactNode }) {
+export function TileCell({ tile, main, sub }: { tile?: React.ReactNode; main: React.ReactNode; sub?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       {tile}
@@ -126,8 +126,14 @@ export function RecurrenceCell({ rule }: { rule?: string }) {
   );
 }
 
-/** Amount in ink, currency after it in ink-3. */
-export function FeeCell({ booking, className }: { booking: RoomBookingDto; className?: string }) {
+/** Amount in ink, currency after it in ink-3 (a single booking's fee, or a series' total). */
+export function FeeCell({
+  booking,
+  className,
+}: {
+  booking: Pick<RoomBookingDto, "totalFee" | "currency">;
+  className?: string;
+}) {
   return (
     <span className={cn("whitespace-nowrap", className)}>
       <span className="font-semibold text-ink tabular-nums">{formatAmount(booking.totalFee)}</span>{" "}

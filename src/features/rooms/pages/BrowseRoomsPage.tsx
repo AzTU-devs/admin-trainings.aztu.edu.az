@@ -1,28 +1,11 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { CalendarPlus, ChevronLeft, ChevronRight, DoorOpen, MapPin, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, DoorOpen, MapPin, Users } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@shared/components/ui/Dialog";
-import { Form, FormSection } from "@shared/components/forms/Form";
-import { FormField } from "@shared/components/forms/FormField";
-import { Input } from "@shared/components/ui/Input";
 import { useListPortalRoomsQuery } from "@features/rooms/api/roomsApi";
-import { useCreateRoomBookingMutation } from "@features/room-requests/api/roomRequestsApi";
-import {
-  roomBookingSchema,
-  type RoomBookingFormValues,
-} from "@features/room-requests/schemas/roomRequest.schema";
+import { BookingRequestDialog } from "@features/room-requests/components/BookingRequestDialog";
 import type { RoomDto } from "@features/rooms/types";
 import { RoomVisual } from "@features/rooms/components/RoomVisual";
 import { RoomStatusBadge } from "@features/rooms/components/RoomStatusBadge";
@@ -31,18 +14,8 @@ import { formatAmount } from "@features/rooms/lib/money";
 export default function BrowseRoomsPage() {
   const [page, setPage] = useState(0);
   const { data, isLoading } = useListPortalRoomsQuery({ page, size: 12 });
+  // The room whose request dialog is open; the dialog starts from empty forms each time.
   const [borrowRoom, setBorrowRoom] = useState<RoomDto | null>(null);
-  const [createBooking] = useCreateRoomBookingMutation();
-
-  const form = useForm<RoomBookingFormValues>({
-    resolver: zodResolver(roomBookingSchema),
-    defaultValues: { roomId: "", offlineCourseId: "", startsAt: "", endsAt: "", recurrenceRule: "" },
-  });
-
-  const openBorrow = (room: RoomDto) => {
-    form.reset({ roomId: room.id, offlineCourseId: "", startsAt: "", endsAt: "", recurrenceRule: "" });
-    setBorrowRoom(room);
-  };
 
   const rooms = data?.content ?? [];
 
@@ -50,7 +23,7 @@ export default function BrowseRoomsPage() {
     <>
       <PageHeader
         title="Browse rooms"
-        description="Find an available classroom and request to borrow it for a session."
+        description="Find an available classroom and request it for one session, or for a whole period on chosen weekdays."
       />
 
       {isLoading ? (
@@ -60,7 +33,7 @@ export default function BrowseRoomsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} onBorrow={() => openBorrow(room)} />
+            <RoomCard key={room.id} room={room} onBorrow={() => setBorrowRoom(room)} />
           ))}
         </div>
       )}
@@ -91,50 +64,7 @@ export default function BrowseRoomsPage() {
         </div>
       )}
 
-      <Dialog open={borrowRoom !== null} onOpenChange={(o) => !o && setBorrowRoom(null)}>
-        <DialogContent size="md" aria-describedby={undefined}>
-          <DialogHeader icon={<CalendarPlus />}>
-            <DialogTitle>Request to borrow{borrowRoom ? ` · ${borrowRoom.name}` : ""}</DialogTitle>
-          </DialogHeader>
-          <Form
-            form={form}
-            onSubmit={async (values) => {
-              try {
-                await createBooking({
-                  roomId: values.roomId,
-                  offlineCourseId: values.offlineCourseId || undefined,
-                  startsAt: new Date(values.startsAt).toISOString(),
-                  endsAt: new Date(values.endsAt).toISOString(),
-                  recurrenceRule: values.recurrenceRule || undefined,
-                }).unwrap();
-                toast.success("Booking requested — an admin will review it");
-                setBorrowRoom(null);
-              } catch {
-                toast.error("Could not request booking");
-              }
-            }}
-          >
-            <FormSection title="">
-              <FormField<RoomBookingFormValues> name="startsAt" label="Starts at" required>
-                {({ field, invalid }) => <Input type="datetime-local" {...field} value={field.value as string} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="endsAt" label="Ends at" required>
-                {({ field, invalid }) => <Input type="datetime-local" {...field} value={field.value as string} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="offlineCourseId" label="Offline course ID" description="Optional — link this booking to one of your offline courses.">
-                {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
-              </FormField>
-              <FormField<RoomBookingFormValues> name="recurrenceRule" label="Recurrence (RRULE)" description="Optional, e.g. FREQ=WEEKLY;COUNT=8">
-                {({ field, invalid }) => <Input {...field} value={(field.value as string) ?? ""} invalid={invalid} />}
-              </FormField>
-            </FormSection>
-            <DialogFooter>
-              <Button variant="secondary" type="button" onClick={() => setBorrowRoom(null)}>Cancel</Button>
-              <Button type="submit" loading={form.formState.isSubmitting}>Request</Button>
-            </DialogFooter>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <BookingRequestDialog room={borrowRoom} open={borrowRoom !== null} onOpenChange={(o) => !o && setBorrowRoom(null)} />
     </>
   );
 }

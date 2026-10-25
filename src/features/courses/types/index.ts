@@ -216,6 +216,12 @@ export interface AdminCreateCourseRequest {
   tutorIds: UUID[];
   /** The tutor allowed to edit the course. Must be one of `tutorIds`. */
   authorizedTutorId: UUID;
+  /**
+   * Users seated on the course as it is created, each exactly as the admin
+   * "add participant" action does (ADMIN_GRANT). At most 500; an unknown or
+   * deleted user fails the whole create with 400 USER_NOT_FOUND.
+   */
+  participantUserIds?: UUID[];
 }
 
 /** Mirror of backend SetCourseTutorsRequest — a full roster replacement. */
