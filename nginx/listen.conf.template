@@ -1,0 +1,5 @@
+# The listen line of nginx/nginx.conf. The nginx image renders this file at container
+# start (its 20-envsubst-on-templates.sh) into /etc/nginx/listen/listen.conf, with
+# PORTAL_LISTEN from the environment: 8081 by default (Dockerfile), 127.0.0.1:8081 in
+# docker-compose.prod.yml.
+listen ${PORTAL_LISTEN};

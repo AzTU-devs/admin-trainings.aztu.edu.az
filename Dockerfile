@@ -18,6 +18,13 @@ FROM nginx:1.27-alpine AS runtime
 # SPA-aware nginx config (history fallback, gzip, /api + /ws proxy, security
 # headers).
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+# The listen address, rendered from PORTAL_LISTEN when the container starts. The
+# image's entrypoint writes templates to NGINX_ENVSUBST_OUTPUT_DIR; the copy made here
+# is the same default, so `nginx -t` below has a file to include at build time.
+ENV PORTAL_LISTEN=8081 \
+    NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/listen
+COPY nginx/listen.conf.template /etc/nginx/templates/listen.conf.template
+RUN mkdir -p /etc/nginx/listen && echo "listen 8081;" > /etc/nginx/listen/listen.conf
 # Snippets go OUTSIDE conf.d — the stock nginx.conf globs `conf.d/*.conf` into the
 # http context, which would load the header lists a second time at the wrong
 # level. All three are needed: nginx.conf includes security-headers.conf (SPA)

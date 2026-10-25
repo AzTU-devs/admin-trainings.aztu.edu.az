@@ -47,6 +47,13 @@ services:
     security_opt:
       - no-new-privileges:true
 
+    # Loopback only (see nginx/listen.conf.template). Host nginx proxies to
+    # 127.0.0.1:8081 and the healthcheck calls 127.0.0.1, so nothing legitimate needs
+    # more; on every interface the portal and its /api/ proxy were one firewall rule
+    # away from being reachable on the server's public address, past TLS.
+    environment:
+      PORTAL_LISTEN: 127.0.0.1:8081
+
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
       interval: 30s
