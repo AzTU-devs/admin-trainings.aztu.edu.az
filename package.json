@@ -82,7 +82,7 @@
     "vitest": "^4.1.7"
   },
   "overrides": {
-    "follow-redirects": "^1.16.1",
+    "follow-redirects": "1.16.2",
     "react-helmet-async": {
       "react": "^16.8.0 || ^17 || ^18 || ^19"
     },
