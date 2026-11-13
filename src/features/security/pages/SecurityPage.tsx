@@ -11,6 +11,7 @@ import {
   ShieldOff,
   ShieldPlus,
   TicketX,
+  Unlock,
   UserCog,
   type LucideIcon,
 } from "lucide-react";
@@ -42,12 +43,16 @@ import { Label } from "@shared/components/ui/Label";
 import { cn } from "@shared/lib/cn";
 // `FAILED_LOGIN` → "Failed login" (MFA / IP keep their capitals), as on every other page.
 import { formatEnum } from "@shared/lib/enums";
+import type { NormalizedError } from "@lib/axios/httpClient";
 import {
   useBlockIpMutation,
   useGetSecurityOverviewQuery,
+  useListBlockedIpsQuery,
   useListSecurityEventsQuery,
+  useUnblockIpMutation,
 } from "@features/security/api/securityApi";
 import type {
+  BlockedIp,
   SecurityEvent,
   SecurityEventKind,
   SecuritySeverity,
@@ -118,6 +123,16 @@ function eventDetail(e: SecurityEvent) {
   return e.message && norm(e.message) !== norm(e.kind) ? e.message : null;
 }
 
+/**
+ * Loopback and the wildcard address are this server itself: the public site's
+ * server calls the API from it. The API ignores such an entry (one stored by an
+ * earlier release refused every page of the site), so the list says so.
+ */
+function isServerItself(ip: string) {
+  const a = ip.trim().toLowerCase();
+  return /^127\./.test(a) || a === "::1" || a === "0:0:0:0:0:0:0:1" || a === "0.0.0.0" || a === "::" || a === "0:0:0:0:0:0:0:0";
+}
+
 const STAT_LABELS = ["Failed logins (24h)", "Locked accounts", "Suspicious logins (24h)", "Blocked IPs"] as const;
 const STAT_ICONS = [ShieldAlert, Lock, ShieldAlert, ShieldCheck] as const;
 
@@ -126,6 +141,21 @@ export default function SecurityPage() {
   const [page, setPage] = useState(0);
   const { data: events, isFetching: evLoading } = useListSecurityEventsQuery({ page, size: 20 });
   const [blockIp] = useBlockIpMutation();
+  const { data: blocked, isFetching: blockedLoading } = useListBlockedIpsQuery();
+  const [unblockIp] = useUnblockIpMutation();
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+
+  const unblock = async (entry: BlockedIp) => {
+    setUnblockingId(entry.id);
+    try {
+      await unblockIp(entry.id).unwrap();
+      toast.success(`${entry.ipAddress} unblocked`);
+    } catch (e) {
+      toast.error((e as NormalizedError).message || "Could not unblock IP");
+    } finally {
+      setUnblockingId(null);
+    }
+  };
 
   const [blockOpen, setBlockOpen] = useState(false);
   const [blockForm, setBlockForm] = useState({ ipAddress: "", reason: "" });
@@ -139,8 +169,9 @@ export default function SecurityPage() {
       toast.success("IP blocked");
       setBlockOpen(false);
       setBlockForm({ ipAddress: "", reason: "" });
-    } catch {
-      toast.error("Could not block IP");
+    } catch (e) {
+      // The API says why: not a single address, your own address, or this server.
+      toast.error((e as NormalizedError).message || "Could not block IP");
     } finally {
       setBlocking(false);
     }
@@ -262,6 +293,7 @@ export default function SecurityPage() {
         <TabsList>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="offenders">Top offenders</TabsTrigger>
+          <TabsTrigger value="blocked">Blocked IPs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="events">
@@ -319,6 +351,54 @@ export default function SecurityPage() {
                         onClick={() => { setBlockForm({ ipAddress: ip.ipAddress, reason: "Top offender" }); setBlockOpen(true); }}
                       >
                         Block
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="blocked">
+          <Card>
+            <CardHeader>
+              <CardTitle>Blocked IP addresses</CardTitle>
+              <CardDescription>
+                Requests from these addresses are refused everywhere, sign-in included. Unblocking takes effect immediately.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {blockedLoading && !blocked ? (
+                <p className="py-2 text-[13px] text-ink-3" aria-busy>Loading…</p>
+              ) : !blocked || blocked.length === 0 ? (
+                <SoftEmpty icon={<ShieldCheck />} title="No addresses are blocked." />
+              ) : (
+                <ul className="divide-y divide-line">
+                  {blocked.map((entry) => (
+                    <li key={entry.id} className="flex items-center gap-3 py-3.5 first:pt-1 last:pb-0 sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-mono text-[13.5px] font-semibold tracking-normal text-ink">{entry.ipAddress}</span>
+                          {isServerItself(entry.ipAddress) && (
+                            <Badge tone="warning" size="sm">Not enforced: this server</Badge>
+                          )}
+                        </p>
+                        <p className="text-[12.5px] text-ink-3 [overflow-wrap:anywhere]">
+                          {[entry.reason, entry.createdByEmail, new Date(entry.createdAt).toLocaleString()].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="shrink-0"
+                        leftIcon={<Unlock className="size-4" />}
+                        loading={unblockingId === entry.id}
+                        disabled={unblockingId !== null && unblockingId !== entry.id}
+                        onClick={() => unblock(entry)}
+                        aria-label={`Unblock ${entry.ipAddress}`}
+                      >
+                        Unblock
                       </Button>
                     </li>
                   ))}

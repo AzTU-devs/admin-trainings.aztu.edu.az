@@ -32,3 +32,13 @@ export interface SecurityOverview {
   recentEvents: SecurityEvent[];
   topOffendingIps: { ipAddress: string; count: number; countryCode?: string }[];
 }
+
+/** One entry of the IP blocklist (GET /super/security/blocked-ips). */
+export interface BlockedIp {
+  id: string;
+  ipAddress: string;
+  reason?: string | null;
+  createdBy?: string | null;
+  createdByEmail?: string | null;
+  createdAt: string;
+}
