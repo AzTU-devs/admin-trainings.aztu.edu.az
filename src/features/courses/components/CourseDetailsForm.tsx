@@ -118,7 +118,9 @@ function toFormValues(initial?: CourseDto, defaultCourseType?: CourseType): Cour
     courseType: initial?.courseType ?? defaultCourseType ?? COURSE_TYPE.ONLINE,
     level: initial?.level ?? COURSE_LEVEL.BEGINNER,
     language: initial?.language ?? "az",
-    free: initial?.free ?? false,
+    // A new course starts free: no payment provider is connected, so the
+    // website lists free courses only.
+    free: initial?.free ?? true,
     price: Number(initial?.price ?? 0),
     currency: initial?.currency ?? "AZN",
     categoryIds: initial?.categoryIds ?? [],

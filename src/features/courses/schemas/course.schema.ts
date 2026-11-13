@@ -88,6 +88,17 @@ export const courseSchema = z
   // Mirrors CourseService.validateTypeSpecific on the backend, so an in-person
   // course is caught here rather than coming back as a 400 after the round trip.
   .superRefine((v, ctx) => {
+    // Mirrors CourseService.requireConsistentPrice. "Paid" at 0 used to be the
+    // default for a new course; it saved, and the course then never showed on
+    // the website, whose catalogue lists free courses only while payments are off.
+    if (!v.free && !(v.price > 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["price"],
+        message: "A paid course needs a price above 0. Switch on “Free course” if it costs nothing.",
+      });
+    }
+
     const d = v.offlineDetails;
     const issue = (field: keyof NonNullable<typeof d>, message: string) =>
       ctx.addIssue({ code: "custom", path: ["offlineDetails", field], message });

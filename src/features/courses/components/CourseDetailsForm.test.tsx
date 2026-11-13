@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { store } from "@lib/redux/store";
@@ -162,6 +162,27 @@ describe("CourseDetailsForm", () => {
 
     expect(await screen.findByText("Start time is required")).toBeInTheDocument();
     expect(screen.getByText("End time is required")).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("starts a new course as free", () => {
+    // It started as "Paid" at 0, which saved and then never showed on the
+    // website: the catalogue lists free courses only while payments are off.
+    renderForm();
+
+    const pricing = screen.getByText("Free course").closest("section, div[class]")!.parentElement!;
+    expect(within(pricing).getByRole("switch")).toBeChecked();
+    expect(within(pricing).getByText("Free")).toBeInTheDocument();
+  });
+
+  it("refuses a paid course at 0, and says how to fix it", async () => {
+    const onSubmit = renderForm({ initial: apiCourse({ free: false, price: 0 }), editing: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Save course" }));
+
+    expect(
+      await screen.findByText("A paid course needs a price above 0. Switch on “Free course” if it costs nothing."),
+    ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

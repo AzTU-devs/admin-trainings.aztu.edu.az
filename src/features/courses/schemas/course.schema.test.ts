@@ -27,6 +27,15 @@ const issues = (value: unknown) => {
 };
 
 describe("courseSchema", () => {
+  it("needs a price above 0 for a paid course", () => {
+    // Paid at 0 saved, and the course never appeared on the website.
+    expect(issues({ ...base, free: false, price: 0 })).toEqual([
+      "price: A paid course needs a price above 0. Switch on “Free course” if it costs nothing.",
+    ]);
+    expect(issues({ ...base, free: false, price: 25 })).toEqual([]);
+    expect(issues({ ...base, free: true, price: 0 })).toEqual([]);
+  });
+
   it("accepts a course exactly as the API returns it, nulls included", () => {
     // The shape that used to fail with "Invalid input: expected string, received
     // null" before any request was sent: no trailer, no weekly/total hours.
