@@ -53,6 +53,14 @@ function firstTabbable(root: HTMLElement): HTMLElement | null {
  * First focus: the first field or button in the dialog, as Radix does — but
  * never the close button. A detail dialog with nothing else to focus now
  * focuses the panel itself, instead of opening with a 3px ring around its X.
+ *
+ * Last focus: back on the control that had it when the dialog opened, if
+ * that is still on the page and enabled. Radix only returns focus to a
+ * DialogTrigger, and the dialogs here are opened from state, so it used to
+ * fall to <body> and the next Tab started again at the top of the page. A
+ * caller whose action removed that control (a deleted row's delete button)
+ * passes `onCloseAutoFocus`, calls `preventDefault()` and focuses its own
+ * neighbour of it instead.
  */
 export const DialogContent = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
@@ -60,9 +68,12 @@ export const DialogContent = forwardRef<
     size?: "sm" | "md" | "lg" | "xl";
     showClose?: boolean;
   }
->(({ className, size = "md", showClose = true, children, onOpenAutoFocus, ...props }, forwardedRef) => {
+>(({ className, size = "md", showClose = true, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, forwardedRef) => {
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" };
   const contentRef = useRef<HTMLDivElement | null>(null);
+  // Read when the dialog closes, which can be after it has unmounted (a
+  // dialog rendered only while open): Radix calls the last handler it got.
+  const openerRef = useRef<HTMLElement | null>(null);
   // The panel only exists while open, so the scroll watcher gets the node
   // itself (state), not a ref object read once at mount.
   const [node, setNode] = useState<HTMLDivElement | null>(null);
@@ -81,6 +92,9 @@ export const DialogContent = forwardRef<
       <DialogPrimitive.Content
         ref={setRef}
         onOpenAutoFocus={(e) => {
+          // First, while focus is still where the dialog was opened from.
+          const opener = document.activeElement;
+          openerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;
           onOpenAutoFocus?.(e);
           if (e.defaultPrevented) return;
           e.preventDefault();
@@ -90,6 +104,16 @@ export const DialogContent = forwardRef<
           if (!target) return root.focus({ preventScroll: true });
           target.focus({ preventScroll: true });
           if (target instanceof HTMLInputElement) target.select();
+        }}
+        onCloseAutoFocus={(e) => {
+          onCloseAutoFocus?.(e);
+          if (e.defaultPrevented) return;
+          // Still on the page: StrictMode's rehearsal of the unmount, not a close.
+          if (contentRef.current?.isConnected) return;
+          const opener = openerRef.current;
+          if (!opener?.isConnected || opener.matches(":disabled")) return;
+          e.preventDefault();
+          opener.focus({ preventScroll: true });
         }}
         className={cn(
           "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2",

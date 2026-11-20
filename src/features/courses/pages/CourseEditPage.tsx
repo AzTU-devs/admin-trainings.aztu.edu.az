@@ -12,12 +12,14 @@ import { ModulesEditor } from "@features/courses/components/ModulesEditor";
 import { CourseSummaryCard } from "@features/courses/components/CourseSummaryCard";
 import { courseHue, useCourseCategories } from "@features/courses/hooks/useCourseCategories";
 import { courseCrumb } from "@features/courses/lib/courseCrumb";
+import { CourseAttendanceButton } from "@features/attendance/components/CourseAttendanceButton";
 import {
   useGetCourseBySlugQuery,
   useSubmitForReviewMutation,
   useUpdateCourseMutation,
 } from "@features/courses/api/coursesApi";
 import { COURSE_STATUS } from "@shared/types/lms";
+import { ROUTES } from "@shared/constants/routes";
 
 export default function CourseEditPage() {
   // Route param carries the course slug (the only detail lookup the backend exposes).
@@ -44,8 +46,9 @@ export default function CourseEditPage() {
         // The record crumb names the course, not its id or slug.
         crumbLabel={courseCrumb(course.title)}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <CourseStatusBadge status={course.status} />
+            <CourseAttendanceButton courseType={course.courseType} to={ROUTES.tutorCourseAttendance(course.slug)} />
             <Button
               variant="gold"
               leftIcon={<Send className="size-4" />}

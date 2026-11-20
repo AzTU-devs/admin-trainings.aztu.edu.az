@@ -206,3 +206,143 @@ describe("normalizeOrcid", () => {
     expect(normalizeOrcid(" https://www.orcid.org/0000-0002-1694-233x ")).toBe("0000-0002-1694-233X");
   });
 });
+
+const YEAR = new Date().getFullYear();
+
+describe("toUpdateRequest — CV", () => {
+  it("sends a new CV's id, null to remove it, and nothing when it is unchanged", () => {
+    const saved = savedProfile({ cvMediaId: "c0000000-0000-4000-8000-000000000001" });
+    const replaced = { ...toFormValues(saved), cvMediaId: "c0000000-0000-4000-8000-000000000002" };
+    expect(toUpdateRequest(replaced, saved)).toEqual({ cvMediaId: replaced.cvMediaId });
+    // Leaving the key out would mean "keep it"; only an explicit null removes it.
+    expect(toUpdateRequest({ ...toFormValues(saved), cvMediaId: undefined }, saved)).toEqual({ cvMediaId: null });
+    expect(toUpdateRequest(toFormValues(saved), saved)).toEqual({});
+  });
+
+  it("leaves a profile without a CV alone, whether the API sent null or nothing", () => {
+    const nulled = savedProfile({ cvMediaId: null, cvUrl: null });
+    expect(toUpdateRequest(toFormValues(nulled), nulled)).toEqual({});
+    const absent = savedProfile();
+    expect(toUpdateRequest(toFormValues(absent), absent)).toEqual({});
+  });
+});
+
+describe("toUpdateRequest — education and experience", () => {
+  const education = { institution: "AzTU", degree: null, startYear: 2010, endYear: 2014 };
+  const job = { company: "Azercell", position: "Engineer", startYear: 2015, endYear: null, description: null };
+
+  it("reads a profile from before the lists as none, and sends nothing for it", () => {
+    const saved = savedProfile();
+    expect(toFormValues(saved).educationEntries).toEqual([]);
+    expect(toFormValues(saved).experienceEntries).toEqual([]);
+    expect(toUpdateRequest(toFormValues(saved), saved)).toEqual({});
+  });
+
+  it("sends nothing when the saved lists are unchanged, nulls and all", () => {
+    const saved = savedProfile({ educationEntries: [education], experienceEntries: [job] });
+    expect(toUpdateRequest(toFormValues(saved), saved)).toEqual({});
+  });
+
+  it("sends the whole list in order, trimmed, blank optional texts as null and Present as null", () => {
+    const saved = savedProfile({ educationEntries: [education] });
+    const values = {
+      ...toFormValues(saved),
+      educationEntries: [
+        ...toFormValues(saved).educationEntries,
+        { institution: "  ADA University ", degree: "  ", startYear: "2022", endYear: null },
+      ],
+    };
+    expect(toUpdateRequest(values, saved)).toEqual({
+      educationEntries: [education, { institution: "ADA University", degree: null, startYear: 2022, endYear: null }],
+    });
+  });
+
+  it("keeps a description's text and drops an empty one to null", () => {
+    const saved = savedProfile({ experienceEntries: [job] });
+    const values = {
+      ...toFormValues(saved),
+      experienceEntries: [{ ...toFormValues(saved).experienceEntries[0], description: "  Led the data team. " }],
+    };
+    expect(toUpdateRequest(values, saved)).toEqual({ experienceEntries: [{ ...job, description: "Led the data team." }] });
+  });
+
+  it("clears a list with [] — an absent key would leave it as it is", () => {
+    const saved = savedProfile({ experienceEntries: [job] });
+    expect(toUpdateRequest({ ...toFormValues(saved), experienceEntries: [] }, saved)).toEqual({ experienceEntries: [] });
+  });
+
+  it("treats the same entries in another order as a change: the order is what the page shows", () => {
+    const second = { ...education, institution: "ADA University" };
+    const saved = savedProfile({ educationEntries: [education, second] });
+    const values = { ...toFormValues(saved), educationEntries: [...toFormValues(saved).educationEntries].reverse() };
+    expect(toUpdateRequest(values, saved)).toEqual({ educationEntries: [second, education] });
+  });
+});
+
+describe("expertProfileSchema — education and experience", () => {
+  // Years as the form holds them: the text typed, "" while empty, null for Present.
+  const edu = (over: Partial<ReturnType<typeof toFormValues>["educationEntries"][number]> = {}) => ({
+    institution: "AzTU",
+    degree: "",
+    startYear: "2010",
+    endYear: "2014" as string | null,
+    ...over,
+  });
+  const job = (over: Partial<ReturnType<typeof toFormValues>["experienceEntries"][number]> = {}) => ({
+    company: "Azercell",
+    position: "Engineer",
+    startYear: "2015",
+    endYear: null as string | null,
+    description: "",
+    ...over,
+  });
+  const messages = (over: Partial<ReturnType<typeof toFormValues>>) =>
+    (parse(over).error?.issues ?? []).map((i) => [i.path.join("."), i.message]);
+
+  it("accepts a finished entry, one still under way (Present), and an expected graduation", () => {
+    expect(parse({ educationEntries: [edu(), edu({ endYear: null }), edu({ endYear: String(YEAR + 10) })] }).success).toBe(true);
+    expect(parse({ experienceEntries: [job(), job({ endYear: String(YEAR) })] }).success).toBe(true);
+  });
+
+  it("asks for the required texts and the years, each on its own field", () => {
+    expect(messages({ educationEntries: [edu({ institution: "  ", startYear: "", endYear: "" })] })).toEqual([
+      ["educationEntries.0.institution", "Enter the institution"],
+      ["educationEntries.0.startYear", "Enter the start year"],
+      ["educationEntries.0.endYear", "Enter the end year, or tick Present"],
+    ]);
+    expect(messages({ experienceEntries: [job({ company: "", position: " " })] })).toEqual([
+      ["experienceEntries.0.company", "Enter the company or organisation"],
+      ["experienceEntries.0.position", "Enter the position"],
+    ]);
+  });
+
+  it("holds the years to the API's range", () => {
+    expect(messages({ educationEntries: [edu({ startYear: "1949" })] })).toEqual([
+      ["educationEntries.0.startYear", "1950 or later"],
+    ]);
+    expect(messages({ educationEntries: [edu({ startYear: String(YEAR + 1), endYear: null })] })).toEqual([
+      ["educationEntries.0.startYear", `${YEAR} at the latest`],
+    ]);
+    expect(messages({ educationEntries: [edu({ startYear: "2015", endYear: "2012" })] })).toEqual([
+      ["educationEntries.0.endYear", "Can't be before the start year"],
+    ]);
+    // Education may end ten years ahead (an expected graduation); a job not even one.
+    expect(messages({ educationEntries: [edu({ endYear: String(YEAR + 11) })] })).toEqual([
+      ["educationEntries.0.endYear", `${YEAR + 10} at the latest`],
+    ]);
+    expect(messages({ experienceEntries: [job({ endYear: String(YEAR + 1) })] })).toEqual([
+      ["experienceEntries.0.endYear", `${YEAR} at the latest — tick Present for a role held now`],
+    ]);
+  });
+
+  it("caps the texts, and each list at twenty entries", () => {
+    expect(messages({ educationEntries: [edu({ institution: "x".repeat(201) })] })).toEqual([
+      ["educationEntries.0.institution", "At most 200 characters"],
+    ]);
+    expect(messages({ experienceEntries: [job({ description: "x".repeat(1_001) })] })).toEqual([
+      ["experienceEntries.0.description", "At most 1,000 characters"],
+    ]);
+    expect(parse({ educationEntries: Array.from({ length: 20 }, () => edu()) }).success).toBe(true);
+    expect(parse({ educationEntries: Array.from({ length: 21 }, () => edu()) }).success).toBe(false);
+  });
+});

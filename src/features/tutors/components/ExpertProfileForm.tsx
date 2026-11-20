@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { GraduationCap, Link2, Loader2, Plus, UserRound, X } from "lucide-react";
+import { Briefcase, FileText, GraduationCap, Link2, Loader2, Plus, Tags, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
@@ -16,6 +16,9 @@ import { CategoryMultiSelect } from "@features/courses/components/CategoryMultiS
 import { FormCard } from "@features/courses/components/FormCard";
 import { StickySaveBar } from "@features/profile/components/StickySaveBar";
 import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
+import { CvField } from "@features/tutors/components/CvField";
+import { CertificatesField } from "@features/tutors/components/CertificatesField";
+import { EducationEntriesField, ExperienceEntriesField } from "@features/tutors/components/ProfileEntries";
 import {
   AREAS_REQUIRED_MESSAGE,
   EXPERT_PROFILE_FIELDS,
@@ -27,9 +30,16 @@ import {
   toUpdateRequest,
   type ExpertProfileFormValues,
 } from "@features/tutors/schemas/expertProfile.schema";
-import type { TutorProfileDto, UpdateTutorProfileRequest } from "@features/tutors/types";
+import type {
+  CreateCertificateRequest,
+  TutorCertificate,
+  TutorProfileDto,
+  UpdateTutorProfileRequest,
+} from "@features/tutors/types";
 import type { NormalizedError } from "@lib/axios/httpClient";
 import { cn } from "@shared/lib/cn";
+import { serverFieldErrors } from "@shared/lib/fieldErrors";
+import { TUTOR_APPROVAL_STATUS, type UUID } from "@shared/types/lms";
 
 interface Props {
   /** The profile as currently saved. The form edits a copy and sends only what changed. */
@@ -54,12 +64,24 @@ interface Props {
   layout?: "sheet" | "cards";
   /** `cards` only: what the save bar names on its left. */
   saveBarLabel?: string;
+  /**
+   * Saves one certificate at once through the caller's endpoint (the expert's
+   * own, or an admin's for this expert) — certificates are not part of the
+   * profile save. Without these the list is shown but can't be changed.
+   */
+  onAddCertificate?: (body: CreateCertificateRequest) => Promise<TutorCertificate>;
+  onDeleteCertificate?: (id: UUID) => Promise<void>;
 }
 
-/** The API's refusals of a photo id — the same codes as a course cover — shown on the photo. */
-const AVATAR_ERROR_CODES = new Set(["MEDIA_NOT_FOUND", "MEDIA_FORBIDDEN", "INVALID_MEDIA_FOR_FIELD"]);
+/**
+ * The API's refusals of a media id. A photo that is not an image is the
+ * photo's; a CV that is not a PDF the CV's; a missing or someone else's upload
+ * is whichever of the two the save carried.
+ */
+const MEDIA_ERROR_CODES = new Set(["MEDIA_NOT_FOUND", "MEDIA_FORBIDDEN"]);
 
 type FieldName = keyof ExpertProfileFormValues;
+type MediaField = "avatarMediaId" | "cvMediaId";
 
 interface TextOptions {
   placeholder?: string;
@@ -80,13 +102,21 @@ export function ExpertProfileForm({
   stickyActions,
   layout = "sheet",
   saveBarLabel,
+  onAddCertificate,
+  onDeleteCertificate,
 }: Props) {
   const [uploadMedia] = useUploadMediaMutation();
   const [uploading, setUploading] = useState(false);
+  const [cvUploading, setCvUploading] = useState(false);
   // What the server holds now: the prop at first, then each save's response. A
   // second save must diff against what the first one stored, not against a
   // refetch that may not have landed yet.
   const [saved, setSaved] = useState(profile);
+  // Saved one by one as they are added or deleted, so this list is the
+  // server's — kept here rather than read from the prop, which in the admin
+  // dialog is the row as the table loaded it.
+  const [certificates, setCertificates] = useState<TutorCertificate[]>(profile.certificates ?? []);
+  const approved = saved.approvalStatus === TUTOR_APPROVAL_STATUS.APPROVED;
 
   const form = useForm<ExpertProfileFormValues>({
     resolver: zodResolver(expertProfileSchema),
@@ -112,6 +142,9 @@ export function ExpertProfileForm({
   };
 
   const avatarMediaId = form.watch("avatarMediaId");
+  // Read and set like the photo, through watch/setValue: a controlled field set
+  // to undefined would show its first value again, so "Remove" would not show.
+  const cvMediaId = form.watch("cvMediaId");
   // The saved photo loads the way the rest of the dashboard shows it (see
   // tutorAvatarSrc); a fresh upload is not on any profile yet, so only the
   // authenticated route, which lets the uploader read it, can serve it.
@@ -155,10 +188,18 @@ export function ExpertProfileForm({
     } catch (e) {
       const err = e as NormalizedError;
       for (const [field, message] of serverFieldErrors(err)) {
-        if (EXPERT_PROFILE_FIELDS.has(field)) form.setError(field as FieldName, { message });
+        // A list entry's path ("educationEntries.0.institution") is checked by its list.
+        if (EXPERT_PROFILE_FIELDS.has(field.split(".")[0])) {
+          form.setError(field as FieldPath<ExpertProfileFormValues>, { message });
+        }
       }
-      if (err.code && AVATAR_ERROR_CODES.has(err.code)) {
-        form.setError("avatarMediaId", { message: err.message });
+      if (err.code === "INVALID_MEDIA_FOR_FIELD") form.setError("avatarMediaId", { message: err.message });
+      if (err.code === "INVALID_DOCUMENT") form.setError("cvMediaId", { message: err.message });
+      if (err.code && MEDIA_ERROR_CODES.has(err.code)) {
+        const sent = (["avatarMediaId", "cvMediaId"] as MediaField[]).filter((k) => typeof body[k] === "string");
+        for (const k of sent.length > 0 ? sent : (["avatarMediaId"] as MediaField[])) {
+          form.setError(k, { message: err.message });
+        }
       }
       if (err.code === "EXPERTISE_REQUIRED") {
         form.setError("expertiseCategoryIds", { message: err.message || AREAS_REQUIRED_MESSAGE });
@@ -185,12 +226,13 @@ export function ExpertProfileForm({
     </FormField>
   );
 
+  // The long texts (the bio, the earlier certification notes) take the whole row.
   const textArea = (name: FieldName, label: string, rows: number, opts: TextOptions = {}) => (
     <FormField<ExpertProfileFormValues>
       name={name}
       label={label}
       description={opts.description}
-      className={name === "bio" ? "md:col-span-2" : undefined}
+      className="md:col-span-2"
     >
       {({ field, invalid, id }) => (
         <Textarea
@@ -234,7 +276,12 @@ export function ExpertProfileForm({
           Cancel
         </Button>
       )}
-      <Button type="submit" loading={form.formState.isSubmitting} disabled={uploading} className={cn(cards && "shrink-0")}>
+      <Button
+        type="submit"
+        loading={form.formState.isSubmitting}
+        disabled={uploading || cvUploading}
+        className={cn(cards && "shrink-0")}
+      >
         {submitLabel}
       </Button>
     </>
@@ -294,7 +341,7 @@ export function ExpertProfileForm({
       )}
 
       {section(
-        <GraduationCap />,
+        <Tags />,
         "Background",
         undefined,
         <>
@@ -306,26 +353,15 @@ export function ExpertProfileForm({
                 type="number"
                 min={0}
                 step={1}
-                value={(field.value as number | undefined) ?? ""}
+                value={(field.value as number | null | undefined) ?? ""}
                 invalid={invalid}
-                onChange={(e) =>
-                  field.onChange(e.target.value === "" ? undefined : Number(e.target.value))
-                }
+                onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
               />
             )}
           </FormField>
           {textInput("languages", "Languages", {
             placeholder: "e.g. Azerbaijani, English, Russian",
             description: "Separate with commas.",
-          })}
-          {textArea("education", "Education", 4, {
-            description: "One qualification per line.",
-            placeholder:
-              "PhD in Computer Science, AzTU, 2015\nMSc in Software Engineering, ADA University, 2010",
-          })}
-          {textArea("certifications", "Certifications", 4, {
-            description: "One per line.",
-            placeholder: "AWS Certified Solutions Architect\nCisco CCNA",
           })}
           <FormField<ExpertProfileFormValues>
             name="expertiseCategoryIds"
@@ -357,6 +393,59 @@ export function ExpertProfileForm({
               />
             )}
           </FormField>
+        </>,
+      )}
+
+      {section(
+        <GraduationCap />,
+        "Education",
+        "Degrees and studies, in the order they should be shown.",
+        <EducationEntriesField legacy={!!saved.education?.trim()} />,
+      )}
+
+      {section(
+        <Briefcase />,
+        "Experience",
+        "Positions held, in the order they should be shown.",
+        <ExperienceEntriesField />,
+      )}
+
+      {section(
+        <FileText />,
+        "CV and certificates",
+        "PDFs for the public expert page. The CV is saved with the profile; certificates are saved as soon as they are added or deleted.",
+        <>
+          <FormField<ExpertProfileFormValues> name="cvMediaId" label="CV" className="md:col-span-2">
+            {({ invalid, id }) => (
+              <CvField
+                id={id}
+                value={cvMediaId}
+                savedId={saved.cvMediaId ?? undefined}
+                onChange={(next) => {
+                  // Cleared in the form only; the save sends null, which removes the CV.
+                  form.setValue("cvMediaId", next, { shouldDirty: true });
+                  form.clearErrors("cvMediaId");
+                }}
+                approved={approved}
+                invalid={invalid}
+                onBusyChange={setCvUploading}
+              />
+            )}
+          </FormField>
+          <CertificatesField
+            certificates={certificates}
+            onChange={setCertificates}
+            add={onAddCertificate}
+            remove={onDeleteCertificate}
+          />
+          {/* The free text from before the list, only on a profile that still has some. */}
+          {!!saved.certifications?.trim() &&
+            textArea("certifications", "Earlier certification notes", 3, {
+              description:
+                certificates.length === 0
+                  ? "The public page shows these lines until a certificate is added above. Add each as a certificate, then clear this box."
+                  : "No longer shown publicly: the certificates above take their place. Clear this box once everything is moved over.",
+            })}
         </>,
       )}
 
@@ -510,25 +599,4 @@ function OwnAreasField({ id, value, onChange, invalid, pickedCategoryNames }: Ow
       </p>
     </div>
   );
-}
-
-/**
- * Per-field messages from a failed save. The API's validation body lists them
- * as `errors: [{ field, message }]`, which the HTTP client passes through as
- * `fieldErrors` unchanged; a `{ field: message }` map is accepted too.
- */
-function serverFieldErrors(err: NormalizedError): Array<[string, string]> {
-  const raw: unknown = err.fieldErrors;
-  if (Array.isArray(raw)) {
-    return raw.flatMap((item: unknown): Array<[string, string]> => {
-      const { field, message } = (item ?? {}) as { field?: unknown; message?: unknown };
-      return typeof field === "string" && typeof message === "string" ? [[field, message]] : [];
-    });
-  }
-  if (raw && typeof raw === "object") {
-    return Object.entries(raw).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    );
-  }
-  return [];
 }

@@ -51,6 +51,20 @@ function renderForm(saved: TutorProfileDto) {
   return { onSave, box: screen.getByRole("textbox", { name: "Add your own area" }) };
 }
 
+describe("ExpertProfileForm — years of experience", () => {
+  it("can be emptied, which the save sends as null", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderForm(profile({ yearsExperience: 12 }));
+    const years = screen.getByRole("spinbutton", { name: "Years of experience" });
+
+    await user.clear(years);
+    expect(years).toHaveValue(null);
+
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ yearsExperience: null }));
+  });
+});
+
 describe("ExpertProfileForm — own areas of expertise", () => {
   it("adds an area with Enter without submitting the profile, then saves it", async () => {
     const user = userEvent.setup();

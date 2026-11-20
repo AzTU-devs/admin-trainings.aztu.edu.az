@@ -2,6 +2,49 @@ import type { TutorApprovalStatus, UUID } from "@shared/types/lms";
 
 export type { TutorApprovalStatus };
 
+/** One place the expert studied, in the order the expert lists them. */
+export interface EducationEntry {
+  institution: string;
+  degree: string | null;
+  startYear: number;
+  /** Null while still studying ("present"); may be up to ten years ahead (expected graduation). */
+  endYear: number | null;
+}
+
+/** One position the expert held, in the order the expert lists them. */
+export interface ExperienceEntry {
+  company: string;
+  position: string;
+  startYear: number;
+  /** Null for the role held now ("present"). */
+  endYear: number | null;
+  /** Plain text. */
+  description: string | null;
+}
+
+/**
+ * One certificate on the expert profile, with its PDF. Added and deleted one at
+ * a time through its own endpoints, never through the profile PATCH.
+ */
+export interface TutorCertificate {
+  id: UUID;
+  title: string;
+  issuer: string | null;
+  issuedYear: number | null;
+  mediaId: UUID;
+  /** `/api/public/media/{mediaId}/content`: public only while the expert is APPROVED. */
+  fileUrl: string;
+  createdAt: string;
+}
+
+/** Body of `POST …/certificates`; the PDF is uploaded to `/media` first. */
+export interface CreateCertificateRequest {
+  title: string;
+  issuer?: string;
+  issuedYear?: number;
+  mediaId: UUID;
+}
+
 /** Mirror of backend TutorProfileDto. */
 export interface TutorProfileDto {
   id: UUID;
@@ -42,6 +85,19 @@ export interface TutorProfileDto {
    * absent from older builds, so read it as `?? []`.
    */
   customExpertise?: string[];
+  /** The stored CV (a PDF). Like the photo, it is public only while the expert is APPROVED. */
+  cvMediaId?: UUID | null;
+  /** `/api/public/media/{id}/content`, or null without a CV. */
+  cvUrl?: string | null;
+  /**
+   * The structured lists. Always arrays from an API that has them, absent from
+   * older builds — read them as `?? []`. Where a list is empty, the public page
+   * still shows the old free-text `education` / `certifications` above.
+   */
+  educationEntries?: EducationEntry[];
+  experienceEntries?: ExperienceEntry[];
+  /** Oldest first, as the API sorts them. */
+  certificates?: TutorCertificate[];
 }
 
 /**
@@ -73,4 +129,9 @@ export interface UpdateTutorProfileRequest {
   expertiseCategoryIds?: UUID[];
   /** The expert's own areas, normalised by the API (trimmed, de-duplicated). */
   customExpertise?: string[];
+  /** An uploaded PDF, or null to remove the CV. */
+  cvMediaId?: UUID | null;
+  /** Each replaces its whole list when sent, in the order given; `[]` clears it. */
+  educationEntries?: EducationEntry[];
+  experienceEntries?: ExperienceEntry[];
 }

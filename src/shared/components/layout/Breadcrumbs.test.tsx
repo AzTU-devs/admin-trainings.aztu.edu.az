@@ -43,6 +43,12 @@ describe("Breadcrumbs", () => {
     expect(screen.getByText("Leyla Məmmədova")).toHaveAttribute("aria-current", "page");
   });
 
+  it("names a course's attendance page, its course crumb leading back to the course", () => {
+    at("/tutor/courses/python-basics/attendance", "Python basics");
+    expect(screen.getByText("Attendance")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Python basics" })).toHaveAttribute("href", "/tutor/courses/python-basics");
+  });
+
   it("keeps 'new' a page, not a record", () => {
     at("/admin/courses/new");
     expect(screen.getByText("New")).toHaveAttribute("aria-current", "page");

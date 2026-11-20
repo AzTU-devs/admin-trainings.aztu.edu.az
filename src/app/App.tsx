@@ -27,6 +27,7 @@ const AdminCourseEditPage = lazy(() => import("@features/courses/pages/AdminCour
 const CourseParticipantsPage = lazy(
   () => import("@features/participants/pages/CourseParticipantsPage"),
 );
+const CourseAttendancePage = lazy(() => import("@features/attendance/pages/CourseAttendancePage"));
 const EnrollmentsListPage = lazy(() => import("@features/enrollments/pages/EnrollmentsListPage"));
 const StudentsListPage = lazy(() => import("@features/students/pages/StudentsListPage"));
 const TutorRoomRequestsPage = lazy(() => import("@features/room-requests/pages/TutorRoomRequestsPage"));
@@ -96,6 +97,7 @@ export default function App() {
                 <Route path={ROUTES.tutorCourses} element={<CoursesListPage />} />
                 <Route path={ROUTES.tutorCourseNew} element={<CourseNewPage />} />
                 <Route path={ROUTES.tutorCourseEdit()} element={<CourseEditPage />} />
+                <Route path={ROUTES.tutorCourseAttendance()} element={<CourseAttendancePage scope="tutor" />} />
                 <Route path={ROUTES.tutorEnrollments} element={<EnrollmentsListPage />} />
                 <Route path={ROUTES.tutorStudents} element={<StudentsListPage />} />
                 <Route path={ROUTES.tutorRooms} element={<BrowseRoomsPage />} />
@@ -110,6 +112,7 @@ export default function App() {
                 <Route path={ROUTES.adminCourseNew} element={<AdminCourseNewPage />} />
                 <Route path={ROUTES.adminCourseEdit()} element={<AdminCourseEditPage />} />
                 <Route path={ROUTES.adminCourseParticipants()} element={<CourseParticipantsPage />} />
+                <Route path={ROUTES.adminCourseAttendance()} element={<CourseAttendancePage scope="admin" />} />
                 <Route path={ROUTES.adminTutors} element={<AdminTutorsPage />} />
                 <Route path={ROUTES.adminRooms} element={<RoomsListPage />} />
                 <Route path={ROUTES.adminRoomPricing} element={<RoomPricingPage />} />

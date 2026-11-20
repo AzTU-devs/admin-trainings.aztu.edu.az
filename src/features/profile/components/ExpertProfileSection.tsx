@@ -4,6 +4,8 @@ import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { ExpertProfileForm } from "@features/tutors/components/ExpertProfileForm";
 import { TutorStatusBadge } from "@features/tutors/components/TutorStatusBadge";
 import {
+  useAddMyCertificateMutation,
+  useDeleteMyCertificateMutation,
   useGetMyTutorProfileQuery,
   useUpdateMyTutorProfileMutation,
 } from "@features/tutors/api/tutorsApi";
@@ -22,6 +24,8 @@ const VISIBILITY: Record<TutorApprovalStatus, string> = {
 export function ExpertProfileSection() {
   const { data, isLoading, error } = useGetMyTutorProfileQuery();
   const [update] = useUpdateMyTutorProfileMutation();
+  const [addCertificate] = useAddMyCertificateMutation();
+  const [deleteCertificate] = useDeleteMyCertificateMutation();
 
   if (isLoading) {
     return (
@@ -33,7 +37,10 @@ export function ExpertProfileSection() {
     );
   }
 
-  if (error || !data) {
+  // Only when there is no profile to show. A background refetch that fails
+  // (a dropped connection after a save, say) keeps the last profile and sets
+  // `error`; replacing the form then would throw away the edits in it.
+  if (!data) {
     // Tutor sign-up creates the profile, so a 404 means a TUTOR role granted by
     // hand — there is nothing here to edit, which is not the same as a failure.
     const missing = !!error && "status" in error && error.status === 404;
@@ -74,6 +81,8 @@ export function ExpertProfileSection() {
         key={data.id}
         profile={data}
         onSave={(body) => update(body).unwrap()}
+        onAddCertificate={(body) => addCertificate(body).unwrap()}
+        onDeleteCertificate={(id) => deleteCertificate(id).unwrap()}
         layout="cards"
         saveBarLabel="Expert profile"
       />

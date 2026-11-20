@@ -19,6 +19,14 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   destructive?: boolean;
   onConfirm: () => void | Promise<void>;
+  /**
+   * Where focus goes once the dialog has closed. By default DialogContent
+   * returns it to the control that had it when the dialog opened, while that
+   * control is still on the page and enabled. Call `preventDefault()` and
+   * focus a neighbour instead when the confirmed action removed it (a deleted
+   * row's delete button).
+   */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function ConfirmDialog({
@@ -30,6 +38,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   destructive,
   onConfirm,
+  onCloseAutoFocus,
 }: ConfirmDialogProps) {
   const [busy, setBusy] = useState(false);
 
@@ -45,7 +54,7 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent size="sm" showClose={false}>
+      <DialogContent size="sm" showClose={false} onCloseAutoFocus={onCloseAutoFocus}>
         {/* The shared header layout: the danger tile beside the title, the
             description under it — like every other dialog. */}
         <DialogHeader icon={destructive ? <AlertTriangle /> : undefined} iconTone="danger">

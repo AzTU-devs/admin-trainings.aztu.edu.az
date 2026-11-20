@@ -14,6 +14,7 @@ import { CourseSummaryCard } from "@features/courses/components/CourseSummaryCar
 import { FormCard } from "@features/courses/components/FormCard";
 import { TutorRosterPicker, type TutorRoster } from "@features/courses/components/TutorRosterPicker";
 import { courseCrumb } from "@features/courses/lib/courseCrumb";
+import { CourseAttendanceButton } from "@features/attendance/components/CourseAttendanceButton";
 import {
   useGetAdminCourseByIdQuery,
   usePublishCourseMutation,
@@ -84,6 +85,7 @@ export default function AdminCourseEditPage() {
             >
               İştirakçilər
             </Button>
+            <CourseAttendanceButton courseType={course.courseType} to={ROUTES.adminCourseAttendance(course.id)} />
             {published ? (
               <Button
                 variant="secondary"

@@ -200,6 +200,11 @@ describe("CalendarEventDialog", () => {
       "href",
       `/admin/courses/${COURSE_ID}/participants`,
     );
+    // An in-person course: its attendance is one step away, beside İştirakçilər.
+    expect(within(dialog).getByRole("link", { name: "Attendance" })).toHaveAttribute(
+      "href",
+      `/admin/courses/${COURSE_ID}/attendance`,
+    );
   });
 
   it("shows a booking that belongs to no course without loading a course", () => {

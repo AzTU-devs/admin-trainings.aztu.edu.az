@@ -14,6 +14,8 @@ export const ROUTES = {
   tutorCourses: "/tutor/courses",
   tutorCourseNew: "/tutor/courses/new",
   tutorCourseEdit: (id: string | number = ":id") => `/tutor/courses/${id}`,
+  /** A course's attendance, by the course's slug like the course page it is reached from. */
+  tutorCourseAttendance: (id: string | number = ":id") => `/tutor/courses/${id}/attendance`,
   tutorEnrollments: "/tutor/enrollments",
   tutorStudents: "/tutor/students",
   tutorRoomRequests: "/tutor/room-requests",
@@ -30,6 +32,9 @@ export const ROUTES = {
   adminCourseEdit: (id: string | number = ":id") => `/admin/courses/${id}`,
   adminCourseParticipants: (courseId: string | number = ":courseId") =>
     `/admin/courses/${courseId}/participants`,
+  /** In-person courses only; reached from the course page, beside İştirakçilər. */
+  adminCourseAttendance: (courseId: string | number = ":courseId") =>
+    `/admin/courses/${courseId}/attendance`,
   adminRooms: "/admin/rooms",
   adminCategories: "/admin/categories",
   adminRoomPricing: "/admin/room-pricing",

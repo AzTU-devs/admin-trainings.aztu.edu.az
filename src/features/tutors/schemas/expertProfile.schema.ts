@@ -1,6 +1,11 @@
 import { z } from "zod";
 import type { UUID } from "@shared/types/lms";
-import type { TutorProfileDto, UpdateTutorProfileRequest } from "@features/tutors/types";
+import type {
+  EducationEntry,
+  ExperienceEntry,
+  TutorProfileDto,
+  UpdateTutorProfileRequest,
+} from "@features/tutors/types";
 
 /**
  * The expert profile form, shared by a tutor editing their own profile and an
@@ -116,23 +121,215 @@ export function ownAreaProblem(
   return null;
 }
 
+/* ───────────────────── education and experience ───────────────────── */
+
+/**
+ * The API's limits on the structured lists: how many entries each may hold,
+ * the earliest year, and how long the texts may be. The latest years move with
+ * the calendar, so they are read when a check runs, not when this loads.
+ */
+export const ENTRY_LIMITS = {
+  count: 20,
+  earliestYear: 1950,
+  /** An education may end up to this many years ahead: an expected graduation. */
+  educationYearsAhead: 10,
+  nameLength: 200,
+  descriptionLength: 1_000,
+} as const;
+
+function thisYear(): number {
+  return new Date().getFullYear();
+}
+
+/** The latest end year an entry may have: education looks ahead, experience does not. */
+export function latestEndYear(kind: "education" | "experience"): number {
+  return kind === "education" ? thisYear() + ENTRY_LIMITS.educationYearsAhead : thisYear();
+}
+
+/** Why a start year is refused, or null. */
+export function startYearProblem(year: number | undefined): string | null {
+  if (year === undefined || Number.isNaN(year)) return "Enter the start year";
+  if (!Number.isInteger(year)) return "A whole year, such as 2015";
+  if (year < ENTRY_LIMITS.earliestYear) return `${ENTRY_LIMITS.earliestYear} or later`;
+  if (year > thisYear()) return `${thisYear()} at the latest`;
+  return null;
+}
+
+/**
+ * Why an end year is refused, or null. `null` is "present" and always fine;
+ * left empty (undefined) it is neither a year nor "present", so it is asked for
+ * — an unset year would otherwise publish as "present" by accident.
+ */
+export function endYearProblem(
+  end: number | null | undefined,
+  start: number | undefined,
+  kind: "education" | "experience",
+): string | null {
+  if (end === null) return null;
+  if (end === undefined || Number.isNaN(end)) return "Enter the end year, or tick Present";
+  if (!Number.isInteger(end)) return "A whole year, such as 2019";
+  if (start !== undefined && Number.isInteger(start) && end < start) return "Can't be before the start year";
+  if (end < ENTRY_LIMITS.earliestYear) return `${ENTRY_LIMITS.earliestYear} or later`;
+  const latest = latestEndYear(kind);
+  if (end > latest) {
+    return kind === "experience"
+      ? `${latest} at the latest — tick Present for a role held now`
+      : `${latest} at the latest`;
+  }
+  return null;
+}
+
+type IssueSink = Pick<z.RefinementCtx, "addIssue">;
+
+function requireText(ctx: IssueSink, path: string, value: string, missing: string, max: number) {
+  const text = value.trim();
+  if (!text) ctx.addIssue({ code: "custom", path: [path], message: missing });
+  else if (text.length > max) ctx.addIssue({ code: "custom", path: [path], message: `At most ${max.toLocaleString("en")} characters` });
+}
+
+function limitText(ctx: IssueSink, path: string, value: string, max: number) {
+  if (value.trim().length > max) {
+    ctx.addIssue({ code: "custom", path: [path], message: `At most ${max.toLocaleString("en")} characters` });
+  }
+}
+
+/** A year box's text as a number; empty is no year yet. */
+export function parseYear(raw: string): number | undefined {
+  const text = raw.trim();
+  return text === "" ? undefined : Number(text);
+}
+
+function checkYears(
+  ctx: IssueSink,
+  entry: { startYear: string; endYear: string | null },
+  kind: "education" | "experience",
+) {
+  const startYear = parseYear(entry.startYear);
+  const start = startYearProblem(startYear);
+  if (start) ctx.addIssue({ code: "custom", path: ["startYear"], message: start });
+  const endYear = entry.endYear === null ? null : parseYear(entry.endYear);
+  const end = endYearProblem(endYear, start ? undefined : startYear, kind);
+  if (end) ctx.addIssue({ code: "custom", path: ["endYear"], message: end });
+}
+
+/*
+ * Each entry as the form holds it: texts as typed ("" for an empty optional
+ * one), and the years as typed too — "" while empty — with the end year `null`
+ * when "Present" is ticked. Not `undefined` for empty: a controlled field set
+ * to undefined shows its first value again (react-hook-form falls back to the
+ * default), so a year could never be cleared nor "Present" unticked. The
+ * messages land on the field they are about.
+ */
+const educationEntrySchema = z
+  .object({
+    institution: z.string(),
+    degree: z.string(),
+    startYear: z.string(),
+    endYear: z.string().nullable(),
+  })
+  .superRefine((entry, ctx) => {
+    requireText(ctx, "institution", entry.institution, "Enter the institution", ENTRY_LIMITS.nameLength);
+    limitText(ctx, "degree", entry.degree, ENTRY_LIMITS.nameLength);
+    checkYears(ctx, entry, "education");
+  });
+
+const experienceEntrySchema = z
+  .object({
+    company: z.string(),
+    position: z.string(),
+    startYear: z.string(),
+    endYear: z.string().nullable(),
+    description: z.string(),
+  })
+  .superRefine((entry, ctx) => {
+    requireText(ctx, "company", entry.company, "Enter the company or organisation", ENTRY_LIMITS.nameLength);
+    requireText(ctx, "position", entry.position, "Enter the position", ENTRY_LIMITS.nameLength);
+    limitText(ctx, "description", entry.description, ENTRY_LIMITS.descriptionLength);
+    checkYears(ctx, entry, "experience");
+  });
+
+export type EducationEntryFormValues = z.infer<typeof educationEntrySchema>;
+export type ExperienceEntryFormValues = z.infer<typeof experienceEntrySchema>;
+
+/** A new, empty entry for the form's Add buttons. */
+export const EMPTY_EDUCATION: EducationEntryFormValues = { institution: "", degree: "", startYear: "", endYear: "" };
+export const EMPTY_EXPERIENCE: ExperienceEntryFormValues = {
+  company: "",
+  position: "",
+  startYear: "",
+  endYear: "",
+  description: "",
+};
+
+/** A blank optional text is null to the API, which trims and stores it that way too. */
+function textOrNull(value: string | null | undefined): string | null {
+  const text = (value ?? "").trim();
+  return text === "" ? null : text;
+}
+
+/** A year from the form (text, validated) or from the API (a number). */
+function yearOut(value: string | number): number {
+  return typeof value === "number" ? value : Number(value.trim());
+}
+
+function endYearOut(value: string | number | null | undefined): number | null {
+  return value === null || value === undefined || value === "" ? null : yearOut(value);
+}
+
+/** An entry as the API stores it, from either side — so a saved list and an edited one compare like for like. */
+function educationOut(e: EducationEntryFormValues | EducationEntry): EducationEntry {
+  return {
+    institution: (e.institution ?? "").trim(),
+    degree: textOrNull(e.degree),
+    startYear: yearOut(e.startYear),
+    endYear: endYearOut(e.endYear),
+  };
+}
+
+function experienceOut(e: ExperienceEntryFormValues | ExperienceEntry): ExperienceEntry {
+  return {
+    company: (e.company ?? "").trim(),
+    position: (e.position ?? "").trim(),
+    startYear: yearOut(e.startYear),
+    endYear: endYearOut(e.endYear),
+    description: textOrNull(e.description),
+  };
+}
+
+function sameEntries<T>(a: readonly T[], b: readonly T[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export const expertProfileSchema = z.object({
   // Set only from an upload response, never typed, so a format check here could
   // only ever block the form over a field nobody can edit by hand.
   avatarMediaId: z.string().optional(),
+  // The same goes for the CV.
+  cvMediaId: z.string().optional(),
   headline: z.string().max(160, "At most 160 characters"),
   academicTitle: z.string().max(120, "At most 120 characters"),
   department: z.string().max(160, "At most 160 characters"),
   bio: z.string().max(5_000, "At most 5,000 characters"),
+  // Null while the box is empty — not undefined, which a controlled field
+  // would answer by showing its first value again (so it could never be cleared).
   yearsExperience: z
     .number()
     .int("Whole years only")
     .min(0, "Can't be negative")
     .max(80, "At most 80 years")
+    .nullable()
     .optional(),
   languages: z.string().max(255, "At most 255 characters"),
+  // The free text from before the structured lists: kept for the profiles that
+  // still have it, which the public page shows while the matching list is empty.
   education: z.string().max(5_000, "At most 5,000 characters"),
   certifications: z.string().max(5_000, "At most 5,000 characters"),
+  educationEntries: z
+    .array(educationEntrySchema)
+    .max(ENTRY_LIMITS.count, `At most ${ENTRY_LIMITS.count} education entries`),
+  experienceEntries: z
+    .array(experienceEntrySchema)
+    .max(ENTRY_LIMITS.count, `At most ${ENTRY_LIMITS.count} experience entries`),
   // At least one area in total — a category or an own area — is checked on the
   // whole object below, so either list may be empty on its own.
   expertiseCategoryIds: z.array(z.string()),
@@ -216,6 +413,10 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
+function yearText(year: number | null | undefined): string {
+  return year == null ? "" : String(year);
+}
+
 /** The editable copy of a saved profile. The API sends null for unset fields, hence `??`. */
 export function toFormValues(p: TutorProfileDto): ExpertProfileFormValues {
   return {
@@ -224,10 +425,26 @@ export function toFormValues(p: TutorProfileDto): ExpertProfileFormValues {
     academicTitle: p.academicTitle ?? "",
     department: p.department ?? "",
     bio: p.bio ?? "",
-    yearsExperience: p.yearsExperience ?? undefined,
+    yearsExperience: p.yearsExperience ?? null,
     languages: p.languages ?? "",
     education: p.education ?? "",
     certifications: p.certifications ?? "",
+    cvMediaId: p.cvMediaId ?? undefined,
+    // Absent from an API build that predates the lists: none yet.
+    educationEntries: (p.educationEntries ?? []).map((e) => ({
+      institution: e.institution ?? "",
+      degree: e.degree ?? "",
+      startYear: yearText(e.startYear),
+      // The API's null is "present".
+      endYear: e.endYear == null ? null : yearText(e.endYear),
+    })),
+    experienceEntries: (p.experienceEntries ?? []).map((e) => ({
+      company: e.company ?? "",
+      position: e.position ?? "",
+      startYear: yearText(e.startYear),
+      endYear: e.endYear == null ? null : yearText(e.endYear),
+      description: e.description ?? "",
+    })),
     expertiseCategoryIds: p.expertiseCategoryIds ?? [],
     // Absent from an API build that predates the field: no own areas.
     customExpertise: p.customExpertise ?? [],
@@ -285,6 +502,17 @@ export function toUpdateRequest(
 
   const avatar = values.avatarMediaId ?? null;
   if (avatar !== (saved.avatarMediaId ?? null)) body.avatarMediaId = avatar;
+
+  // Like the photo: a new upload's id, or null to remove the CV.
+  const cv = values.cvMediaId ?? null;
+  if (cv !== (saved.cvMediaId ?? null)) body.cvMediaId = cv;
+
+  // Each list replaces the stored one whole, in the order shown, so it is sent
+  // only when it differs; [] clears it.
+  const education = values.educationEntries.map(educationOut);
+  if (!sameEntries(education, (saved.educationEntries ?? []).map(educationOut))) body.educationEntries = education;
+  const experience = values.experienceEntries.map(experienceOut);
+  if (!sameEntries(experience, (saved.experienceEntries ?? []).map(experienceOut))) body.experienceEntries = experience;
 
   return body;
 }

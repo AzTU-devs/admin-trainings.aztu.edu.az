@@ -34,6 +34,7 @@ import { CoursePriceValue } from "@features/courses/components/courseCells";
 import type { CourseDto } from "@features/courses/types";
 import { useListCourseParticipantsQuery } from "@features/participants/api/participantsApi";
 import { ViewProfileLink } from "@features/user-profile/components/ViewProfileLink";
+import { CourseAttendanceButton } from "@features/attendance/components/CourseAttendanceButton";
 import { KindBadge } from "@features/calendar/components/KindBadge";
 import {
   PLATFORM_TIME_ZONE,
@@ -124,6 +125,7 @@ function EventDetails({ event, timeZone }: { event: CalendarEventDto; timeZone: 
             <Button asChild variant="secondary" leftIcon={<Users className="size-4" />}>
               <Link to={ROUTES.adminCourseParticipants(courseId)}>İştirakçilər</Link>
             </Button>
+            <CourseAttendanceButton courseType={event.courseType} to={ROUTES.adminCourseAttendance(courseId)} />
             <Button asChild leftIcon={<ExternalLink className="size-4" />}>
               <Link to={ROUTES.adminCourseEdit(courseId)}>Open course</Link>
             </Button>
