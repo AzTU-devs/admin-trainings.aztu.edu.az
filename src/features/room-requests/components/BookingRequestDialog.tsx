@@ -28,7 +28,12 @@ import {
   toSeriesRequest,
   type RoomBookingSeriesFormValues,
 } from "@features/room-requests/schemas/roomBookingSeries.schema";
-import { MAX_SERIES_OCCURRENCES, occurrenceDates, todayIn } from "@features/room-requests/lib/series";
+import {
+  MAX_SERIES_OCCURRENCES,
+  occurrenceDates,
+  todayIn,
+  zonedInstantOfInput,
+} from "@features/room-requests/lib/series";
 import { describeSeriesCreateError } from "@features/room-requests/lib/bookingErrors";
 import { SeriesPreview } from "@features/room-requests/components/SeriesPreview";
 import { WeekdayPicker } from "@features/room-requests/components/WeekdayPicker";
@@ -162,11 +167,20 @@ function SingleBookingForm({
       form={form}
       onSubmit={async (values) => {
         try {
+          // Read on the platform's clock, as the long-term form's times are and as
+          // every list shows them: new Date() would read the browser's zone, and a
+          // reviewer would then see a different hour from the one the expert typed.
+          const startsAt = zonedInstantOfInput(values.startsAt);
+          const endsAt = zonedInstantOfInput(values.endsAt);
+          if (!startsAt || !endsAt) {
+            form.setError(startsAt ? "endsAt" : "startsAt", { message: "Enter a valid date and time" });
+            return;
+          }
           await createBooking({
             roomId: values.roomId,
             offlineCourseId: values.offlineCourseId?.trim() || undefined,
-            startsAt: new Date(values.startsAt).toISOString(),
-            endsAt: new Date(values.endsAt).toISOString(),
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
           }).unwrap();
           toast.success("Booking requested — an admin will review it");
           onDone();
@@ -175,13 +189,13 @@ function SingleBookingForm({
         }
       }}
     >
-      <FormSection description="One session in the room, from a start to an end.">
-        <FormField<RoomBookingFormValues> name="startsAt" label="Starts at" required>
+      <FormSection description="One session in the room, from a start to an end, in Baku time.">
+        <FormField<RoomBookingFormValues> name="startsAt" label="Starts at (Baku time)" required>
           {({ field, invalid, id }) => (
             <Input id={id} type="datetime-local" {...field} value={field.value as string} invalid={invalid} />
           )}
         </FormField>
-        <FormField<RoomBookingFormValues> name="endsAt" label="Ends at" required>
+        <FormField<RoomBookingFormValues> name="endsAt" label="Ends at (Baku time)" required>
           {({ field, invalid, id }) => (
             <Input id={id} type="datetime-local" {...field} value={field.value as string} invalid={invalid} />
           )}

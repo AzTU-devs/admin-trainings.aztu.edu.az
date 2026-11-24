@@ -81,6 +81,11 @@ export default function CalendarPage() {
   const [title, setTitle] = useState("");
   const [range, setRange] = useState<CalendarRange | null>(null);
   const [selected, setSelected] = useState<CalendarEventDto | null>(null);
+  // Set when the open entry's room request was removed: the entry leaves the
+  // grid as the range refetches, so focus goes to the period's title rather
+  // than back to it.
+  const removedRef = useRef(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
 
   // `currentData`, not `data`: after a move the previous range's events must
   // not linger on the new one while it loads.
@@ -112,7 +117,17 @@ export default function CalendarPage() {
   const onEventClick = useCallback((info: EventClickInfo) => {
     info.jsEvent.preventDefault();
     const { dto } = info.event.extendedProps as CalendarEventProps;
-    if (dto) setSelected(dto);
+    if (!dto) return;
+    removedRef.current = false;
+    setSelected(dto);
+  }, []);
+
+  // Both the details and their remove confirm close at once after a removal;
+  // each sends focus to the title.
+  const onDialogCloseFocus = useCallback((e: Event) => {
+    if (!removedRef.current) return;
+    e.preventDefault();
+    titleRef.current?.focus({ preventScroll: true });
   }, []);
 
   // A click on an empty day in the month grid opens that day, as a date
@@ -160,8 +175,10 @@ export default function CalendarPage() {
               </Button>
             </div>
             <h2
+              ref={titleRef}
+              tabIndex={-1}
               aria-live="polite"
-              className="min-w-0 font-display text-[19px] font-bold tracking-[-0.018em] text-ink"
+              className="min-w-0 font-display text-[19px] font-bold tracking-[-0.018em] text-ink focus:outline-none"
             >
               {title}
             </h2>
@@ -280,6 +297,10 @@ export default function CalendarPage() {
         onOpenChange={(open) => {
           if (!open) setSelected(null);
         }}
+        onRemoved={() => {
+          removedRef.current = true;
+        }}
+        onCloseAutoFocus={onDialogCloseFocus}
       />
     </>
   );

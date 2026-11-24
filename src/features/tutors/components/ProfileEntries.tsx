@@ -1,7 +1,7 @@
-import { useId, useRef, type RefObject } from "react";
+import { useId, useRef, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { useFieldArray, useFormContext, useFormState, type FieldPath } from "react-hook-form";
-import { Plus, Trash2 } from "lucide-react";
+import { useFieldArray, useFormContext, useFormState, useWatch, type FieldPath } from "react-hook-form";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { FormField } from "@shared/components/forms/FormField";
 import { Button } from "@shared/components/ui/Button";
 import { Checkbox } from "@shared/components/ui/Checkbox";
@@ -22,8 +22,9 @@ type Kind = "education" | "experience";
 /*
  * The expert's education and experience as lists of entries, inside the
  * profile form: they are saved with it, each list sent whole in the order
- * shown (entries are added at the end; there is no reordering). The checks
- * are the API's (see expertProfile.schema).
+ * shown — the order the public page lists them in. Entries are added at the
+ * end and moved up or down one place at a time. The checks are the API's (see
+ * expertProfile.schema).
  */
 
 interface EducationProps {
@@ -37,14 +38,16 @@ interface EducationProps {
 
 export function EducationEntriesField({ legacy }: EducationProps) {
   const { control } = useFormContext<Values>();
-  const { fields, append, remove } = useFieldArray({ control, name: "educationEntries" });
+  const { fields, append, remove, move } = useFieldArray({ control, name: "educationEntries" });
   const addRef = useRef<HTMLButtonElement>(null);
+  const mover = useEntryMover(move, fields.length);
 
   return (
     <EntryList
       name="educationEntries"
       count={fields.length}
       addRef={addRef}
+      announcement={mover.announcement}
       addLabel="Add education"
       empty="No education added yet."
       onAdd={() =>
@@ -72,6 +75,10 @@ export function EducationEntriesField({ legacy }: EducationProps) {
         <EntryCard
           key={f.id}
           title={`Education ${i + 1}`}
+          nameField={`educationEntries.${i}.institution`}
+          index={i}
+          count={fields.length}
+          onMove={(to, label) => mover.moveEntry(i, to, label)}
           onRemove={() => removeEntry(remove, i, addRef)}
         >
           <TextField
@@ -90,14 +97,16 @@ export function EducationEntriesField({ legacy }: EducationProps) {
 
 export function ExperienceEntriesField() {
   const { control } = useFormContext<Values>();
-  const { fields, append, remove } = useFieldArray({ control, name: "experienceEntries" });
+  const { fields, append, remove, move } = useFieldArray({ control, name: "experienceEntries" });
   const addRef = useRef<HTMLButtonElement>(null);
+  const mover = useEntryMover(move, fields.length);
 
   return (
     <EntryList
       name="experienceEntries"
       count={fields.length}
       addRef={addRef}
+      announcement={mover.announcement}
       addLabel="Add experience"
       empty="No experience added yet."
       onAdd={() => append({ ...EMPTY_EXPERIENCE }, { focusName: `experienceEntries.${fields.length}.company` })}
@@ -106,6 +115,10 @@ export function ExperienceEntriesField() {
         <EntryCard
           key={f.id}
           title={`Experience ${i + 1}`}
+          nameField={`experienceEntries.${i}.company`}
+          index={i}
+          count={fields.length}
+          onMove={(to, label) => mover.moveEntry(i, to, label)}
           onRemove={() => removeEntry(remove, i, addRef)}
         >
           <TextField
@@ -147,10 +160,30 @@ function removeEntry(remove: (index: number) => void, i: number, addRef: RefObje
   addRef.current?.focus();
 }
 
+/**
+ * Moving an entry: react-hook-form's `move`, which takes the entry's values
+ * and its messages (the form's and the API's) along with it, rendered at once
+ * so the card that holds the focused button is in its new place — and its
+ * buttons enabled or disabled for it — before it takes the focus back (see
+ * EntryCard). Focus stays put, so nothing else would tell a screen reader the
+ * move happened: the list's live region says where the entry went.
+ */
+function useEntryMover(move: (from: number, to: number) => void, count: number) {
+  const [announcement, setAnnouncement] = useState("");
+  const moveEntry = (from: number, to: number, label: string) => {
+    flushSync(() => {
+      move(from, to);
+      setAnnouncement(`${label} moved to position ${to + 1} of ${count}.`);
+    });
+  };
+  return { announcement, moveEntry };
+}
+
 function EntryList({
   name,
   count,
   addRef,
+  announcement,
   addLabel,
   empty,
   onAdd,
@@ -160,6 +193,8 @@ function EntryList({
   name: ListName;
   count: number;
   addRef: React.Ref<HTMLButtonElement>;
+  /** Said by screen readers after a move. */
+  announcement: string;
   addLabel: string;
   empty: string;
   onAdd: () => void;
@@ -174,6 +209,10 @@ function EntryList({
       ) : (
         <p className="rounded-[18px] bg-paper-2 px-4 py-3.5 text-[13.5px] text-ink-3">{empty}</p>
       )}
+      {/* Always on the page: a live region only speaks about changes made after it appeared. */}
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <ListError name={name} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button
@@ -206,9 +245,49 @@ function ListError({ name }: { name: ListName }) {
   return message ? <p className="text-[12.5px] font-medium leading-snug text-danger">{message}</p> : null;
 }
 
-/** One entry: a numbered card, its fields on the form's two-column grid, and its remove button. */
-function EntryCard({ title, onRemove, children }: { title: string; onRemove: () => void; children: React.ReactNode }) {
+/**
+ * One entry: a numbered card, its fields on the form's two-column grid, and
+ * its move and remove buttons.
+ */
+function EntryCard({
+  title,
+  nameField,
+  index,
+  count,
+  onMove,
+  onRemove,
+  children,
+}: {
+  title: string;
+  /** The entry's institution or company: what its move buttons are named after, once typed. */
+  nameField: FieldPath<Values>;
+  index: number;
+  count: number;
+  /** Moves this entry to `to`, rendered by the time it returns. */
+  onMove: (to: number, label: string) => void;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
   const titleId = useId();
+  const upRef = useRef<HTMLButtonElement>(null);
+  const downRef = useRef<HTMLButtonElement>(null);
+  const typed = useWatch<Values>({ name: nameField });
+  const label = (typeof typed === "string" && typed.trim()) || title;
+
+  /**
+   * One place up (-1) or down (1). The card is the same element afterwards —
+   * keyed by the entry, not its place — but React may have moved it in the
+   * page, which drops the focus. So the focus goes back to the button pressed,
+   * to press again; or to the other one when the entry has reached that end of
+   * the list and the pressed one is disabled.
+   */
+  const step = (by: -1 | 1) => {
+    onMove(index + by, label);
+    const pressed = by < 0 ? upRef.current : downRef.current;
+    const other = by < 0 ? downRef.current : upRef.current;
+    (pressed && !pressed.disabled ? pressed : other)?.focus();
+  };
+
   return (
     <li>
       <div role="group" aria-labelledby={titleId} className="rounded-[18px] border border-line bg-surface p-4 sm:p-5">
@@ -216,16 +295,42 @@ function EntryCard({ title, onRemove, children }: { title: string; onRemove: () 
           <p id={titleId} className="font-display text-[15px] font-bold tracking-[-0.01em] text-ink">
             {title}
           </p>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="-mr-2 -mt-1 text-ink-3 hover:bg-danger-tint hover:text-danger"
-            onClick={onRemove}
-            aria-label={`Remove ${title.toLowerCase()}`}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <div className="-mr-2 -mt-1 flex shrink-0 items-center">
+            <Button
+              ref={upRef}
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="text-ink-3"
+              onClick={() => step(-1)}
+              disabled={index === 0}
+              aria-label={`Move up: ${label}`}
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+            <Button
+              ref={downRef}
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="text-ink-3"
+              onClick={() => step(1)}
+              disabled={index === count - 1}
+              aria-label={`Move down: ${label}`}
+            >
+              <ArrowDown className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="text-ink-3 hover:bg-danger-tint hover:text-danger"
+              onClick={onRemove}
+              aria-label={`Remove ${title.toLowerCase()}`}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{children}</div>
       </div>

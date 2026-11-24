@@ -142,6 +142,16 @@ describe("toCalendarEvent", () => {
       "cal-ev--pending",
     );
   });
+
+  it("says a pending booking is pending in its text, not only with its pattern", () => {
+    // The stripes are lost on a month grid's dot rows and to a screen reader.
+    expect(toCalendarEvent(booking).title).toBe("Room 301 · Leyla H. (pending)");
+    expect(toCalendarEvent({ ...booking, bookingStatus: "APPROVED" }).title).toBe("Room 301 · Leyla H.");
+    // The details dialog keeps the API's own title, with the status as a badge.
+    expect((toCalendarEvent(booking).extendedProps as { dto: CalendarEventDto }).dto.title).toBe(
+      "Room 301 · Leyla H.",
+    );
+  });
 });
 
 describe("Baku time", () => {

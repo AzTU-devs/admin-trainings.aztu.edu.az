@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import {
   CalendarClock,
@@ -10,6 +11,7 @@ import {
   ListOrdered,
   MapPin,
   RotateCw,
+  Trash2,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -35,9 +37,13 @@ import type { CourseDto } from "@features/courses/types";
 import { useListCourseParticipantsQuery } from "@features/participants/api/participantsApi";
 import { ViewProfileLink } from "@features/user-profile/components/ViewProfileLink";
 import { CourseAttendanceButton } from "@features/attendance/components/CourseAttendanceButton";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
+import { RemoveRequestDialog } from "@features/room-requests/components/RemoveRequestDialog";
+import type { RemovalTarget } from "@features/room-requests/lib/removal";
 import { KindBadge } from "@features/calendar/components/KindBadge";
 import {
   PLATFORM_TIME_ZONE,
+  bookingIdOf,
   formatEventWhen,
   placeOf,
   seatsText,
@@ -62,6 +68,14 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** The zone the calendar shows (the API's `timezone`). */
   timeZone?: string;
+  /**
+   * After the super admin removed the event's room request (or its whole
+   * series); the dialog then closes itself. The calendar refetches through
+   * the cache tags.
+   */
+  onRemoved?: () => void;
+  /** Where focus goes when this dialog, or its remove confirm, closes (see DialogContent). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -70,24 +84,60 @@ interface Props {
  * belongs to a course the course and its first İştirakçilər are loaded on
  * open from the existing admin endpoints — the calendar has no detail
  * endpoint of its own.
+ *
+ * An entry backed by a room booking ("booking:<id>") offers the super admin
+ * "Remove request", and "Remove whole series" when the booking is a session
+ * of a long-term booking, each behind the same confirm as the request pages.
  */
-export function CalendarEventDialog({ event, onOpenChange, timeZone = PLATFORM_TIME_ZONE }: Props) {
+export function CalendarEventDialog({
+  event,
+  onOpenChange,
+  timeZone = PLATFORM_TIME_ZONE,
+  onRemoved,
+  onCloseAutoFocus,
+}: Props) {
   return (
     <Dialog open={!!event} onOpenChange={onOpenChange}>
-      {event && <EventDetails event={event} timeZone={timeZone} />}
+      {event && (
+        <EventDetails
+          event={event}
+          timeZone={timeZone}
+          onRemoved={() => {
+            onRemoved?.();
+            onOpenChange(false);
+          }}
+          onCloseAutoFocus={onCloseAutoFocus}
+        />
+      )}
     </Dialog>
   );
 }
 
-function EventDetails({ event, timeZone }: { event: CalendarEventDto; timeZone: string }) {
+function EventDetails({
+  event,
+  timeZone,
+  onRemoved,
+  onCloseAutoFocus,
+}: {
+  event: CalendarEventDto;
+  timeZone: string;
+  onRemoved: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
+}) {
   const Icon = KIND_ICON[event.kind] ?? CalendarDays;
   const courseId = event.courseId ?? null;
   const place = placeOf(event);
   const seats = seatsText(event);
   const tutors = (event.tutorNames ?? []).filter(Boolean);
+  const { isSuperAdmin } = usePermissions();
+  const bookingId = isSuperAdmin ? bookingIdOf(event) : null;
+  const seriesId = bookingId ? (event.seriesId ?? null) : null;
+  const [removal, setRemoval] = useState<RemovalTarget | null>(null);
+  const when = `${formatEventWhen(event, timeZone)} (${timeZone} time)`;
+  const status = event.bookingStatus ? ` · ${String(event.bookingStatus).toLowerCase()}` : "";
 
   return (
-    <DialogContent size="lg">
+    <DialogContent size="lg" onCloseAutoFocus={onCloseAutoFocus}>
       <DialogHeader icon={<Icon />}>
         <DialogTitle className="break-words">{event.title}</DialogTitle>
         <DialogDescription asChild>
@@ -120,6 +170,41 @@ function EventDetails({ event, timeZone }: { event: CalendarEventDto; timeZone: 
       {courseId ? <CourseSection courseId={courseId} /> : null}
 
       <DialogFooter>
+        {bookingId && (
+          // Apart from the links on the left: these change data, for good.
+          <div className="flex flex-col-reverse gap-2 sm:mr-auto sm:flex-row">
+            <Button
+              variant="ghost"
+              className="text-danger hover:bg-danger-tint hover:text-danger"
+              leftIcon={<Trash2 className="size-4" />}
+              onClick={() =>
+                setRemoval({
+                  kind: seriesId ? "occurrence" : "booking",
+                  id: bookingId,
+                  what: `${event.title} · ${when}${status}`,
+                })
+              }
+            >
+              Remove request
+            </Button>
+            {seriesId && (
+              <Button
+                variant="ghost"
+                className="text-danger hover:bg-danger-tint hover:text-danger"
+                leftIcon={<Trash2 className="size-4" />}
+                onClick={() =>
+                  setRemoval({
+                    kind: "series",
+                    id: seriesId,
+                    what: `${event.title} · the long-term booking with the session on ${when}`,
+                  })
+                }
+              >
+                Remove whole series
+              </Button>
+            )}
+          </div>
+        )}
         {courseId ? (
           <>
             <Button asChild variant="secondary" leftIcon={<Users className="size-4" />}>
@@ -136,6 +221,15 @@ function EventDetails({ event, timeZone }: { event: CalendarEventDto; timeZone: 
           </Button>
         )}
       </DialogFooter>
+
+      {bookingId && (
+        <RemoveRequestDialog
+          target={removal}
+          onClose={() => setRemoval(null)}
+          onRemoved={onRemoved}
+          onCloseAutoFocus={onCloseAutoFocus}
+        />
+      )}
     </DialogContent>
   );
 }

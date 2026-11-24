@@ -65,11 +65,21 @@ export const ANY_MEDIA_ACCEPT: Accept = {
   ...DOCUMENT_ACCEPT,
 };
 
+/**
+ * A PDF or an image, for files that may be either: an award's scan or its
+ * photo. Still only types a browser shows rather than runs (no SVG).
+ */
+export const DOCUMENT_OR_IMAGE_ACCEPT: Accept = {
+  ...DOCUMENT_ACCEPT,
+  ...IMAGE_ACCEPT,
+};
+
 /** Human wording for each allowlist — used in help text and rejection messages. */
 export const IMAGE_FORMATS_LABEL = "JPEG, PNG, GIF, WebP or AVIF";
 export const VIDEO_FORMATS_LABEL = "MP4, WebM or MOV";
 export const DOCUMENT_FORMATS_LABEL = "PDF";
 export const ANY_MEDIA_FORMATS_LABEL = "an image, a video or a PDF";
+export const DOCUMENT_OR_IMAGE_FORMATS_LABEL = `a PDF or an image (${IMAGE_FORMATS_LABEL})`;
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"];
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov"];
@@ -144,25 +154,31 @@ export function validateAnyMediaFile(
   file: File,
   limits: { maxImageMb: number; maxVideoMb: number; maxDocumentMb: number },
 ): string | null {
+  if (claims(file, IMAGE_MIME_TYPES, IMAGE_EXTENSIONS)) return validateImageFile(file, limits.maxImageMb);
+  if (claims(file, VIDEO_MIME_TYPES, VIDEO_EXTENSIONS)) return validateVideoFile(file, limits.maxVideoMb);
+  if (claims(file, DOCUMENT_MIME_TYPES, DOCUMENT_EXTENSIONS)) {
+    return validateDocumentFile(file, limits.maxDocumentMb);
+  }
+  return `${file.name} is not a supported file. Use ${ANY_MEDIA_FORMATS_LABEL}.`;
+}
+
+/** {@link validateAnyMediaFile} for a PDF or an image only, each against its own size cap. */
+export function validateDocumentOrImageFile(
+  file: File,
+  limits: { maxImageMb: number; maxDocumentMb: number },
+): string | null {
+  if (claims(file, IMAGE_MIME_TYPES, IMAGE_EXTENSIONS)) return validateImageFile(file, limits.maxImageMb);
+  if (claims(file, DOCUMENT_MIME_TYPES, DOCUMENT_EXTENSIONS)) {
+    return validateDocumentFile(file, limits.maxDocumentMb);
+  }
+  return `${file.name} is not a supported file. Use ${DOCUMENT_OR_IMAGE_FORMATS_LABEL}.`;
+}
+
+/** Whether a file says it is of a kind: by its declared type, or by its extension when it declares none. */
+function claims(file: File, mimeTypes: readonly string[], extensions: readonly string[]): boolean {
   const declared = file.type.toLowerCase();
   const name = file.name.toLowerCase();
-
-  const isImage =
-    (IMAGE_MIME_TYPES as readonly string[]).includes(declared) ||
-    (!declared && IMAGE_EXTENSIONS.some((e) => name.endsWith(e)));
-  if (isImage) return validateImageFile(file, limits.maxImageMb);
-
-  const isVideo =
-    (VIDEO_MIME_TYPES as readonly string[]).includes(declared) ||
-    (!declared && VIDEO_EXTENSIONS.some((e) => name.endsWith(e)));
-  if (isVideo) return validateVideoFile(file, limits.maxVideoMb);
-
-  const isDocument =
-    (DOCUMENT_MIME_TYPES as readonly string[]).includes(declared) ||
-    (!declared && DOCUMENT_EXTENSIONS.some((e) => name.endsWith(e)));
-  if (isDocument) return validateDocumentFile(file, limits.maxDocumentMb);
-
-  return `${file.name} is not a supported file. Use ${ANY_MEDIA_FORMATS_LABEL}.`;
+  return mimeTypes.includes(declared) || (!declared && extensions.some((e) => name.endsWith(e)));
 }
 
 function validate(

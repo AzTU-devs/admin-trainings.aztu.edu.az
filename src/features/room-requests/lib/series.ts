@@ -162,6 +162,16 @@ export function zonedInstant(date: string, time: string, timeZone = PLATFORM_TIM
   return new Date(t);
 }
 
+/**
+ * {@link zonedInstant} for a `datetime-local` value ("2026-11-02T10:00", seconds
+ * optional): the instant it names on the clock of `timeZone`, not the browser's.
+ */
+export function zonedInstantOfInput(value: string, timeZone = PLATFORM_TIMEZONE): Date | null {
+  const [date, time] = value.split("T");
+  if (!date || !time) return null;
+  return zonedInstant(date, time.slice(0, 5), timeZone);
+}
+
 /** Today's date in `timeZone`, as yyyy-MM-dd. */
 export function todayIn(timeZone = PLATFORM_TIMEZONE, now: Date = new Date()): string {
   return wallClock(now, timeZone).date;

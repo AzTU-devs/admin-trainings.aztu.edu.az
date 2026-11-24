@@ -275,3 +275,150 @@ describe("ExpertProfileForm — experience", () => {
     expect(await within(entry("Experience 1")).findByText("must not be blank")).toBeInTheDocument();
   });
 });
+
+describe("ExpertProfileForm — order of the entries", () => {
+  const AZTU = { institution: "AzTU", degree: null, startYear: 2006, endYear: 2010 };
+  const ADA = { institution: "ADA University", degree: null, startYear: 2010, endYear: 2012 };
+  const METU = { institution: "METU", degree: "PhD", startYear: 2012, endYear: 2016 };
+  const button = (name: string) => screen.getByRole("button", { name });
+  const institution = (title: string) => field(entry(title), "textbox", /^Institution/);
+
+  it("moves an entry, keeps the focus on the button pressed, and saves the new order", async () => {
+    const user = userEvent.setup();
+    const { onSave, save } = renderForm(profile({ educationEntries: [AZTU, ADA, METU] }));
+
+    // Nowhere to go past either end.
+    expect(button("Move up: AzTU")).toBeDisabled();
+    expect(button("Move down: METU")).toBeDisabled();
+
+    button("Move down: AzTU").focus();
+    await user.keyboard("{Enter}");
+    expect(institution("Education 1")).toHaveValue("ADA University");
+    expect(institution("Education 2")).toHaveValue("AzTU");
+    // Still on the same entry's same button, to press again.
+    expect(button("Move down: AzTU")).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(institution("Education 3")).toHaveValue("AzTU");
+    // Last now, so "down" is disabled: the focus is on its "up" instead.
+    expect(button("Move down: AzTU")).toBeDisabled();
+    expect(button("Move up: AzTU")).toHaveFocus();
+
+    // And back up, all the way: at the top "up" is disabled, so the focus goes to "down".
+    await user.keyboard("{Enter}");
+    expect(institution("Education 2")).toHaveValue("AzTU");
+    expect(button("Move up: AzTU")).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(institution("Education 1")).toHaveValue("AzTU");
+    expect(button("Move up: AzTU")).toBeDisabled();
+    expect(button("Move down: AzTU")).toHaveFocus();
+
+    // By pointer too.
+    await user.click(button("Move up: METU"));
+    expect(button("Move up: METU")).toHaveFocus();
+    expect([1, 2, 3].map((n) => institution(`Education ${n}`))).toEqual([
+      expect.objectContaining({ value: "AzTU" }),
+      expect.objectContaining({ value: "METU" }),
+      expect.objectContaining({ value: "ADA University" }),
+    ]);
+
+    await save();
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ educationEntries: [AZTU, METU, ADA] }));
+  });
+
+  it("tells a screen reader where the entry went", async () => {
+    const user = userEvent.setup();
+    renderForm(profile({ educationEntries: [AZTU, ADA, METU] }));
+
+    await user.click(button("Move down: ADA University"));
+    expect(screen.getByText("ADA University moved to position 3 of 3.")).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("names the move buttons after the entry once its name is typed", async () => {
+    const user = userEvent.setup();
+    const { onSave, save } = renderForm(
+      profile({
+        experienceEntries: [{ company: "Azercell", position: "Engineer", startYear: 2015, endYear: null, description: null }],
+      }),
+    );
+
+    // A lone entry can't move either way.
+    expect(button("Move up: Azercell")).toBeDisabled();
+    expect(button("Move down: Azercell")).toBeDisabled();
+
+    await user.click(button("Add experience"));
+    // Before its company is typed, the new entry goes by its card's title.
+    expect(button("Move up: Experience 2")).toBeEnabled();
+    await user.type(field(entry("Experience 2"), "textbox", /^Company or organisation/), "Kapital Bank");
+    await user.type(field(entry("Experience 2"), "textbox", /^Position/), "Analyst");
+    await user.type(field(entry("Experience 2"), "spinbutton", /^Start year/), "2020");
+    await user.click(within(entry("Experience 2")).getByRole("checkbox", { name: "Present" }));
+
+    await user.click(button("Move up: Kapital Bank"));
+    expect(field(entry("Experience 1"), "textbox", /^Company or organisation/)).toHaveValue("Kapital Bank");
+    expect(button("Move down: Kapital Bank")).toHaveFocus();
+
+    await save();
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith({
+        experienceEntries: [
+          { company: "Kapital Bank", position: "Analyst", startYear: 2020, endYear: null, description: null },
+          { company: "Azercell", position: "Engineer", startYear: 2015, endYear: null, description: null },
+        ],
+      }),
+    );
+  });
+
+  it("keeps the form's messages with the entry they are about", async () => {
+    const user = userEvent.setup();
+    const { onSave, save } = renderForm(profile({ educationEntries: [AZTU] }));
+
+    await user.click(button("Add education"));
+    await user.type(institution("Education 2"), "ADA University");
+    await user.type(field(entry("Education 2"), "spinbutton", /^Start year/), "1949");
+    await user.type(field(entry("Education 2"), "spinbutton", /^End year/), "2012");
+    await save();
+    expect(await within(entry("Education 2")).findByText("1950 or later")).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+
+    await user.click(button("Move up: ADA University"));
+    // The entry and its message moved together; the other entry has none.
+    expect(institution("Education 1")).toHaveValue("ADA University");
+    expect(within(entry("Education 1")).getByText("1950 or later")).toBeInTheDocument();
+    expect(within(entry("Education 2")).queryByText("1950 or later")).not.toBeInTheDocument();
+    expect(field(entry("Education 2"), "spinbutton", /^Start year/)).toHaveValue(2006);
+
+    // Fixed where it now is, it saves in the new order.
+    await user.clear(field(entry("Education 1"), "spinbutton", /^Start year/));
+    await user.type(field(entry("Education 1"), "spinbutton", /^Start year/), "2010");
+    await save();
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ educationEntries: [ADA, AZTU] }));
+  });
+
+  it("keeps the API's message with the entry it is about", async () => {
+    const saved = profile({
+      experienceEntries: [
+        { company: "Azercell", position: "Engineer", startYear: 2015, endYear: null, description: null },
+        { company: "Kapital Bank", position: "Analyst", startYear: 2012, endYear: 2015, description: null },
+      ],
+    });
+    const onSave = vi.fn().mockRejectedValue({
+      status: 400,
+      code: "VALIDATION_FAILED",
+      message: "Request validation failed",
+      fieldErrors: [{ field: "experienceEntries[0].position", message: "must not be blank" }],
+      isNormalized: true,
+    });
+    render(<ExpertProfileForm profile={saved} onSave={onSave} />);
+    const user = userEvent.setup();
+
+    await user.type(field(entry("Experience 1"), "textbox", /^Position/), " lead");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(await within(entry("Experience 1")).findByText("must not be blank")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Move down: Azercell" }));
+    expect(field(entry("Experience 2"), "textbox", /^Company or organisation/)).toHaveValue("Azercell");
+    expect(within(entry("Experience 2")).getByText("must not be blank")).toBeInTheDocument();
+    expect(within(entry("Experience 1")).queryByText("must not be blank")).not.toBeInTheDocument();
+  });
+});

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { CalendarEventDialog, PARTICIPANT_PREVIEW } from "./CalendarEventDialog";
@@ -14,10 +14,19 @@ vi.mock("@features/courses/api/coursesApi", () => ({ useGetAdminCourseByIdQuery:
 vi.mock("@features/participants/api/participantsApi", () => ({
   useListCourseParticipantsQuery: vi.fn(),
 }));
-// The profile link is the super admin's; the calendar is only theirs anyway.
-vi.mock("@features/auth/hooks/usePermissions", () => ({
-  usePermissions: () => ({ isSuperAdmin: true }),
+// The profile link and the removals are the super admin's; the calendar is
+// only theirs anyway, but the dialog checks for the removals itself.
+const { perms, removeBooking, removeSeries } = vi.hoisted(() => ({
+  perms: { isSuperAdmin: true },
+  removeBooking: vi.fn(),
+  removeSeries: vi.fn(),
 }));
+vi.mock("@features/auth/hooks/usePermissions", () => ({ usePermissions: () => perms }));
+vi.mock("@features/room-requests/api/roomRequestsApi", () => ({
+  useRemoveRoomBookingMutation: () => [removeBooking, { isLoading: false }],
+  useRemoveRoomBookingSeriesMutation: () => [removeSeries, { isLoading: false }],
+}));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const COURSE_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -150,6 +159,111 @@ function renderDialog(event: CalendarEventDto | null, onOpenChange = vi.fn()) {
 beforeEach(() => {
   vi.mocked(useGetAdminCourseByIdQuery).mockReset();
   vi.mocked(useListCourseParticipantsQuery).mockReset();
+  perms.isSuperAdmin = true;
+  removeBooking.mockReset().mockReturnValue({ unwrap: () => Promise.resolve(undefined) });
+  removeSeries.mockReset().mockReturnValue({ unwrap: () => Promise.resolve(undefined) });
+});
+
+const BOOKING_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const SERIES_ID = "5e000000-0000-4000-8000-000000000001";
+
+function renderRemovable(event: CalendarEventDto) {
+  const onOpenChange = vi.fn();
+  const onRemoved = vi.fn();
+  render(
+    <MemoryRouter>
+      <CalendarEventDialog
+        event={event}
+        onOpenChange={onOpenChange}
+        onRemoved={onRemoved}
+        timeZone="Asia/Baku"
+      />
+    </MemoryRouter>,
+  );
+  return { onOpenChange, onRemoved, user: userEvent.setup() };
+}
+
+describe("CalendarEventDialog — removing the room request", () => {
+  beforeEach(() => {
+    mockCourse({ data: course });
+    mockParticipants({ data: participants });
+  });
+
+  it("offers the super admin Remove request on a booking, behind the confirm", async () => {
+    const { user, onOpenChange, onRemoved } = renderRemovable(bookingEvent);
+    const details = screen.getByRole("dialog", { name: "Room 301 · Leyla H." });
+    expect(within(details).queryByRole("button", { name: "Remove whole series" })).not.toBeInTheDocument();
+
+    await user.click(within(details).getByRole("button", { name: "Remove request" }));
+    const confirm = await screen.findByRole("dialog", { name: "Remove this booking request?" });
+    expect(confirm).toHaveTextContent(
+      "Room 301 · Leyla H. · Tue, 3 Nov 2026 · 14:00–16:00 (Asia/Baku time) · pending",
+    );
+    expect(confirm).toHaveTextContent("This cannot be undone.");
+    expect(confirm).toHaveTextContent("its time slot is free to book again");
+
+    await user.click(within(confirm).getByRole("button", { name: "Remove request" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(removeBooking).toHaveBeenCalledWith(BOOKING_ID);
+    expect(onRemoved).toHaveBeenCalled();
+  });
+
+  it("offers Remove whole series for a session of a long-term booking", async () => {
+    const { user, onRemoved } = renderRemovable({ ...bookingEvent, seriesId: SERIES_ID });
+    const details = screen.getByRole("dialog", { name: "Room 301 · Leyla H." });
+
+    // The one session first: only it goes.
+    await user.click(within(details).getByRole("button", { name: "Remove request" }));
+    const one = await screen.findByRole("dialog", { name: "Remove this session?" });
+    await user.click(within(one).getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Remove this session?" })).not.toBeInTheDocument(),
+    );
+    // Back on the button that opened it.
+    expect(within(details).getByRole("button", { name: "Remove request" })).toHaveFocus();
+
+    await user.click(within(details).getByRole("button", { name: "Remove whole series" }));
+    const all = await screen.findByRole("dialog", { name: "Remove this long-term booking?" });
+    expect(all).toHaveTextContent(
+      "Room 301 · Leyla H. · the long-term booking with the session on Tue, 3 Nov 2026 · 14:00–16:00 (Asia/Baku time)",
+    );
+    expect(all).toHaveTextContent("every session of it are removed");
+    await user.click(within(all).getByRole("button", { name: "Remove whole series" }));
+
+    await waitFor(() => expect(removeSeries).toHaveBeenCalledWith(SERIES_ID));
+    expect(removeBooking).not.toHaveBeenCalled();
+    expect(onRemoved).toHaveBeenCalled();
+  });
+
+  it("offers Remove request on a course meeting that is the course's room booking", async () => {
+    const { user } = renderRemovable({
+      ...oneTimeEvent,
+      id: `booking:${BOOKING_ID}`,
+      kind: "SESSION",
+      courseType: "OFFLINE",
+      bookingStatus: "APPROVED",
+    });
+    await user.click(screen.getByRole("button", { name: "Remove request" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Remove this booking request?" })).getByRole(
+        "button",
+        { name: "Remove request" },
+      ),
+    );
+    await waitFor(() => expect(removeBooking).toHaveBeenCalledWith(BOOKING_ID));
+  });
+
+  it("offers no removal on an entry that is not a room booking", () => {
+    renderRemovable(oneTimeEvent);
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+  });
+
+  it("offers no removal to an admin who is not the super admin", () => {
+    perms.isSuperAdmin = false;
+    renderRemovable({ ...bookingEvent, seriesId: SERIES_ID });
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("CalendarEventDialog", () => {

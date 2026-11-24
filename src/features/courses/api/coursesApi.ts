@@ -28,14 +28,16 @@ interface ModerationArgs extends PageRequest {
  * Cache keys an admin write touches. Keyed off the course id rather than the
  * response body so the lists still refresh for a write that answers with less
  * than a full course, and the public slug entry is dropped too whenever the
- * response tells us the slug.
+ * response tells us the slug. The super admin's calendar shows courses (their
+ * dates, sessions, status and tutors), so it is refreshed as well.
  */
-const adminCourseTags = (id: UUID, res?: CourseDto): { type: "Course"; id: string }[] => [
+const adminCourseTags = (id: UUID, res?: CourseDto): ({ type: "Course"; id: string } | "Calendar")[] => [
   { type: "Course", id },
   { type: "Course", id: "MODERATION" },
   { type: "Course", id: "MINE" },
   { type: "Course", id: "PUBLIC-LIST" },
   ...(res ? [{ type: "Course" as const, id: res.slug }] : []),
+  "Calendar",
 ];
 
 export const coursesApi = baseApi.injectEndpoints({
@@ -84,6 +86,8 @@ export const coursesApi = baseApi.injectEndpoints({
         { type: "Course", id: "PUBLIC-LIST" },
         { type: "Course", id: "MINE" },
         { type: "Course", id },
+        // An archived course leaves the calendar.
+        "Calendar",
       ],
     }),
 
@@ -107,6 +111,7 @@ export const coursesApi = baseApi.injectEndpoints({
         { type: "Course", id: "MODERATION" },
         { type: "Course", id: "MINE" },
         { type: "Course", id: "PUBLIC-LIST" },
+        "Calendar",
       ],
     }),
     updateAdminCourse: build.mutation<CourseDto, { id: UUID; body: UpdateCourseRequest }>({
@@ -136,8 +141,9 @@ export const coursesApi = baseApi.injectEndpoints({
               { type: "Course", id: res.id },
               { type: "Course", id: "MODERATION" },
               { type: "Course", id: "MINE" },
+              "Calendar",
             ]
-          : [{ type: "Course", id: arg.id }, { type: "Course", id: "MODERATION" }],
+          : [{ type: "Course", id: arg.id }, { type: "Course", id: "MODERATION" }, "Calendar"],
     }),
   }),
   overrideExisting: false,

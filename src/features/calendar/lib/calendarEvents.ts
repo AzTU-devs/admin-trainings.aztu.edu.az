@@ -169,9 +169,13 @@ export function toCalendarEvent(dto: CalendarEventDto, timeZone = PLATFORM_TIME_
   const className = ["cal-ev", `cal-ev--${meta.slug}`, pending ? "cal-ev--pending" : ""]
     .filter(Boolean)
     .join(" ");
+  const title = dto.title || meta.label;
   const base = {
     id: dto.id,
-    title: dto.title || meta.label,
+    // Said in words as well as drawn as stripes: a month grid draws a timed
+    // entry as a dot row, where the stripes hardly show, and a screen reader
+    // reads only the entry's text.
+    title: pending ? `${title} (pending)` : title,
     className,
     ...kindColors(dto.kind),
     extendedProps: { dto } satisfies CalendarEventProps,
@@ -249,6 +253,16 @@ export function zoneOffsetLabel(timeZone = PLATFORM_TIME_ZONE, at: Date = new Da
   } catch {
     return "";
   }
+}
+
+/**
+ * The room booking behind an event, when the event is one: a ROOM_BOOKING,
+ * or a course SESSION taken from the course's approved booking (both have the
+ * id "booking:<bookingId>"). A session of its own ("session:<id>") is not.
+ */
+export function bookingIdOf(dto: Pick<CalendarEventDto, "id">): string | null {
+  const id = dto.id.startsWith("booking:") ? dto.id.slice("booking:".length) : "";
+  return id || null;
 }
 
 /** Room, city and street on one line, skipping what is missing. */

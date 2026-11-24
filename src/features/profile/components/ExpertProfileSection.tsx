@@ -4,7 +4,9 @@ import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { ExpertProfileForm } from "@features/tutors/components/ExpertProfileForm";
 import { TutorStatusBadge } from "@features/tutors/components/TutorStatusBadge";
 import {
+  useAddMyAwardMutation,
   useAddMyCertificateMutation,
+  useDeleteMyAwardMutation,
   useDeleteMyCertificateMutation,
   useGetMyTutorProfileQuery,
   useUpdateMyTutorProfileMutation,
@@ -26,6 +28,8 @@ export function ExpertProfileSection() {
   const [update] = useUpdateMyTutorProfileMutation();
   const [addCertificate] = useAddMyCertificateMutation();
   const [deleteCertificate] = useDeleteMyCertificateMutation();
+  const [addAward] = useAddMyAwardMutation();
+  const [deleteAward] = useDeleteMyAwardMutation();
 
   if (isLoading) {
     return (
@@ -83,6 +87,8 @@ export function ExpertProfileSection() {
         onSave={(body) => update(body).unwrap()}
         onAddCertificate={(body) => addCertificate(body).unwrap()}
         onDeleteCertificate={(id) => deleteCertificate(id).unwrap()}
+        onAddAward={(body) => addAward(body).unwrap()}
+        onDeleteAward={(id) => deleteAward(id).unwrap()}
         layout="cards"
         saveBarLabel="Expert profile"
       />

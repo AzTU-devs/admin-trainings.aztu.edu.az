@@ -11,6 +11,7 @@ import {
   todayIn,
   wallClock,
   zonedInstant,
+  zonedInstantOfInput,
 } from "./series";
 
 const MON_WED = ["MONDAY", "WEDNESDAY"];
@@ -89,6 +90,17 @@ describe("Baku wall-clock times", () => {
     // 21:30Z is already the next day in Baku.
     expect(todayIn(undefined, new Date("2026-10-25T21:30:00Z"))).toBe("2026-10-26");
     expect(todayIn(undefined, new Date("2026-10-25T19:30:00Z"))).toBe("2026-10-25");
+  });
+
+  it("reads a datetime-local value on the Baku clock", () => {
+    expect(zonedInstantOfInput("2026-12-08T08:00")?.toISOString()).toBe("2026-12-08T04:00:00.000Z");
+    // Seconds, which some browsers add, do not move the minute.
+    expect(zonedInstantOfInput("2026-12-08T08:00:30")?.toISOString()).toBe("2026-12-08T04:00:00.000Z");
+    // Just after midnight in Baku is still the day before in UTC.
+    expect(zonedInstantOfInput("2026-12-08T01:00")?.toISOString()).toBe("2026-12-07T21:00:00.000Z");
+    expect(zonedInstantOfInput("")).toBeNull();
+    expect(zonedInstantOfInput("2026-12-08")).toBeNull();
+    expect(zonedInstantOfInput("2026-12-08T")).toBeNull();
   });
 });
 

@@ -68,6 +68,10 @@ export const TAGS = [
   "Me",
   "Security",
   "Attendance",
+  // The super admin's calendar (`GET /api/admin/calendar`). Bookings and
+  // courses live in other features; every write that changes what the
+  // calendar shows invalidates this, so an open or cached range refetches.
+  "Calendar",
 ] as const;
 
 export type ApiTag = (typeof TAGS)[number];

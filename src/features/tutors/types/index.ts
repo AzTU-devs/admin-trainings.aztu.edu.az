@@ -45,6 +45,33 @@ export interface CreateCertificateRequest {
   mediaId: UUID;
 }
 
+/** What an award's file is, as the API derives it from the stored type. */
+export type AwardFileKind = "PDF" | "IMAGE";
+
+/**
+ * One award (Təltif) on the expert profile, named in both languages, with an
+ * optional PDF or image. Like a certificate, added and deleted one at a time
+ * through its own endpoints, never through the profile PATCH.
+ */
+export interface TutorAward {
+  id: UUID;
+  nameAz: string;
+  nameEn: string;
+  /** Null for an award without a file; then `fileUrl` and `fileKind` are null too. */
+  mediaId: UUID | null;
+  /** `/api/public/media/{mediaId}/content`: public only while the expert is APPROVED. */
+  fileUrl: string | null;
+  fileKind: AwardFileKind | null;
+  createdAt: string;
+}
+
+/** Body of `POST …/awards`; a file is uploaded to `/media` first, and left out when there is none. */
+export interface CreateAwardRequest {
+  nameAz: string;
+  nameEn: string;
+  mediaId?: UUID;
+}
+
 /** Mirror of backend TutorProfileDto. */
 export interface TutorProfileDto {
   id: UUID;
@@ -98,6 +125,8 @@ export interface TutorProfileDto {
   experienceEntries?: ExperienceEntry[];
   /** Oldest first, as the API sorts them. */
   certificates?: TutorCertificate[];
+  /** Oldest first, like the certificates. Absent from builds before awards: read as `?? []`. */
+  awards?: TutorAward[];
 }
 
 /**

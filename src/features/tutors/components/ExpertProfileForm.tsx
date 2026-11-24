@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Briefcase, FileText, GraduationCap, Link2, Loader2, Plus, Tags, UserRound, X } from "lucide-react";
+import { Briefcase, FileText, GraduationCap, Link2, Loader2, Plus, Tags, Trophy, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
@@ -18,6 +18,7 @@ import { StickySaveBar } from "@features/profile/components/StickySaveBar";
 import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
 import { CvField } from "@features/tutors/components/CvField";
 import { CertificatesField } from "@features/tutors/components/CertificatesField";
+import { AwardsField } from "@features/tutors/components/AwardsField";
 import { EducationEntriesField, ExperienceEntriesField } from "@features/tutors/components/ProfileEntries";
 import {
   AREAS_REQUIRED_MESSAGE,
@@ -31,7 +32,9 @@ import {
   type ExpertProfileFormValues,
 } from "@features/tutors/schemas/expertProfile.schema";
 import type {
+  CreateAwardRequest,
   CreateCertificateRequest,
+  TutorAward,
   TutorCertificate,
   TutorProfileDto,
   UpdateTutorProfileRequest,
@@ -71,6 +74,9 @@ interface Props {
    */
   onAddCertificate?: (body: CreateCertificateRequest) => Promise<TutorCertificate>;
   onDeleteCertificate?: (id: UUID) => Promise<void>;
+  /** The same for awards: each saved at once through the caller's endpoint, never with the profile. */
+  onAddAward?: (body: CreateAwardRequest) => Promise<TutorAward>;
+  onDeleteAward?: (id: UUID) => Promise<void>;
 }
 
 /**
@@ -104,6 +110,8 @@ export function ExpertProfileForm({
   saveBarLabel,
   onAddCertificate,
   onDeleteCertificate,
+  onAddAward,
+  onDeleteAward,
 }: Props) {
   const [uploadMedia] = useUploadMediaMutation();
   const [uploading, setUploading] = useState(false);
@@ -116,6 +124,8 @@ export function ExpertProfileForm({
   // server's — kept here rather than read from the prop, which in the admin
   // dialog is the row as the table loaded it.
   const [certificates, setCertificates] = useState<TutorCertificate[]>(profile.certificates ?? []);
+  // Awards are saved the same way, so kept the same way.
+  const [awards, setAwards] = useState<TutorAward[]>(profile.awards ?? []);
   const approved = saved.approvalStatus === TUTOR_APPROVAL_STATUS.APPROVED;
 
   const form = useForm<ExpertProfileFormValues>({
@@ -447,6 +457,13 @@ export function ExpertProfileForm({
                   : "No longer shown publicly: the certificates above take their place. Clear this box once everything is moved over.",
             })}
         </>,
+      )}
+
+      {section(
+        <Trophy />,
+        "Təltiflər (Awards)",
+        "Prizes and honours, each named in Azerbaijani and English, with a PDF or image if there is one. Saved as soon as they are added or deleted.",
+        <AwardsField awards={awards} onChange={setAwards} add={onAddAward} remove={onDeleteAward} />,
       )}
 
       {section(

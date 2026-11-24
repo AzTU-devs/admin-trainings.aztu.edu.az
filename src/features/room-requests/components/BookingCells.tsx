@@ -5,21 +5,27 @@ import { formatAmount } from "@features/rooms/lib/money";
 import { RoomTile } from "@features/rooms/components/RoomTile";
 import { RoomRequestStatusBadge } from "@features/room-requests/components/RoomRequestStatusBadge";
 import type { RoomBookingDto } from "@features/room-requests/types";
+import { PLATFORM_TIMEZONE, wallClock } from "@features/room-requests/lib/series";
 
 /*
  * The cells of the booking tables (admin review queue, tutor's own bookings)
  * and the phone row that stands in for them under 768px. Presentation only:
  * the pages own the columns, sorting, paging and actions.
  *
- * Dates follow the browser's locale, like the rest of the dashboard.
+ * Times are the platform's wall clock (Asia/Baku) whatever the browser's zone,
+ * as on the calendar, in the long-term bookings and in the Remove confirm: a
+ * reviewer abroad otherwise saw 08:00 Baku as 11:00 PM the day before, and the
+ * row disagreed with the confirm opened from it. The format follows the
+ * browser's locale, like the rest of the dashboard.
  */
-const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const IN_BAKU = { timeZone: PLATFORM_TIMEZONE } as const;
+const time = (d: Date) => d.toLocaleTimeString(undefined, { ...IN_BAKU, hour: "numeric", minute: "2-digit" });
 const longDate = (d: Date) =>
-  d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  d.toLocaleDateString(undefined, { ...IN_BAKU, weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const dateTime = (d: Date) =>
-  `${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}, ${time(d)}`;
+  `${d.toLocaleDateString(undefined, { ...IN_BAKU, month: "short", day: "numeric", year: "numeric" })}, ${time(d)}`;
 
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+const sameDay = (a: Date, b: Date) => wallClock(a).date === wallClock(b).date;
 
 /**
  * A 40px calendar tile — month over day. On a phone card it is the row's only
@@ -50,10 +56,10 @@ export function DateTile({
       )}
     >
       <span className={cn("text-[10px] font-semibold leading-none", plain ? "text-ink-3" : "text-k-700")}>
-        {date.toLocaleDateString(undefined, { month: "short" })}
+        {date.toLocaleDateString(undefined, { ...IN_BAKU, month: "short" })}
       </span>
       <span className="mt-[3px] font-display text-[16px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">
-        {date.getDate()}
+        {Number(wallClock(date).date.slice(8))}
       </span>
     </span>
   );

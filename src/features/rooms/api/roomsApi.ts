@@ -24,7 +24,8 @@ export const roomsApi = baseApi.injectEndpoints({
     }),
     deleteRoom: build.mutation<void, UUID>({
       query: (id) => ({ url: `/admin/rooms/${id}`, method: "DELETE" }),
-      invalidatesTags: [{ type: "Room", id: "LIST" }],
+      // A deleted room's bookings leave the super admin's calendar.
+      invalidatesTags: [{ type: "Room", id: "LIST" }, "Calendar"],
     }),
   }),
   overrideExisting: false,

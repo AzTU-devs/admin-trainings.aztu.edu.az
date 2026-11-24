@@ -35,6 +35,12 @@ export interface CalendarEventDto {
   seatLimit?: number | null;
   enrolledCount?: number | null;
   bookingStatus?: BookingStatus | string | null;
+  /**
+   * For a booking event ("booking:<id>"), the long-term booking it is a
+   * session of; null or absent for a single booking. Offers "Remove whole
+   * series" in the details; without it only the one session can be removed.
+   */
+  seriesId?: UUID | null;
 }
 
 /** The calendar payload after unwrapping `{ data, meta }`. */

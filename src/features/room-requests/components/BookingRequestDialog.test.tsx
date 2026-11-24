@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
@@ -187,4 +187,39 @@ describe("BookingRequestDialog — long-term booking", () => {
     expect(within(field!).getByLabelText(/^Start date/)).toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledWith(message);
   });
+});
+
+describe("BookingRequestDialog — single booking", () => {
+  const originalTz = process.env.TZ;
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  // The times typed are Baku's, as the long-term form's are and as every list and
+  // the calendar show them; new Date() read them in the browser's zone instead.
+  it.each(["UTC", "America/New_York", "Asia/Baku"])(
+    "reads the times typed as Baku time with the browser in %s",
+    async (zone) => {
+      process.env.TZ = zone;
+      createBooking.mockReturnValue(resolves({ id: "b1" }));
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup();
+      render(<BookingRequestDialog open onOpenChange={onOpenChange} room={ROOM} />);
+
+      expect(screen.getByLabelText(/^Starts at \(Baku time\)/)).toBeInTheDocument();
+      set(/^Starts at/, "2099-12-08T08:00");
+      set(/^Ends at/, "2099-12-08T09:30");
+      await user.click(screen.getByRole("button", { name: "Request" }));
+
+      await waitFor(() => expect(createBooking).toHaveBeenCalledTimes(1));
+      expect(createBooking).toHaveBeenCalledWith({
+        roomId: ROOM.id,
+        offlineCourseId: undefined,
+        startsAt: "2099-12-08T04:00:00.000Z",
+        endsAt: "2099-12-08T05:30:00.000Z",
+      });
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    },
+  );
 });

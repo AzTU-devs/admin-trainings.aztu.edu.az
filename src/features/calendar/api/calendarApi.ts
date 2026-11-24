@@ -22,6 +22,9 @@ export const calendarApi = baseApi.injectEndpoints({
           return { error: normalizeError(e) };
         }
       },
+      // Every range at once: a booking decided or removed, or a course
+      // changed, may sit in any of them (see the "Calendar" tag in baseApi).
+      providesTags: ["Calendar"],
     }),
   }),
   overrideExisting: false,

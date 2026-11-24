@@ -19,6 +19,7 @@ import { Input } from "@shared/components/ui/Input";
 import { useUploadMediaMutation } from "@shared/api/mediaApi";
 import { formatFileSize } from "@shared/components/upload/uploadConstraints";
 import { serverFieldErrors } from "@shared/lib/fieldErrors";
+import { isolatedSubmit } from "@shared/lib/isolatedSubmit";
 import { openStoredDocument } from "@shared/lib/openDocument";
 import { cn } from "@shared/lib/cn";
 import type { UUID } from "@shared/types/lms";
@@ -301,13 +302,8 @@ function CertificateForm({
     <FormProvider {...form}>
       <form
         noValidate
-        // The dialog sits in a portal, but React still bubbles its submit up the
-        // component tree — into the profile form around this field, which would
-        // save the whole profile too. Stopped here.
-        onSubmit={(e) => {
-          e.stopPropagation();
-          void form.handleSubmit(submit)(e);
-        }}
+        // Not also a submit of the profile form around this field.
+        onSubmit={isolatedSubmit(form.handleSubmit(submit))}
         className="space-y-4"
       >
         <FormField<CertificateFormValues> name="title" label="Title" required>

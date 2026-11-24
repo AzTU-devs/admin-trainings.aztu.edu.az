@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatFileSize,
+  validateDocumentOrImageFile,
   validateImageFile,
   validateVideoFile,
   videoContentType,
@@ -61,6 +62,37 @@ describe("validateImageFile", () => {
   it("refuses a script renamed to look like an image", () => {
     expect(validateImageFile(fakeFile("payload.js", "text/javascript", 2048), 10)).not.toBeNull();
     expect(validateImageFile(fakeFile("payload.php", "", 2048), 10)).not.toBeNull();
+  });
+});
+
+describe("validateDocumentOrImageFile", () => {
+  const limits = { maxImageMb: 10, maxDocumentMb: 50 };
+
+  it("accepts a PDF and the five image types the API stores", () => {
+    for (const type of ["application/pdf", "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]) {
+      expect(validateDocumentOrImageFile(fakeFile("award", type, MB), limits)).toBeNull();
+    }
+    // By extension, when the browser reports no type.
+    expect(validateDocumentOrImageFile(fakeFile("award.pdf", "", MB), limits)).toBeNull();
+    expect(validateDocumentOrImageFile(fakeFile("award.webp", "", MB), limits)).toBeNull();
+  });
+
+  it("holds each kind to its own size cap", () => {
+    expect(validateDocumentOrImageFile(fakeFile("scan.pdf", "application/pdf", 40 * MB), limits)).toBeNull();
+    expect(validateDocumentOrImageFile(fakeFile("photo.jpg", "image/jpeg", 40 * MB), limits)).toContain("10 MB");
+  });
+
+  it("refuses SVG, video and anything else, naming what would do", () => {
+    for (const file of [
+      fakeFile("logo.svg", "image/svg+xml", 1024),
+      fakeFile("logo.svg", "", 1024),
+      fakeFile("clip.mp4", "video/mp4", MB),
+      fakeFile("notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", MB),
+    ]) {
+      expect(validateDocumentOrImageFile(file, limits)).toBe(
+        `${file.name} is not a supported file. Use a PDF or an image (JPEG, PNG, GIF, WebP or AVIF).`,
+      );
+    }
   });
 });
 

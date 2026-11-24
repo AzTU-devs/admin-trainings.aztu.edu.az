@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, List, X } from "lucide-react";
+import { Check, List, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { DataTable } from "@shared/components/tables/DataTable";
@@ -33,6 +33,14 @@ import {
 } from "@features/room-requests/components/SeriesCells";
 import { SeriesDetailsDialog } from "@features/room-requests/components/SeriesDetailsDialog";
 import { SeriesDecisionDialog, type SeriesDecisionKind } from "@features/room-requests/components/SeriesDecisionDialog";
+import { RemoveRequestDialog } from "@features/room-requests/components/RemoveRequestDialog";
+import {
+  describeBooking,
+  describeSeries,
+  formatBookingWhen,
+  type RemovalTarget,
+} from "@features/room-requests/lib/removal";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
 import {
   useDecideRoomBookingMutation,
   useListAdminRoomBookingSeriesQuery,
@@ -76,6 +84,39 @@ function RejectButton({ onClick }: { onClick: (e: React.MouseEvent) => void }) {
   );
 }
 
+/**
+ * The super admin's Remove (`room:booking_remove`): icon-only, quiet red like
+ * Reject, so a pending row's actions still fit beside Approve and Reject.
+ * The confirm it opens names the request and says what removing does.
+ */
+function RemoveButton({ onClick }: { onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="px-3 text-danger hover:bg-danger-tint hover:text-danger"
+      aria-label="Remove"
+      title="Remove"
+      onClick={onClick}
+    >
+      <Trash2 className="size-4" />
+    </Button>
+  );
+}
+
+const bookingRemoval = (b: RoomBookingDto): RemovalTarget => ({
+  kind: b.seriesId ? "occurrence" : "booking",
+  id: b.id,
+  what: describeBooking(b),
+});
+
+const seriesRemoval = (s: RoomBookingSeriesDto): RemovalTarget => ({
+  kind: "series",
+  id: s.id,
+  what: describeSeries(s),
+  sessions: s.occurrenceCount,
+});
+
 /** A session of a series is decided with its series (the API answers 409 PART_OF_SERIES). */
 const decidable = (b: RoomBookingDto) => b.status === BOOKING_STATUS.PENDING && !b.seriesId;
 
@@ -91,8 +132,13 @@ const stop = (fn: () => void) => (e: React.MouseEvent) => {
  * over single bookings (`GET …/room-bookings/admin`, which leaves the
  * sessions of a series out). A long-term request opens on its sessions, so
  * the dates can be checked before the whole series is approved.
+ *
+ * A super admin can also remove any request for good: a single booking, a
+ * whole long-term booking, or one session of it from its details. Other
+ * roles never see Remove (and the API refuses them with 403 anyway).
  */
 export default function AdminRoomRequestsPage() {
+  const { isSuperAdmin } = usePermissions();
   const [tab, setTab] = useState<BookingStatus>(BOOKING_STATUS.PENDING);
   const [page, setPage] = useState(0);
   const [seriesPage, setSeriesPage] = useState(0);
@@ -102,6 +148,27 @@ export default function AdminRoomRequestsPage() {
   const [seriesDecision, setSeriesDecision] = useState<{ series: RoomBookingSeriesDto; kind: SeriesDecisionKind } | null>(
     null,
   );
+  const [removal, setRemoval] = useState<RemovalTarget | null>(null);
+  // Set once a request is gone. The control that opened the confirm (and the
+  // details, for a whole series) goes with its row, so focus moves to the
+  // current status tab, the top of the list the row was in. Cleared when the
+  // next confirm or details dialog opens, not by the handler: a series removed
+  // from its details closes both dialogs, and both must agree.
+  const removedRef = useRef(false);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const focusAfterRemoval = useCallback((e: Event) => {
+    if (!removedRef.current) return;
+    e.preventDefault();
+    tabsRef.current?.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus({ preventScroll: true });
+  }, []);
+  const openRemoval = useCallback((target: RemovalTarget) => {
+    removedRef.current = false;
+    setRemoval(target);
+  }, []);
+  const openDetails = useCallback((s: RoomBookingSeriesDto) => {
+    removedRef.current = false;
+    setDetails(s);
+  }, []);
 
   const { data, isFetching } = useListAdminRoomBookingsQuery({ status: tab, page, size: 10 });
   const { data: seriesData, isFetching: seriesFetching } = useListAdminRoomBookingSeriesQuery({
@@ -132,15 +199,20 @@ export default function AdminRoomRequestsPage() {
         id: "actions",
         header: "",
         cell: ({ row }) =>
-          decidable(row.original) ? (
+          decidable(row.original) || isSuperAdmin ? (
             <div className="flex items-center justify-end gap-2">
-              <ApproveButton onClick={() => openDecision(row.original, "APPROVED")} />
-              <RejectButton onClick={() => openDecision(row.original, "REJECTED")} />
+              {decidable(row.original) && (
+                <>
+                  <ApproveButton onClick={() => openDecision(row.original, "APPROVED")} />
+                  <RejectButton onClick={() => openDecision(row.original, "REJECTED")} />
+                </>
+              )}
+              {isSuperAdmin && <RemoveButton onClick={() => openRemoval(bookingRemoval(row.original))} />}
             </div>
           ) : null,
       },
     ],
-    [openDecision],
+    [openDecision, openRemoval, isSuperAdmin],
   );
 
   const seriesActions = useCallback(
@@ -154,10 +226,11 @@ export default function AdminRoomRequestsPage() {
           size="sm"
           aria-label="Details"
           title="Details"
-          onClick={stop(() => setDetails(s))}
+          onClick={stop(() => openDetails(s))}
         >
           <List className="size-4" />
         </Button>
+        {isSuperAdmin && <RemoveButton onClick={stop(() => openRemoval(seriesRemoval(s)))} />}
         {s.status === BOOKING_STATUS.PENDING ? (
           <div className="flex flex-col items-stretch gap-1">
             <ApproveButton onClick={stop(() => openSeriesDecision(s, "APPROVED"))} />
@@ -166,7 +239,7 @@ export default function AdminRoomRequestsPage() {
         ) : null}
       </>
     ),
-    [openSeriesDecision],
+    [openSeriesDecision, openDetails, openRemoval, isSuperAdmin],
   );
 
   const seriesColumns = useMemo<ColumnDef<RoomBookingSeriesDto>[]>(
@@ -207,7 +280,7 @@ export default function AdminRoomRequestsPage() {
           setSeriesPage(0);
         }}
       >
-        <TabsList>
+        <TabsList ref={tabsRef}>
           <TabsTrigger value={BOOKING_STATUS.PENDING}>Pending</TabsTrigger>
           <TabsTrigger value={BOOKING_STATUS.APPROVED}>Approved</TabsTrigger>
           <TabsTrigger value={BOOKING_STATUS.REJECTED}>Rejected</TabsTrigger>
@@ -227,7 +300,7 @@ export default function AdminRoomRequestsPage() {
               pagination={pageOf(seriesData)}
               onPageChange={setSeriesPage}
               getRowId={(r) => r.id}
-              onRowClick={setDetails}
+              onRowClick={openDetails}
               renderMobileRow={(s) => <SeriesMobileRow series={s} showTutor actions={seriesActions(s)} />}
             />
           </ProfileSection>
@@ -248,10 +321,15 @@ export default function AdminRoomRequestsPage() {
                 <BookingMobileRow
                   booking={b}
                   actions={
-                    decidable(b) ? (
+                    decidable(b) || isSuperAdmin ? (
                       <>
-                        <ApproveButton onClick={() => openDecision(b, "APPROVED")} />
-                        <RejectButton onClick={() => openDecision(b, "REJECTED")} />
+                        {decidable(b) && (
+                          <>
+                            <ApproveButton onClick={() => openDecision(b, "APPROVED")} />
+                            <RejectButton onClick={() => openDecision(b, "REJECTED")} />
+                          </>
+                        )}
+                        {isSuperAdmin && <RemoveButton onClick={() => openRemoval(bookingRemoval(b))} />}
                       </>
                     ) : undefined
                   }
@@ -266,33 +344,61 @@ export default function AdminRoomRequestsPage() {
         series={details}
         onOpenChange={(o) => !o && setDetails(null)}
         showTutor
-        actions={(s) =>
-          s.status === BOOKING_STATUS.PENDING ? (
-            <>
+        removableSessions={isSuperAdmin}
+        onCloseAutoFocus={focusAfterRemoval}
+        actions={(s) => (
+          <>
+            {isSuperAdmin && (
               <Button
                 variant="ghost"
                 className="text-danger hover:bg-danger-tint hover:text-danger"
-                leftIcon={<X className="size-4" />}
-                onClick={() => openSeriesDecision(s, "REJECTED")}
+                leftIcon={<Trash2 className="size-4" />}
+                onClick={() => openRemoval(seriesRemoval(s))}
               >
-                Reject
+                Remove whole series
               </Button>
-              <Button leftIcon={<Check className="size-4" />} onClick={() => openSeriesDecision(s, "APPROVED")}>
-                Approve all sessions
-              </Button>
-            </>
-          ) : null
-        }
+            )}
+            {s.status === BOOKING_STATUS.PENDING ? (
+              <>
+                <Button
+                  variant="ghost"
+                  className="text-danger hover:bg-danger-tint hover:text-danger"
+                  leftIcon={<X className="size-4" />}
+                  onClick={() => openSeriesDecision(s, "REJECTED")}
+                >
+                  Reject
+                </Button>
+                <Button leftIcon={<Check className="size-4" />} onClick={() => openSeriesDecision(s, "APPROVED")}>
+                  Approve all sessions
+                </Button>
+              </>
+            ) : null}
+          </>
+        )}
       />
 
       <SeriesDecisionDialog decision={seriesDecision} onClose={() => setSeriesDecision(null)} />
+
+      {isSuperAdmin && (
+        <RemoveRequestDialog
+          target={removal}
+          onClose={() => setRemoval(null)}
+          onRemoved={(t) => {
+            removedRef.current = true;
+            // Removed from its details: they would only show what is gone.
+            if (t.kind === "series") setDetails(null);
+          }}
+          onCloseAutoFocus={focusAfterRemoval}
+        />
+      )}
 
       <Dialog open={!!decision} onOpenChange={(o) => !o && setDecision(null)}>
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{decision?.kind === "APPROVED" ? "Approve booking" : "Reject booking"}</DialogTitle>
             <DialogDescription>
-              {decision?.b.roomName} · {decision?.b.startsAt && new Date(decision.b.startsAt).toLocaleString()}
+              {decision?.b.roomName} ·{" "}
+              {decision?.b && `${formatBookingWhen(decision.b.startsAt, decision.b.endsAt)} Baku time`}
             </DialogDescription>
           </DialogHeader>
           <Textarea

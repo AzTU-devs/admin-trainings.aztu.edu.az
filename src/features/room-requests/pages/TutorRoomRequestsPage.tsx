@@ -32,6 +32,7 @@ import {
 import type { RoomBookingDto, RoomBookingSeriesDto } from "@features/room-requests/types";
 import { singleBookingErrorMessage } from "@features/room-requests/lib/bookingErrors";
 import { formatDateRange, formatDays, formatTimeRange } from "@features/room-requests/lib/series";
+import { formatBookingWhen } from "@features/room-requests/lib/removal";
 import { BOOKING_STATUS } from "@shared/types/lms";
 import type { ApiPage } from "@shared/types/api";
 
@@ -62,7 +63,6 @@ export default function TutorRoomRequestsPage() {
   const [cancelBooking] = useCancelRoomBookingMutation();
   const [cancelSeries] = useCancelRoomBookingSeriesMutation();
 
-  const fmt = (iso: string) => new Date(iso).toLocaleString();
 
   /** Pending and approved bookings can still be cancelled; the rest have no action. */
   const cancelAction = useCallback((b: RoomBookingDto) => {
@@ -225,7 +225,11 @@ export default function TutorRoomRequestsPage() {
         open={!!toCancel}
         onOpenChange={(o) => !o && setToCancel(null)}
         title="Cancel this booking?"
-        description={toCancel ? `${toCancel.roomName} · ${fmt(toCancel.startsAt)}` : undefined}
+        description={
+          toCancel
+            ? `${toCancel.roomName} · ${formatBookingWhen(toCancel.startsAt, toCancel.endsAt)} Baku time`
+            : undefined
+        }
         confirmLabel="Cancel booking"
         cancelLabel="Keep it"
         destructive

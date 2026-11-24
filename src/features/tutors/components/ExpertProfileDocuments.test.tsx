@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { ExpertProfileForm } from "./ExpertProfileForm";
 import { openStoredDocument } from "@shared/lib/openDocument";
-import type { TutorCertificate, TutorProfileDto } from "@features/tutors/types";
+import type { TutorAward, TutorCertificate, TutorProfileDto } from "@features/tutors/types";
 
 const { CATEGORY, upload } = vi.hoisted(() => ({
   CATEGORY: { id: "c0000000-0000-4000-8000-000000000001", slug: "it", name: "Information Technology", sortOrder: 0, active: true },
@@ -414,5 +414,339 @@ describe("ExpertProfileForm — certificates", () => {
 
     render(<ExpertProfileForm profile={profile()} onSave={vi.fn()} />);
     expect(screen.queryByRole("textbox", { name: "Earlier certification notes" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ExpertProfileForm — awards", () => {
+  const IMAGE_MEDIA = "d0000000-0000-4000-8000-000000000011";
+  const IMAGE_MEDIA_2 = "d0000000-0000-4000-8000-000000000012";
+  const AWARD_PDF_MEDIA = "d0000000-0000-4000-8000-000000000013";
+
+  const TEACHER: TutorAward = {
+    id: "f0000000-0000-4000-8000-000000000001",
+    nameAz: "İlin müəllimi",
+    nameEn: "Teacher of the Year",
+    mediaId: IMAGE_MEDIA,
+    fileUrl: `/api/public/media/${IMAGE_MEDIA}/content`,
+    fileKind: "IMAGE",
+    createdAt: "2026-11-01T10:00:00Z",
+  };
+  const HONOUR: TutorAward = {
+    id: "f0000000-0000-4000-8000-000000000002",
+    nameAz: "Fəxri fərman",
+    nameEn: "Certificate of Honour",
+    mediaId: null,
+    fileUrl: null,
+    fileKind: null,
+    createdAt: "2026-11-02T10:00:00Z",
+  };
+  const GRANT: TutorAward = {
+    id: "f0000000-0000-4000-8000-000000000003",
+    nameAz: "Prezident təqaüdü",
+    nameEn: "Presidential Scholarship",
+    mediaId: AWARD_PDF_MEDIA,
+    fileUrl: `/api/public/media/${AWARD_PDF_MEDIA}/content`,
+    fileKind: "PDF",
+    createdAt: "2026-11-03T10:00:00Z",
+  };
+
+  const png = (name = "award.png") => new File(["\x89PNG test"], name, { type: "image/png" });
+
+  function renderAwards(saved: TutorProfileDto, api: { add?: ReturnType<typeof vi.fn>; remove?: ReturnType<typeof vi.fn> }) {
+    const onSave = vi.fn(async (body: object) => ({ ...saved, ...body }) as TutorProfileDto);
+    render(
+      <ExpertProfileForm
+        profile={saved}
+        onSave={onSave}
+        onAddAward={api.add as never}
+        onDeleteAward={api.remove as never}
+      />,
+    );
+    return { onSave };
+  }
+
+  async function openDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Add award" }));
+    return screen.findByRole("dialog", { name: "Add award" });
+  }
+
+  async function fillNames(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, az: string, en: string) {
+    await user.type(within(dialog).getByRole("textbox", { name: /^Name \(AZ\)/ }), az);
+    await user.type(within(dialog).getByRole("textbox", { name: /^Name \(EN\)/ }), en);
+  }
+
+  it("adds one with an image: uploads it, posts it at once, and lists it — without saving the profile", async () => {
+    const user = userEvent.setup();
+    uploadsAs(IMAGE_MEDIA);
+    const add = vi.fn(async () => TEACHER);
+    const { onSave } = renderAwards(profile(), { add, remove: vi.fn() });
+
+    expect(screen.getByText("No awards yet.")).toBeInTheDocument();
+    // An unsaved edit on the profile: a submit that leaked out of the dialog would save it.
+    await user.type(screen.getByRole("textbox", { name: "Headline" }), "Lecturer");
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "  İlin müəllimi ", " Teacher of the Year  ");
+    const file = png();
+    await user.upload(within(dialog).getByLabelText("File"), file);
+    expect(await within(dialog).findByText("award.png")).toBeInTheDocument();
+    expect(within(dialog).getByText(/^Image · /)).toBeInTheDocument();
+
+    // Enter in a field submits the dialog's own form, not the profile around it.
+    await user.type(within(dialog).getByRole("textbox", { name: /^Name \(EN\)/ }), "{Enter}");
+
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith({ nameAz: "İlin müəllimi", nameEn: "Teacher of the Year", mediaId: IMAGE_MEDIA }),
+    );
+    expect(upload).toHaveBeenCalledWith(file);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const list = screen.getByRole("list", { name: "Awards" });
+    expect(within(list).getByText("İlin müəllimi")).toHaveAttribute("lang", "az");
+    expect(within(list).getByText("Teacher of the Year")).toHaveAttribute("lang", "en");
+    expect(toast.success).toHaveBeenCalledWith("Award added");
+    expect(onSave).not.toHaveBeenCalled();
+
+    // The profile's own save carries the profile's edits, never the awards.
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ headline: "Lecturer" }));
+  });
+
+  it("adds one without a file, posting no mediaId", async () => {
+    const user = userEvent.setup();
+    const add = vi.fn(async () => HONOUR);
+    renderAwards(profile(), { add, remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "Fəxri fərman", "Certificate of Honour");
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    await waitFor(() => expect(add).toHaveBeenCalledWith({ nameAz: "Fəxri fərman", nameEn: "Certificate of Honour" }));
+    expect(upload).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // Nothing to open on an award without a file.
+    const list = screen.getByRole("list", { name: "Awards" });
+    expect(within(list).getByText("Fəxri fərman")).toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: /^Open/ })).not.toBeInTheDocument();
+  });
+
+  it("takes a chosen file off again: the award goes without one, and the focus stays in the picker", async () => {
+    const user = userEvent.setup();
+    const add = vi.fn(async () => HONOUR);
+    renderAwards(profile(), { add, remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "Fəxri fərman", "Certificate of Honour");
+    await user.upload(within(dialog).getByLabelText("File"), png());
+    await within(dialog).findByText("award.png");
+
+    await user.click(within(dialog).getByRole("button", { name: "Remove the chosen file" }));
+    expect(within(dialog).getByText("No file chosen")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Choose file" })).toHaveFocus();
+
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+    await waitFor(() => expect(add).toHaveBeenCalledWith({ nameAz: "Fəxri fərman", nameEn: "Certificate of Honour" }));
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("asks for both names, each up to 200 characters, before anything is sent", async () => {
+    const user = userEvent.setup();
+    uploadsAs(IMAGE_MEDIA);
+    const add = vi.fn();
+    renderAwards(profile(), { add, remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    // Spaces only are no name: the API trims them away.
+    await user.type(within(dialog).getByRole("textbox", { name: /^Name \(AZ\)/ }), "   ");
+    await user.upload(within(dialog).getByLabelText("File"), png());
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    expect(await within(dialog).findByText("Enter the award's name in Azerbaijani")).toBeInTheDocument();
+    expect(within(dialog).getByText("Enter the award's name in English")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("textbox", { name: /^Name \(EN\)/ }));
+    await user.paste("x".repeat(201));
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+    expect(await within(dialog).findByText("At most 200 characters")).toBeInTheDocument();
+
+    expect(upload).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("takes a PDF or an image, and turns away anything else before uploading it", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    renderAwards(profile(), { add: vi.fn(), remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    const input = within(dialog).getByLabelText("File");
+    expect(input).toHaveAttribute("accept", expect.stringContaining("application/pdf"));
+    expect(input).toHaveAttribute("accept", expect.stringContaining("image/avif"));
+
+    await user.upload(input, new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" }));
+    expect(
+      await within(dialog).findByText("logo.svg is not a supported file. Use a PDF or an image (JPEG, PNG, GIF, WebP or AVIF)."),
+    ).toBeInTheDocument();
+    await user.upload(input, new File(["mp4"], "clip.mp4", { type: "video/mp4" }));
+    expect(await within(dialog).findByText(/^clip\.mp4 is not a supported file/)).toBeInTheDocument();
+
+    await user.upload(input, pdf("award.pdf"));
+    expect(await within(dialog).findByText("award.pdf")).toBeInTheDocument();
+    expect(within(dialog).getByText(/^PDF · /)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/is not a supported file/)).not.toBeInTheDocument();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [400, "INVALID_AWARD_FILE", "An award's file must be a PDF or an image"],
+    [403, "MEDIA_FORBIDDEN", "That upload is someone else's"],
+    [404, "MEDIA_NOT_FOUND", "That upload no longer exists"],
+  ])("shows the API's refusal of the file (%i %s) on the file, and uploads it again for the retry", async (status, code, message) => {
+    const user = userEvent.setup();
+    uploadsAs(IMAGE_MEDIA, IMAGE_MEDIA_2);
+    const add = vi.fn().mockRejectedValueOnce({ status, code, message, isNormalized: true }).mockResolvedValueOnce(TEACHER);
+    renderAwards(profile(), { add, remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "İlin müəllimi", "Teacher of the Year");
+    await user.upload(within(dialog).getByLabelText("File"), png());
+    await within(dialog).findByText("award.png");
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    expect(await within(fieldBox("File")).findByText(message, { selector: "[data-field-error]" })).toBeInTheDocument();
+    expect(within(fieldBox("Name (AZ)")).queryByText(message)).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(message);
+    expect(screen.getByRole("dialog", { name: "Add award" })).toBeInTheDocument();
+
+    // That upload can't be used again: the retry sends a new one.
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+    await waitFor(() => expect(add).toHaveBeenCalledTimes(2));
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(add).toHaveBeenLastCalledWith({ nameAz: "İlin müəllimi", nameEn: "Teacher of the Year", mediaId: IMAGE_MEDIA_2 });
+  });
+
+  it("puts the API's messages on the names, and retries without a second upload", async () => {
+    const user = userEvent.setup();
+    uploadsAs(IMAGE_MEDIA);
+    const add = vi
+      .fn()
+      .mockRejectedValueOnce({
+        status: 400,
+        code: "VALIDATION_FAILED",
+        message: "Request validation failed",
+        fieldErrors: [
+          { field: "nameAz", message: "size must be between 1 and 200" },
+          { field: "nameEn", message: "must not be blank" },
+        ],
+        isNormalized: true,
+      })
+      .mockResolvedValueOnce(TEACHER);
+    renderAwards(profile(), { add, remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "İlin müəllimi", "Teacher of the Year");
+    await user.upload(within(dialog).getByLabelText("File"), png());
+    await within(dialog).findByText("award.png");
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    expect(
+      await within(fieldBox("Name (AZ)")).findByText("size must be between 1 and 200", { selector: "[data-field-error]" }),
+    ).toBeInTheDocument();
+    expect(within(fieldBox("Name (EN)")).getByText("must not be blank", { selector: "[data-field-error]" })).toBeInTheDocument();
+    // Placed on the fields, so not repeated for the dialog as a whole.
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+    await waitFor(() => expect(add).toHaveBeenCalledTimes(2));
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenLastCalledWith({ nameAz: "İlin müəllimi", nameEn: "Teacher of the Year", mediaId: IMAGE_MEDIA });
+  });
+
+  it("says in the dialog, which stays open, when the API holds thirty already (AWARD_LIMIT)", async () => {
+    const user = userEvent.setup();
+    const add = vi.fn().mockRejectedValue({ status: 400, code: "AWARD_LIMIT", message: "At most 30 awards", isNormalized: true });
+    renderAwards(profile(), { add, remove: vi.fn() });
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "Fəxri fərman", "Certificate of Honour");
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("At most 30 awards");
+    expect(toast.error).toHaveBeenCalledWith("At most 30 awards");
+    expect(screen.getByRole("dialog", { name: "Add award" })).toBeInTheDocument();
+  });
+
+  it("opens each file as what it is, and deletes an award after a confirm", async () => {
+    const user = userEvent.setup();
+    const remove = vi.fn(async () => undefined);
+    renderAwards(profile({ awards: [TEACHER, HONOUR, GRANT] }), { add: vi.fn(), remove });
+
+    await user.click(screen.getByRole("button", { name: "Open the image of İlin müəllimi" }));
+    expect(openStoredDocument).toHaveBeenLastCalledWith(IMAGE_MEDIA, "award");
+    await user.click(screen.getByRole("button", { name: "Open the PDF of Prezident təqaüdü" }));
+    expect(openStoredDocument).toHaveBeenLastCalledWith(AWARD_PDF_MEDIA, "award");
+    expect(screen.queryByRole("button", { name: /^Open the .* of Fəxri fərman$/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete İlin müəllimi" }));
+    const confirm = await screen.findByRole("dialog", { name: "Delete this award?" });
+    expect(confirm).toHaveTextContent("“İlin müəllimi” and its file come off the profile straight away.");
+    expect(remove).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(TEACHER.id));
+    await waitFor(() =>
+      expect(within(screen.getByRole("list", { name: "Awards" })).queryByText("İlin müəllimi")).not.toBeInTheDocument(),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Award deleted");
+    // Its row (and the button that opened the confirm) is gone: focus lands on the list's own control.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Add award" })).toHaveFocus());
+  });
+
+  it("keeps an award whose delete was refused, and drops one already deleted elsewhere", async () => {
+    const user = userEvent.setup();
+    const remove = vi
+      .fn()
+      .mockRejectedValueOnce({ status: 503, message: "Try again", isNormalized: true })
+      .mockRejectedValueOnce({ status: 404, code: "AWARD_NOT_FOUND", message: "Award not found", isNormalized: true });
+    renderAwards(profile({ awards: [HONOUR] }), { add: vi.fn(), remove });
+
+    await user.click(screen.getByRole("button", { name: "Delete Fəxri fərman" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Try again"));
+    expect(within(screen.getByRole("list", { name: "Awards" })).getByText("Fəxri fərman")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete Fəxri fərman" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Award not found"));
+    expect(await screen.findByText("No awards yet.")).toBeInTheDocument();
+  });
+
+  it("stops at thirty, and puts the focus on the count when the thirtieth is added", async () => {
+    const user = userEvent.setup();
+    const others = Array.from({ length: 29 }, (_, i) => ({
+      ...HONOUR,
+      id: `f0000000-0000-4000-8000-1${String(i).padStart(11, "0")}`,
+      nameAz: `Təltif ${i + 1}`,
+    }));
+    const add = vi.fn(async () => HONOUR);
+    renderAwards(profile({ awards: others }), { add, remove: vi.fn() });
+    expect(screen.getByText("Saved as soon as each is added or deleted · 29/30")).toBeInTheDocument();
+
+    const dialog = await openDialog(user);
+    await fillNames(user, dialog, "Fəxri fərman", "Certificate of Honour");
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // Thirty now, so Add is disabled and can't take the focus back.
+    expect(screen.getByRole("button", { name: "Add award" })).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByText("That's the most there can be (30). Delete one to add another.")).toHaveFocus(),
+    );
+  });
+
+  it("shows the list without add or delete when no endpoints are given", () => {
+    render(<ExpertProfileForm profile={profile({ awards: [TEACHER] })} onSave={vi.fn()} />);
+    expect(within(screen.getByRole("list", { name: "Awards" })).getByText("Teacher of the Year")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add award" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete İlin müəllimi" })).not.toBeInTheDocument();
   });
 });

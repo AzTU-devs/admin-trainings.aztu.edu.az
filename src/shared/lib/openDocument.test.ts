@@ -179,6 +179,58 @@ describe("openStoredDocument", () => {
     expect(click).toHaveBeenCalledTimes(1);
   });
 
+  it("shows an image as that image: an award's photo, typed as the API stored it", async () => {
+    const tab = fakeTab();
+    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    respond = async (config) => ({ ...(await stored(config)), data: new Blob(["\x89PNG"], { type: "image/png" }) });
+
+    await openStoredDocument(MEDIA_ID, "award");
+
+    const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+    expect(blob.type).toBe("image/png");
+    expect(tab.location.href).toBe(BLOB_URL);
+  });
+
+  it("goes by the Content-Type header when the blob carries no type", async () => {
+    vi.spyOn(window, "open").mockReturnValue(fakeTab() as unknown as Window);
+    respond = async (config) => ({
+      ...(await stored(config)),
+      data: new Blob(["RIFF"]),
+      headers: { "content-type": "image/webp" },
+    });
+
+    await openStoredDocument(MEDIA_ID, "award");
+
+    expect((vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob).type).toBe("image/webp");
+  });
+
+  it.each(["image/svg+xml", "text/html; charset=utf-8", "application/xhtml+xml"])(
+    "never shows a type a browser would run (%s): it is typed as a PDF",
+    async (type) => {
+      vi.spyOn(window, "open").mockReturnValue(fakeTab() as unknown as Window);
+      respond = async (config) => ({ ...(await stored(config)), data: new Blob(["<svg onload=alert(1)>"], { type }) });
+
+      await openStoredDocument(MEDIA_ID, "award");
+
+      expect((vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob).type).toBe("application/pdf");
+    },
+  );
+
+  it("names a downloaded image by what it is when a popup blocker stopped the tab", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
+    respond = async (config) => ({ ...(await stored(config)), data: new Blob(["jpeg"], { type: "image/jpeg" }) });
+    const names: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    });
+
+    await openStoredDocument(MEDIA_ID, "award");
+    // A name given with the wrong extension gets the right one.
+    await openStoredDocument(MEDIA_ID, "award.pdf");
+
+    expect(names).toEqual(["award.jpg", "award.jpg"]);
+  });
+
   it("closes the tab and rejects when the PDF can't be read", async () => {
     const tab = fakeTab();
     vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);

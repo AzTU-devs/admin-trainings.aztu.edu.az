@@ -10,7 +10,9 @@ import { TutorStatusBadge } from "@features/tutors/components/TutorStatusBadge";
 import { TutorAvatar } from "@features/tutors/components/TutorAvatar";
 import { tutorAvatarSrc } from "@features/tutors/components/avatarSource";
 import {
+  useAddTutorAwardMutation,
   useAddTutorCertificateMutation,
+  useDeleteTutorAwardMutation,
   useDeleteTutorCertificateMutation,
   useUpdateTutorProfileMutation,
 } from "@features/tutors/api/tutorsApi";
@@ -28,6 +30,8 @@ export function EditExpertProfileDialog({ tutor, onClose }: Props) {
   const [update] = useUpdateTutorProfileMutation();
   const [addCertificate] = useAddTutorCertificateMutation();
   const [deleteCertificate] = useDeleteTutorCertificateMutation();
+  const [addAward] = useAddTutorAwardMutation();
+  const [deleteAward] = useDeleteTutorAwardMutation();
 
   return (
     <Dialog open={!!tutor} onOpenChange={(open) => !open && onClose()}>
@@ -74,6 +78,8 @@ export function EditExpertProfileDialog({ tutor, onClose }: Props) {
               onSave={(body) => update({ id: tutor.id, body }).unwrap()}
               onAddCertificate={(body) => addCertificate({ tutorId: tutor.id, body }).unwrap()}
               onDeleteCertificate={(id) => deleteCertificate({ tutorId: tutor.id, id }).unwrap()}
+              onAddAward={(body) => addAward({ tutorId: tutor.id, body }).unwrap()}
+              onDeleteAward={(id) => deleteAward({ tutorId: tutor.id, id }).unwrap()}
               onSaved={onClose}
               onCancel={onClose}
               stickyActions

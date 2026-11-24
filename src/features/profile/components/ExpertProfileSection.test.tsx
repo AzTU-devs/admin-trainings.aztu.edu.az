@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
@@ -10,7 +10,7 @@ import uiReducer from "@lib/redux/uiSlice";
 import { baseApi } from "@lib/query/baseApi";
 import { httpClient } from "@lib/axios/httpClient";
 import { tutorsApi } from "@features/tutors/api/tutorsApi";
-import type { TutorProfileDto } from "@features/tutors/types";
+import type { TutorAward, TutorProfileDto } from "@features/tutors/types";
 
 /* The expert's own profile section on a real store, against a fake API. */
 
@@ -127,5 +127,43 @@ describe("ExpertProfileSection", () => {
     renderSection();
 
     expect(await screen.findByText("No expert profile yet")).toBeInTheDocument();
+  });
+
+  it("adds and deletes awards through the expert's own endpoints, keeping the cached profile in step", async () => {
+    const user = userEvent.setup();
+    const honour: TutorAward = {
+      id: "f0000000-0000-4000-8000-000000000002",
+      nameAz: "Fəxri fərman",
+      nameEn: "Certificate of Honour",
+      mediaId: null,
+      fileUrl: null,
+      fileKind: null,
+      createdAt: "2026-11-02T10:00:00Z",
+    };
+    let posted: unknown;
+    routes[`POST ${ME_URL}/awards`] = (config) => {
+      posted = config.data;
+      return honour;
+    };
+    routes[`DELETE ${ME_URL}/awards/${honour.id}`] = () => "";
+    const store = renderSection();
+    const cachedAwards = () => tutorsApi.endpoints.getMyTutorProfile.select()(store.getState()).data?.awards;
+
+    await user.click(await screen.findByRole("button", { name: "Add award" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add award" });
+    await user.type(within(dialog).getByRole("textbox", { name: /^Name \(AZ\)/ }), "Fəxri fərman");
+    await user.type(within(dialog).getByRole("textbox", { name: /^Name \(EN\)/ }), "Certificate of Honour");
+    await user.click(within(dialog).getByRole("button", { name: "Add award" }));
+
+    expect(await within(await screen.findByRole("list", { name: "Awards" })).findByText("Fəxri fərman")).toBeInTheDocument();
+    expect(posted).toEqual({ nameAz: "Fəxri fərman", nameEn: "Certificate of Honour" });
+    expect(cachedAwards()).toEqual([honour]);
+
+    await user.click(screen.getByRole("button", { name: "Delete Fəxri fərman" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Delete this award?" })).getByRole("button", { name: "Delete" }));
+    expect(await screen.findByText("No awards yet.")).toBeInTheDocument();
+    expect(cachedAwards()).toEqual([]);
+    // Written into the cache, not fetched again under the form.
+    expect(profileGets).toBe(1);
   });
 });
