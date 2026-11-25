@@ -19,8 +19,12 @@ import type {
  * of the page is inspection.
  */
 
-/** The account's own status — the backend's UserStatus, not the Users table's vocabulary. */
-export type ProfileAccountStatus = "ACTIVE" | "LOCKED" | "SUSPENDED" | "DELETED";
+/**
+ * The account's own status — the backend's UserStatus, not the Users table's
+ * vocabulary. PENDING_APPROVAL: a new İştirakçi sign-up waiting for a super
+ * admin; REJECTED: one they turned down. Neither can sign in.
+ */
+export type ProfileAccountStatus = "ACTIVE" | "LOCKED" | "SUSPENDED" | "DELETED" | "PENDING_APPROVAL" | "REJECTED";
 
 /** Role codes as the API spells them. USER is the participant (İştirakçi) role. */
 export type ProfileRole = "USER" | "TUTOR" | "ADMIN" | "SUPER_ADMIN";

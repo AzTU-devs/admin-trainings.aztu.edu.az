@@ -53,6 +53,7 @@ const TONE: Record<string, StatusTone> = {
   PAID: "success",
 
   PENDING: "warning",
+  PENDING_APPROVAL: "warning",
   PENDING_PAYMENT: "warning",
   IN_REVIEW: "warning",
   UPLOADING: "warning",

@@ -1,3 +1,4 @@
+import type { DayOfWeek } from "@shared/lib/weekdays";
 import type {
   CourseLevel,
   CourseStatus,
@@ -71,6 +72,12 @@ export interface OfflineDetailsDto {
   enrolledCount?: number | null;
   city?: string | null;
   addressLine?: string | null;
+  /**
+   * The weekdays an OFFLINE course meets, Monday first; `[]` when not set (a
+   * course from before they were asked for, and every ONE_TIME course).
+   * Absent from an API older than it.
+   */
+  daysOfWeek?: DayOfWeek[] | null;
 }
 
 /** One entry of a course's syllabus; `description` is rich-text HTML. */
@@ -111,6 +118,11 @@ export interface CourseDto {
   currency: string;
   status: CourseStatus;
   publishedAt?: string;
+  /**
+   * When the course was ended (its students graduated); null while it runs.
+   * Ending does not change `status`. Absent from an API older than it.
+   */
+  endedAt?: string | null;
   ratingAvg?: number;
   ratingCount: number;
   enrolledCount: number;
@@ -144,6 +156,8 @@ export interface CourseSummaryDto {
   tutorId: UUID;
   tutorDisplayName?: string;
   publishedAt?: string;
+  /** When the course was ended; null while it runs (see CourseDto). */
+  endedAt?: string | null;
 }
 
 export interface CreateCourseRequest {
@@ -189,6 +203,12 @@ export interface OfflineDetailsRequest {
   studentLimit?: number;
   city?: string;
   addressLine?: string;
+  /**
+   * OFFLINE: the weekdays the course meets, Monday first, at least one
+   * (400 OFFLINE_DAYS_REQUIRED), at least one of them within the dates
+   * (400 NO_COURSE_DAYS_IN_RANGE). ONE_TIME: not sent; the API ignores it.
+   */
+  daysOfWeek?: DayOfWeek[];
 }
 
 /**
@@ -228,4 +248,23 @@ export interface AdminCreateCourseRequest {
 export interface SetCourseTutorsRequest {
   tutorIds: UUID[];
   authorizedTutorId: UUID;
+}
+
+/**
+ * Mirror of `GET /api/super/courses/{courseId}/deletion-impact` — what
+ * deleting the course does, for the super admin's confirm.
+ */
+export interface CourseDeletionImpact {
+  courseId: UUID;
+  title: string;
+  slug: string;
+  status: CourseStatus;
+  /** Enrolments that are cancelled, each student notified. */
+  activeEnrollments: number;
+  /** How many of those were paid: no refund is made automatically. */
+  paidEnrollments: number;
+  /** The course's room bookings still to come, released. */
+  upcomingRoomBookings: number;
+  /** Its long-term room bookings, removed with their sessions. */
+  roomBookingSeries: number;
 }

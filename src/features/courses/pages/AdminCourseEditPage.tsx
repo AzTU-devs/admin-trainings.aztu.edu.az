@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { EyeOff, SearchX, Send, Users } from "lucide-react";
+import { EyeOff, SearchX, Send, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
@@ -9,12 +9,23 @@ import { Spinner } from "@shared/components/ui/Spinner";
 import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { CourseDetailsForm } from "@features/courses/components/CourseDetailsForm";
-import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { CourseEndedBadge, CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
 import { CourseSummaryCard } from "@features/courses/components/CourseSummaryCard";
+import { DeleteCourseDialog } from "@features/courses/components/DeleteCourseDialog";
 import { FormCard } from "@features/courses/components/FormCard";
 import { TutorRosterPicker, type TutorRoster } from "@features/courses/components/TutorRosterPicker";
 import { courseCrumb } from "@features/courses/lib/courseCrumb";
 import { CourseAttendanceButton } from "@features/attendance/components/CourseAttendanceButton";
+import {
+  CertificateSignaturesCard,
+  CourseCertificatesCard,
+  CourseEndedNotice,
+  EndCourseAction,
+  hasCertificatesSection,
+  useCourseGraduation,
+} from "@features/certificates";
+import { courseExperts } from "@features/certificates/lib/certificates";
+import { usePermissions } from "@features/auth/hooks/usePermissions";
 import {
   useGetAdminCourseByIdQuery,
   usePublishCourseMutation,
@@ -44,11 +55,23 @@ export default function AdminCourseEditPage() {
   const [publishCourse, { isLoading: publishing }] = usePublishCourseMutation();
   const [unpublishCourse, { isLoading: unpublishing }] = useUnpublishCourseMutation();
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const { canDeleteCourse, canManageCertificates } = usePermissions();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Ending the course, its certificates and (super admin) the names printed
+  // on them. The super admin may choose those names before it is published.
+  const graduation = useCourseGraduation(course, { always: canManageCertificates });
+  const [tab, setTab] = useState("details");
+  // Deleted: its page is left at once; the course's own query, refreshed with
+  // every other, finds nothing, and that is no reason to say "not found" here.
+  const [deleted, setDeleted] = useState(false);
 
-  if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
+  if (isLoading || deleted) return <div className="flex justify-center py-12"><Spinner /></div>;
   if (error || !course) return <EmptyState tone="danger" Icon={SearchX} title="Course not found." />;
 
   const published = course.status === COURSE_STATUS.PUBLISHED;
+  const showCertificates = hasCertificatesSection(graduation);
+  // The Certificates tab goes when there is nothing left for it (reopened, none issued).
+  const activeTab = tab === "certificates" && !showCertificates ? "details" : tab;
 
   const publish = async () => {
     try {
@@ -78,6 +101,8 @@ export default function AdminCourseEditPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <CourseStatusBadge status={course.status} />
+            {/* The view is fresher than the course right after ending or reopening it. */}
+            <CourseEndedBadge endedAt={graduation ? graduation.endedAt : course.endedAt} />
             <Button
               variant="secondary"
               leftIcon={<Users className="size-4" />}
@@ -86,6 +111,7 @@ export default function AdminCourseEditPage() {
               İştirakçilər
             </Button>
             <CourseAttendanceButton courseType={course.courseType} to={ROUTES.adminCourseAttendance(course.id)} />
+            <EndCourseAction view={graduation} />
             {published ? (
               <Button
                 variant="secondary"
@@ -105,19 +131,33 @@ export default function AdminCourseEditPage() {
                 Publish
               </Button>
             )}
+            {canDeleteCourse && (
+              // Apart from the rest, and quiet until asked: it cannot be undone.
+              <Button
+                variant="ghost"
+                className="text-danger hover:bg-danger-tint hover:text-danger"
+                leftIcon={<Trash2 className="size-4" />}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete course
+              </Button>
+            )}
           </div>
         }
       />
+
+      <CourseEndedNotice view={graduation} onShowCertificates={() => setTab("certificates")} className="mb-6" />
 
       {/* Two columns on a wide screen: the editor, and the course's cover and
           facts in a sticky side card (above the editor on narrower screens). */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
         <CourseSummaryCard course={course} className="xl:sticky xl:top-[92px] xl:col-start-2 xl:row-start-1" />
 
-        <Tabs defaultValue="details" className="min-w-0 xl:col-start-1 xl:row-start-1">
+        <Tabs value={activeTab} onValueChange={setTab} className="min-w-0 xl:col-start-1 xl:row-start-1">
           <TabsList>
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="tutors">Tutors</TabsTrigger>
+            {showCertificates && <TabsTrigger value="certificates">Certificates</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="details">
@@ -134,9 +174,23 @@ export default function AdminCourseEditPage() {
             />
           </TabsContent>
 
-          <TabsContent value="tutors">
+          <TabsContent value="tutors" className="space-y-6">
             <CourseTutorsCard course={course} />
+            {graduation?.canManage && (
+              <CertificateSignaturesCard
+                courseId={course.id}
+                saved={graduation.certificateTutors}
+                experts={courseExperts(course)}
+                editorName={course.tutorDisplayName ?? course.tutors.find((t) => t.authorized)?.displayName}
+              />
+            )}
           </TabsContent>
+
+          {showCertificates && (
+            <TabsContent value="certificates">
+              <CourseCertificatesCard view={graduation} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
@@ -149,6 +203,19 @@ export default function AdminCourseEditPage() {
         destructive
         onConfirm={unpublish}
       />
+
+      {canDeleteCourse && (
+        <DeleteCourseDialog
+          course={course}
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          onDeleted={() => {
+            setDeleted(true);
+            // Replaced, so Back does not lead to a course that is gone.
+            navigate(ROUTES.adminCourses, { replace: true });
+          }}
+        />
+      )}
     </>
   );
 }

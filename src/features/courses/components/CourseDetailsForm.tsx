@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useForm, useWatch, type FieldErrors } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
+import { useForm, useFormContext, useWatch, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
@@ -15,11 +15,13 @@ import {
 import { Form } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { RichTextEditor } from "@shared/components/forms/RichTextEditor";
+import { WeekdayPicker } from "@shared/components/forms/WeekdayPicker";
 import { Input } from "@shared/components/ui/Input";
 import { Switch } from "@shared/components/ui/Switch";
 import { Button } from "@shared/components/ui/Button";
 import { cn } from "@shared/lib/cn";
 import { isRichTextEmpty } from "@shared/lib/richText";
+import { daySpan, formatWeekdayRange, sortDays } from "@shared/lib/weekdays";
 import {
   Select,
   SelectContent,
@@ -38,6 +40,7 @@ import { FormCard } from "@features/courses/components/FormCard";
 import { SyllabusEditor } from "@features/courses/components/SyllabusEditor";
 import { legacySyllabusToItems, syllabusToLegacyText } from "@features/courses/lib/syllabus";
 import {
+  COURSE_DAYS_MESSAGES,
   courseSchema,
   sessionHours,
   type CourseFormValues,
@@ -141,6 +144,8 @@ function toFormValues(initial?: CourseDto, defaultCourseType?: CourseType): Cour
       studentLimit: off?.studentLimit ?? 20,
       city: off?.city ?? "",
       addressLine: off?.addressLine ?? "",
+      // Empty on a course from before the days were asked for: picked before it saves.
+      daysOfWeek: sortDays(off?.daysOfWeek),
     },
   };
 }
@@ -169,6 +174,7 @@ function toPayload(values: CourseFormValues, initial: CourseDto | undefined): Co
       studentLimit: off.studentLimit ?? undefined,
       city: blankToUndefined(off.city),
       addressLine: blankToUndefined(off.addressLine),
+      daysOfWeek: sortDays(off.daysOfWeek),
     };
   } else if (values.courseType === COURSE_TYPE.ONE_TIME && off) {
     // One day: the end date is the start date, and the hours are the API's to
@@ -210,6 +216,14 @@ function toPayload(values: CourseFormValues, initial: CourseDto | undefined): Co
     offlineDetails,
   };
 }
+
+/** The API's refusals that the course days field fixes, with the field's own wording for each. */
+const DAYS_ERRORS: Record<string, string> = {
+  OFFLINE_DAYS_REQUIRED: COURSE_DAYS_MESSAGES.required,
+  NO_COURSE_DAYS_IN_RANGE: COURSE_DAYS_MESSAGES.noneInRange,
+};
+
+const DAYS_FIELD = "offlineDetails.daysOfWeek";
 
 /** Axios reports an aborted request as a normalised ERR_CANCELED, not an AbortError. */
 function isCancel(e: unknown): boolean {
@@ -349,9 +363,18 @@ export function CourseDetailsForm({
         for (const [k, v] of Object.entries(err.fieldErrors)) {
           // The API names list elements `syllabusItems[0].title` and nests the
           // admin create body under `course.`; the form uses dots and no prefix.
-          const path = k.replace(/^course\./, "").replace(/\[(\d+)\]/g, ".$1");
+          let path = k.replace(/^course\./, "").replace(/\[(\d+)\]/g, ".$1");
+          // One bad weekday is the picker's problem, not an element's: the picker has no elements.
+          if (path.startsWith(`${DAYS_FIELD}.`)) path = DAYS_FIELD;
           form.setError(path as keyof CourseFormValues, { message: v });
         }
+      }
+      const daysError = err.code ? DAYS_ERRORS[err.code] : undefined;
+      if (daysError) {
+        form.setError(DAYS_FIELD, { message: daysError });
+        requestAnimationFrame(() => {
+          document.querySelector("[data-field-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
       }
       toast.error(err.message || "Save failed");
     }
@@ -491,15 +514,16 @@ export function CourseDetailsForm({
       {courseType === COURSE_TYPE.OFFLINE && (
         <FormCard icon={<CalendarDays />} title="Offline schedule">
           <FormField<CourseFormValues> name="offlineDetails.startDate" label="Start date" required>
-            {({ field, invalid }) => (
-              <Input type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            {({ field, invalid, id }) => (
+              <Input id={id} type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
             )}
           </FormField>
           <FormField<CourseFormValues> name="offlineDetails.endDate" label="End date" required>
-            {({ field, invalid }) => (
-              <Input type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
+            {({ field, invalid, id }) => (
+              <Input id={id} type="date" {...field} value={(field.value as string) ?? ""} invalid={invalid} />
             )}
           </FormField>
+          <CourseDaysField />
           <FormField<CourseFormValues>
             name="offlineDetails.startTime"
             label="Classes start at"
@@ -695,6 +719,48 @@ export function CourseDetailsForm({
 }
 
 /* ───────────────────── in-person fields shared by both types ───────────────────── */
+
+/**
+ * The weekdays an offline course meets, and under them how many class days
+ * that makes between the dates: "18 class days, Mon 2 Nov – Wed 30 Dec 2026".
+ */
+function CourseDaysField() {
+  const { control, getFieldState, trigger } = useFormContext<CourseFormValues>();
+  const [startDate, endDate, days] = useWatch({
+    control,
+    name: ["offlineDetails.startDate", "offlineDetails.endDate", DAYS_FIELD],
+  });
+  const span = days?.length ? daySpan(startDate, endDate, days) : null;
+
+  // "None of the chosen days falls between…" is fixed as often by the dates as
+  // by the days: once it shows, a change of dates checks it again (the picker
+  // re-checks itself).
+  useEffect(() => {
+    if (getFieldState(DAYS_FIELD).error) void trigger(DAYS_FIELD);
+  }, [startDate, endDate, getFieldState, trigger]);
+
+  let summary = "The weekdays the classes meet.";
+  if (span && span.count > 0 && span.first && span.last) {
+    summary = `${span.count} ${span.count === 1 ? "class day" : "class days"}, ${formatWeekdayRange(span.first, span.last)}`;
+  } else if (span) {
+    summary = COURSE_DAYS_MESSAGES.noneInRange;
+  }
+
+  return (
+    <FormField<CourseFormValues> name={DAYS_FIELD} label="Course days" required description={summary} className="md:col-span-2">
+      {({ field, invalid, id }) => (
+        <WeekdayPicker
+          id={id}
+          label="Course days"
+          value={(field.value as string[] | null | undefined) ?? []}
+          onChange={field.onChange}
+          onBlur={field.onBlur}
+          invalid={invalid}
+        />
+      )}
+    </FormField>
+  );
+}
 
 function SeatLimitField() {
   return (

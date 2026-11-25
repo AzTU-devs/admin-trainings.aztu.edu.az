@@ -1,5 +1,15 @@
 import { z } from "zod";
+import { DAYS_OF_WEEK, daySpan } from "@shared/lib/weekdays";
 import { COURSE_LEVEL, COURSE_TYPE } from "@shared/types/lms";
+
+/**
+ * The course days' messages, shared with the API error mapping
+ * (OFFLINE_DAYS_REQUIRED, NO_COURSE_DAYS_IN_RANGE) so both say the same thing.
+ */
+export const COURSE_DAYS_MESSAGES = {
+  required: "Pick at least one day",
+  noneInRange: "None of the chosen days falls between the start and end date",
+} as const;
 
 /**
  * Options the backend stores for an ONLINE course. `totalVideoSeconds` is
@@ -34,6 +44,8 @@ const offlineDetailsSchema = z.object({
   // The columns are VARCHAR(80) / VARCHAR(255).
   city: z.string().max(80, "At most 80 characters").nullish(),
   addressLine: z.string().max(255, "At most 255 characters").nullish(),
+  // OFFLINE only: the weekdays the course meets (required below).
+  daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).nullish(),
 });
 
 /**
@@ -114,6 +126,13 @@ export const courseSchema = z
       // that is given has to run forwards. "HH:mm" also compares as a string.
       if (d?.startTime && d?.endTime && d.endTime.slice(0, 5) <= d.startTime.slice(0, 5)) {
         issue("endTime", "End time must be after the start time");
+      }
+      // A course from before the days were asked for opens with none, and
+      // cannot be saved until they are picked (the API asks for them too).
+      if (!d?.daysOfWeek?.length) {
+        issue("daysOfWeek", COURSE_DAYS_MESSAGES.required);
+      } else if (daySpan(d.startDate, d.endDate, d.daysOfWeek)?.count === 0) {
+        issue("daysOfWeek", COURSE_DAYS_MESSAGES.noneInRange);
       }
     } else if (v.courseType === COURSE_TYPE.ONE_TIME) {
       if (!d?.startDate) issue("startDate", "Pick the date of the training");

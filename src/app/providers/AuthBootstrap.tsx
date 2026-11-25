@@ -20,7 +20,15 @@ export function AuthBootstrap() {
 
   useEffect(() => {
     if (data) {
-      dispatch(userUpdated({ id: data.id, email: data.email, fullName: data.fullName, roles: data.roles }));
+      dispatch(
+        userUpdated({
+          id: data.id,
+          email: data.email,
+          fullName: data.fullName,
+          roles: data.roles,
+          ...(data.permissions ? { permissions: data.permissions } : {}),
+        }),
+      );
     }
   }, [data, dispatch]);
 

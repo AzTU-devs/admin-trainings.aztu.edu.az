@@ -21,7 +21,7 @@ import { ConfirmDialog } from "@shared/components/ui/ConfirmDialog";
 import { Form, FormSection } from "@shared/components/forms/Form";
 import { FormField } from "@shared/components/forms/FormField";
 import { ROUTES } from "@shared/constants/routes";
-import { ENROLLMENT_STATUS } from "@shared/types/lms";
+import { ENROLLMENT_STATUS, isEnrollmentRequest } from "@shared/types/lms";
 import type { NormalizedError } from "@lib/axios/httpClient";
 import { useGetAdminCourseByIdQuery } from "@features/courses/api/coursesApi";
 import {
@@ -231,7 +231,9 @@ export default function CourseParticipantsPage() {
 /** Remove from the course — the row's one action, on the table and on a phone. */
 function RemoveButton({ participant, onRemove }: { participant: CourseParticipantDto; onRemove: () => void }) {
   // A cancelled enrollment is already off the course — removing it again does nothing.
-  if (participant.status === ENROLLMENT_STATUS.CANCELLED) return null;
+  // A request (pending or rejected) holds no place to remove: the course's owner
+  // or the super admin decides on it from their enrolment requests.
+  if (participant.status === ENROLLMENT_STATUS.CANCELLED || isEnrollmentRequest(participant.status)) return null;
   return (
     <Button
       variant="ghost"

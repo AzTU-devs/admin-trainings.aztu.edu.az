@@ -57,6 +57,7 @@ describe("courseSchema", () => {
           studentLimit: 20,
           city: null,
           addressLine: null,
+          daysOfWeek: ["MONDAY", "WEDNESDAY"],
         },
       }),
     ).toEqual([]);
@@ -88,7 +89,11 @@ describe("courseSchema", () => {
   });
 
   it("lets an offline course leave its daily times out, but not run them backwards", () => {
-    const offline = { ...base, courseType: "OFFLINE", offlineDetails: { startDate: "2026-10-01", endDate: "2026-10-30", studentLimit: 20 } };
+    const offline = {
+      ...base,
+      courseType: "OFFLINE",
+      offlineDetails: { startDate: "2026-10-01", endDate: "2026-10-30", studentLimit: 20, daysOfWeek: ["TUESDAY"] },
+    };
     expect(issues(offline)).toEqual([]);
     expect(
       issues({ ...offline, offlineDetails: { ...offline.offlineDetails, startTime: "18:00", endTime: "09:00" } }),
@@ -110,9 +115,52 @@ describe("courseSchema", () => {
       issues({
         ...base,
         courseType: "OFFLINE",
-        offlineDetails: { startDate: "2026-10-01", endDate: "2026-10-02", studentLimit: 5, city: "x".repeat(81) },
+        offlineDetails: {
+          startDate: "2026-10-01",
+          endDate: "2026-10-02",
+          studentLimit: 5,
+          city: "x".repeat(81),
+          daysOfWeek: ["THURSDAY"],
+        },
       }),
     ).toEqual(["offlineDetails.city: At most 80 characters"]);
+  });
+});
+
+describe("courseSchema — course days", () => {
+  const offline = (daysOfWeek: unknown, dates = { startDate: "2026-11-02", endDate: "2026-12-30" }) => ({
+    ...base,
+    courseType: "OFFLINE",
+    offlineDetails: { ...dates, studentLimit: 20, daysOfWeek },
+  });
+
+  it("asks an offline course for at least one day", () => {
+    expect(issues(offline([]))).toEqual(["offlineDetails.daysOfWeek: Pick at least one day"]);
+    // A course from before the days were asked for: none stored, null from the API.
+    expect(issues(offline(null))).toEqual(["offlineDetails.daysOfWeek: Pick at least one day"]);
+    expect(issues(offline(["MONDAY", "WEDNESDAY"]))).toEqual([]);
+  });
+
+  it("wants one of the days between the dates", () => {
+    // Tue 3 – Thu 5 Nov has no Monday.
+    expect(issues(offline(["MONDAY"], { startDate: "2026-11-03", endDate: "2026-11-05" }))).toEqual([
+      "offlineDetails.daysOfWeek: None of the chosen days falls between the start and end date",
+    ]);
+    expect(issues(offline(["WEDNESDAY"], { startDate: "2026-11-03", endDate: "2026-11-05" }))).toEqual([]);
+  });
+
+  it("refuses a name that is not a weekday", () => {
+    expect(issues(offline(["MONDAY", "FUNDAY"]))[0]).toMatch(/^offlineDetails\.daysOfWeek\.1: /);
+  });
+
+  it("asks a one-time course for none", () => {
+    expect(
+      issues({
+        ...base,
+        courseType: "ONE_TIME",
+        offlineDetails: { startDate: "2026-11-05", startTime: "10:00", endTime: "12:00", studentLimit: 30, daysOfWeek: [] },
+      }),
+    ).toEqual([]);
   });
 });
 

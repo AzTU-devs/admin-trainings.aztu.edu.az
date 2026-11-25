@@ -63,5 +63,6 @@ export function toAuthUser(dto: BackendUserDto): AuthUser {
     email: dto.email,
     fullName,
     roles: dto.roles as Role[],
+    ...(Array.isArray(dto.permissions) ? { permissions: dto.permissions } : {}),
   };
 }

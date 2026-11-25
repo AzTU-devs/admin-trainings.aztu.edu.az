@@ -51,6 +51,7 @@ function apiCourse(overrides: Partial<CourseDto> = {}): CourseDto {
       enrolledCount: 0,
       city: null,
       addressLine: null,
+      daysOfWeek: ["TUESDAY", "THURSDAY"],
     },
     modules: [],
     ...overrides,
@@ -102,6 +103,7 @@ describe("CourseDetailsForm", () => {
       studentLimit: 20,
       city: undefined,
       addressLine: undefined,
+      daysOfWeek: ["TUESDAY", "THURSDAY"],
     });
     expect(body.thumbnailMediaId).toBeUndefined();
     expect(body.clearThumbnail).toBeUndefined();
@@ -216,5 +218,83 @@ describe("CourseDetailsForm", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0].thumbnailMediaId).toBeUndefined();
     expect(onSubmit.mock.calls[0][0].clearThumbnail).toBe(true);
+  });
+
+  /* ───────────────────────────── course days ───────────────────────────── */
+
+  /** An offline course from before the days were asked for: the API reads its days as []. */
+  const legacy = (over: Partial<NonNullable<CourseDto["offlineDetails"]>> = {}) =>
+    apiCourse({
+      offlineDetails: { startDate: "2026-11-02", endDate: "2026-12-30", studentLimit: 20, daysOfWeek: [], ...over },
+    });
+  const day = (name: string) =>
+    within(screen.getByRole("group", { name: "Course days" })).getByRole("button", { name });
+
+  it("asks a course without days to pick them before it saves, and sends them Monday first", async () => {
+    const onSubmit = renderForm({ initial: legacy(), editing: true });
+
+    // Right after the dates, with nothing picked yet.
+    expect(day("Monday")).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: "Save course" }));
+    expect(await screen.findByText("Pick at least one day")).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await userEvent.click(day("Wednesday"));
+    await userEvent.click(day("Monday"));
+    // A quiet count of the class days the choice makes.
+    expect(screen.getByText("18 class days, Mon 2 Nov – Wed 30 Dec 2026")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save course" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].offlineDetails?.daysOfWeek).toEqual(["MONDAY", "WEDNESDAY"]);
+  });
+
+  it("refuses days none of which fall between the dates, and checks again when the dates change", async () => {
+    // Tue 3 – Thu 5 Nov: no Monday.
+    const onSubmit = renderForm({ initial: legacy({ startDate: "2026-11-03", endDate: "2026-11-05", daysOfWeek: ["MONDAY"] }), editing: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Save course" }));
+    const message = "None of the chosen days falls between the start and end date";
+    expect(await screen.findByText(message, { selector: "[data-field-error]" })).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    // A week later the range holds Mon 9 Nov: the message goes without touching the days.
+    const end = screen.getByLabelText(/^End date/);
+    await userEvent.clear(end);
+    await userEvent.type(end, "2026-11-10");
+    await waitFor(() => expect(screen.queryByText(message, { selector: "[data-field-error]" })).not.toBeInTheDocument());
+    expect(screen.getByText("1 class day, Mon 9 Nov 2026")).toBeInTheDocument();
+  });
+
+  it("puts the API's course-day refusals on the days", async () => {
+    const onSubmit = renderForm({ initial: apiCourse(), editing: true });
+    onSubmit.mockRejectedValueOnce({
+      status: 400,
+      code: "NO_COURSE_DAYS_IN_RANGE",
+      message: "None of the chosen days falls between the start and end date",
+      isNormalized: true,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Save course" }));
+
+    const error = await screen.findByText("None of the chosen days falls between the start and end date", {
+      selector: "[data-field-error]",
+    });
+    expect(within(error.parentElement as HTMLElement).getByRole("group", { name: "Course days" })).toBeInTheDocument();
+  });
+
+  it("asks a one-time course for no days and sends none", async () => {
+    const onSubmit = renderForm({
+      initial: apiCourse({
+        courseType: "ONE_TIME",
+        offlineDetails: { startDate: "2026-11-05", endDate: "2026-11-05", startTime: "10:00", endTime: "12:00", studentLimit: 30, daysOfWeek: [] },
+      }),
+      editing: true,
+    });
+
+    expect(screen.queryByRole("group", { name: "Course days" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save course" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].offlineDetails).not.toHaveProperty("daysOfWeek");
   });
 });

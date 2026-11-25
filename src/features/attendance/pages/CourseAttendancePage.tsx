@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useParams } from "react-router";
 import { Eye, Lock, MonitorPlay, SearchX } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
@@ -12,10 +13,11 @@ import { useGetAdminCourseByIdQuery, useGetCourseBySlugQuery } from "@features/c
 import { courseCrumb } from "@features/courses/lib/courseCrumb";
 import type { CourseDto } from "@features/courses/types";
 import {
+  useGetAttendanceRegisterQuery,
   useGetCourseAttendanceQuery,
-  useListAttendanceDaysQuery,
 } from "@features/attendance/api/attendanceApi";
 import { AttendanceDayCard } from "@features/attendance/components/AttendanceDayCard";
+import { AttendanceRegisterCard } from "@features/attendance/components/AttendanceRegisterCard";
 import { AttendanceRoster } from "@features/attendance/components/AttendanceRoster";
 import { useBakuToday } from "@features/attendance/hooks/useBakuToday";
 import { isMarkableDay } from "@features/attendance/lib/attendance";
@@ -28,10 +30,12 @@ import { isMarkableDay } from "@features/attendance/lib/attendance";
 type Scope = "tutor" | "admin";
 
 /**
- * A course's attendance, one course day at a time: who joined, came late or
- * was absent. Experts add marks (never change them); admins read; a super
- * admin adds, changes and deletes. The server decides who may do what — the
- * view's `canMark` and `canManage` — and this page only follows it.
+ * A course's attendance: the register — every student against every course
+ * day — and under it one day's roster, where marks are taken. Choosing a day
+ * in the register opens it there. Experts add marks (never change them);
+ * admins read; a super admin adds, changes and deletes. The server decides who
+ * may do what — the view's `canMark` and `canManage` — and this page only
+ * follows it. Anyone who can see it can export the register to Excel.
  */
 export default function CourseAttendancePage({ scope }: { scope: Scope }) {
   const params = useParams();
@@ -74,7 +78,11 @@ function AttendanceScreen({ course, scope }: { course: CourseDto; scope: Scope }
     // list moves on to the new day rather than taking marks for the old one.
     date ? { courseId: course.id, date } : { courseId: course.id, today },
   );
-  const { data: days } = useListAttendanceDaysQuery(course.id);
+  // The register card's own cache entry: only the course's weekdays are read here.
+  const { data: register } = useGetAttendanceRegisterQuery(course.id);
+  const daySectionRef = useRef<HTMLElement>(null);
+  const dayHeadingRef = useRef<HTMLHeadingElement>(null);
+  const dateBoxRef = useRef<HTMLInputElement>(null);
 
   if (!data) {
     if (error) return <AttendanceError error={error as NormalizedError} onRetry={() => void refetch()} />;
@@ -88,18 +96,22 @@ function AttendanceScreen({ course, scope }: { course: CourseDto; scope: Scope }
   // An API from before `canMark` leaves it to the route: an expert reaches
   // this page from their own courses, staff from the admin pages.
   const canAdd = data.canMark ?? (data.canManage || scope === "tutor");
+  const oneDay = data.firstDate === data.lastDate;
+
+  // The roster sits under the register: the reader is taken there, and its
+  // heading — now naming the day chosen — takes the focus.
+  const openDay = (day: string) => {
+    flushSync(() => setDate(day));
+    daySectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    dayHeadingRef.current?.focus({ preventScroll: true });
+  };
+  const openOtherDay = () => {
+    daySectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    dateBoxRef.current?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="space-y-5">
-      <AttendanceDayCard
-        date={shown}
-        firstDate={data.firstDate}
-        lastDate={data.lastDate}
-        today={today}
-        days={days}
-        onPick={setDate}
-      />
-
       {!canAdd && (
         <div className="note">
           <Eye aria-hidden />
@@ -110,23 +122,45 @@ function AttendanceScreen({ course, scope }: { course: CourseDto; scope: Scope }
         </div>
       )}
 
-      {currentData ? (
-        <AttendanceRoster
-          key={currentData.date}
-          view={currentData}
-          canAdd={canAdd && isMarkableDay(currentData.date, currentData.firstDate, currentData.lastDate, today)}
+      <AttendanceRegisterCard
+        courseId={course.id}
+        courseSlug={course.slug}
+        today={today}
+        openDate={shown}
+        onOpenDay={openDay}
+        onOpenOtherDay={canAdd && !oneDay ? openOtherDay : undefined}
+      />
+
+      <section ref={daySectionRef} aria-label="The day's attendance" className="scroll-mt-24 space-y-5">
+        <AttendanceDayCard
+          date={shown}
+          firstDate={data.firstDate}
+          lastDate={data.lastDate}
           today={today}
-          recheckToday={recheckToday}
-          refreshing={isFetching}
+          onPick={setDate}
+          daysOfWeek={register?.daysOfWeek}
+          headingRef={dayHeadingRef}
+          dateBoxRef={dateBoxRef}
         />
-      ) : error ? (
-        <AttendanceError error={error as NormalizedError} onRetry={() => void refetch()} />
-      ) : (
-        <Card className="flex justify-center py-12" aria-busy>
-          <Spinner />
-          <span className="sr-only">Loading the day…</span>
-        </Card>
-      )}
+
+        {currentData ? (
+          <AttendanceRoster
+            key={currentData.date}
+            view={currentData}
+            canAdd={canAdd && isMarkableDay(currentData.date, currentData.firstDate, currentData.lastDate, today)}
+            today={today}
+            recheckToday={recheckToday}
+            refreshing={isFetching}
+          />
+        ) : error ? (
+          <AttendanceError error={error as NormalizedError} onRetry={() => void refetch()} />
+        ) : (
+          <Card className="flex justify-center py-12" aria-busy>
+            <Spinner />
+            <span className="sr-only">Loading the day…</span>
+          </Card>
+        )}
+      </section>
     </div>
   );
 }

@@ -127,6 +127,26 @@ describe("toCalendarEvent", () => {
     });
   });
 
+  it("places each course day of one course as its own entry, timed or all day", () => {
+    // A course with days: one entry per course day, each with its own id.
+    const monday = { ...courseSpan, id: `course:${COURSE_ID}:2026-11-02`, start: "2026-11-02T06:00:00Z", end: "2026-11-02T08:00:00Z", allDay: false };
+    const wednesday = { ...monday, id: `course:${COURSE_ID}:2026-11-04`, start: "2026-11-04T06:00:00Z", end: "2026-11-04T08:00:00Z" };
+    // Without daily times, all day on that date (Baku midnight to midnight).
+    const friday = { ...courseSpan, id: `course:${COURSE_ID}:2026-11-06`, start: "2026-11-05T20:00:00Z", end: "2026-11-06T20:00:00Z" };
+
+    const events = toCalendarEvents([monday, wednesday, friday]);
+    expect(events.map((e) => e.id)).toEqual([
+      `course:${COURSE_ID}:2026-11-02`,
+      `course:${COURSE_ID}:2026-11-04`,
+      `course:${COURSE_ID}:2026-11-06`,
+    ]);
+    expect(events[0]).toMatchObject({ allDay: false, start: "2026-11-02T06:00:00Z", end: "2026-11-02T08:00:00Z" });
+    expect(events[1]).toMatchObject({ allDay: false, start: "2026-11-04T06:00:00Z" });
+    expect(events[2]).toMatchObject({ allDay: true, start: "2026-11-06", end: "2026-11-07", color: "var(--cal-course)" });
+    expect(formatEventWhen(wednesday)).toBe("Wed, 4 Nov 2026 · 10:00–12:00");
+    expect(formatEventWhen(friday)).toBe("Fri, 6 Nov 2026 · all day");
+  });
+
   it("gives an all-day event with no length one day", () => {
     const ev = toCalendarEvent({ ...courseSpan, end: courseSpan.start });
     expect(ev).toMatchObject({ start: "2026-11-02", end: "2026-11-03" });

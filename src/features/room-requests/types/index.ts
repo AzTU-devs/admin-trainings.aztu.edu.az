@@ -1,4 +1,5 @@
 import type { BookingDecision, BookingStatus, UUID } from "@shared/types/lms";
+import type { DayOfWeek } from "@shared/lib/weekdays";
 
 /** Mirror of backend RoomBookingDto. */
 export interface RoomBookingDto {
@@ -33,8 +34,8 @@ export interface BookingCreateRequest {
   recurrenceRule?: string;
 }
 
-/** java.time.DayOfWeek names, as the API sends and accepts them. */
-export type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+/** java.time.DayOfWeek names, as the API sends and accepts them (shared with the offline course's days). */
+export type { DayOfWeek };
 
 /** One session of a long-term booking: an ordinary room booking linked to the series. */
 export interface RoomBookingOccurrenceDto {

@@ -5,15 +5,21 @@ import type { BookingStatus, CourseStatus, CourseType, UUID } from "@shared/type
  *  - ONE_TIME      a one-time training (one timed block on its date)
  *  - SESSION       one meeting of an offline course (an offline session, or a
  *                  room booking linked to the course)
- *  - COURSE        an offline course with no sessions or bookings, shown as an
- *                  all-day bar over its date range
+ *  - COURSE        an offline course with no sessions or bookings: one entry
+ *                  per course day (at its daily times, or all day), or — a
+ *                  course without days — an all-day bar over its date range
  *  - ROOM_BOOKING  a room booking that belongs to no course
  */
 export type CalendarEventKind = "ONE_TIME" | "COURSE" | "SESSION" | "ROOM_BOOKING";
 
 /** Mirror of one entry of `GET /api/admin/calendar`. */
 export interface CalendarEventDto {
-  /** "one-time:<courseId>", "course:<courseId>", "session:<sessionId>" or "booking:<bookingId>". */
+  /**
+   * "one-time:<courseId>", "course:<courseId>" (a bar over the course's dates),
+   * "course:<courseId>:<yyyy-MM-dd>" (one of its course days),
+   * "session:<sessionId>" or "booking:<bookingId>". Unique per entry: one
+   * course may have many.
+   */
   id: string;
   kind: CalendarEventKind;
   title: string;

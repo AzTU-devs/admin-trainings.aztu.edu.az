@@ -30,6 +30,12 @@ describe("statusTone", () => {
     expect(statusTone("HIGH")).toBe("danger");
   });
 
+  it("reads an account or enrolment waiting for approval as waiting, and a rejected one as refused", () => {
+    expect(formatEnum("PENDING_APPROVAL")).toBe("Pending approval");
+    expect(statusTone("PENDING_APPROVAL")).toBe("warning");
+    expect(statusTone("REJECTED")).toBe("danger");
+  });
+
   it("falls back to neutral for sources, channels and unknown values", () => {
     expect(statusTone("FREE")).toBe("neutral");
     expect(statusTone("IN_APP")).toBe("neutral");

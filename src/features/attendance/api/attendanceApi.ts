@@ -1,22 +1,24 @@
 import { baseApi } from "@lib/query/baseApi";
 import type { UUID } from "@shared/types/lms";
 import type {
-  AttendanceDaySummary,
   AttendanceMark,
   AttendanceRecord,
+  AttendanceRegister,
   CourseAttendanceView,
   MarkAttendanceRequest,
 } from "@features/attendance/types";
 
 /** Every day of one course's attendance (each date is its own cache entry). */
 const viewTag = (courseId: UUID) => ({ type: "Attendance" as const, id: `VIEW-${courseId}` });
-/** The course's list of marked days and their counts. */
-const daysTag = (courseId: UUID) => ({ type: "Attendance" as const, id: `DAYS-${courseId}` });
+/** The course's register: every day, every student, every mark and the counts. */
+const registerTag = (courseId: UUID) => ({ type: "Attendance" as const, id: `REGISTER-${courseId}` });
 
 /**
- * Attendance for in-person (OFFLINE and ONE_TIME) courses, one course day at a
- * time. Experts on the course's roster read and add marks; admins read; a
- * super admin also changes and deletes them (`attendance:manage`).
+ * Attendance for in-person (OFFLINE and ONE_TIME) courses: the register (the
+ * whole course at once) and one course day at a time, where marks are taken.
+ * Experts on the course's roster read and add marks; admins read; a super
+ * admin also changes and deletes them (`attendance:manage`). The Excel export
+ * is a file, not cached state: see attendanceExport.ts.
  */
 export const attendanceApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -34,15 +36,18 @@ export const attendanceApi = baseApi.injectEndpoints({
       }),
       providesTags: (_r, _e, { courseId }) => [viewTag(courseId)],
     }),
-    /** Backend `GET /api/portal/courses/{courseId}/attendance/days`. */
-    listAttendanceDays: build.query<AttendanceDaySummary[], UUID>({
-      query: (courseId) => ({ url: `/portal/courses/${courseId}/attendance/days`, method: "GET" }),
-      providesTags: (_r, _e, courseId) => [daysTag(courseId)],
+    /**
+     * Backend `GET /api/portal/courses/{courseId}/attendance/register` — the
+     * whole course as a table. Every change of a mark refetches it.
+     */
+    getAttendanceRegister: build.query<AttendanceRegister, UUID>({
+      query: (courseId) => ({ url: `/portal/courses/${courseId}/attendance/register`, method: "GET" }),
+      providesTags: (_r, _e, courseId) => [registerTag(courseId)],
     }),
     /**
      * Backend `POST /api/portal/courses/{courseId}/attendance` — new marks for
      * one day, all or nothing. It answers with that day's view, which goes
-     * straight into the cache (below), so only the marked days are refetched.
+     * straight into the cache (below), so only the register is refetched.
      * Refused — above all 409 ATTENDANCE_ALREADY_MARKED, when someone else
      * marked one of these students first — the day is refetched too, to show
      * what is there now.
@@ -50,7 +55,7 @@ export const attendanceApi = baseApi.injectEndpoints({
     markAttendance: build.mutation<CourseAttendanceView, { courseId: UUID; body: MarkAttendanceRequest }>({
       query: ({ courseId, body }) => ({ url: `/portal/courses/${courseId}/attendance`, method: "POST", data: body }),
       invalidatesTags: (result, _e, { courseId }) =>
-        result ? [daysTag(courseId)] : [viewTag(courseId), daysTag(courseId)],
+        result ? [registerTag(courseId)] : [viewTag(courseId), registerTag(courseId)],
       async onQueryStarted({ courseId }, { dispatch, getState, queryFulfilled }): Promise<void> {
         let view: CourseAttendanceView;
         try {
@@ -73,12 +78,12 @@ export const attendanceApi = baseApi.injectEndpoints({
     changeAttendanceMark: build.mutation<AttendanceRecord, { courseId: UUID; recordId: UUID; status: AttendanceMark }>({
       query: ({ recordId, status }) => ({ url: `/super/attendance/${recordId}`, method: "PATCH", data: { status } }),
       // Success or not (a mark deleted meanwhile is a 404), the day is reloaded.
-      invalidatesTags: (_r, _e, { courseId }) => [viewTag(courseId), daysTag(courseId)],
+      invalidatesTags: (_r, _e, { courseId }) => [viewTag(courseId), registerTag(courseId)],
     }),
     /** Backend `DELETE /api/super/attendance/{recordId}` — super admin only, audited. */
     deleteAttendanceMark: build.mutation<void, { courseId: UUID; recordId: UUID }>({
       query: ({ recordId }) => ({ url: `/super/attendance/${recordId}`, method: "DELETE" }),
-      invalidatesTags: (_r, _e, { courseId }) => [viewTag(courseId), daysTag(courseId)],
+      invalidatesTags: (_r, _e, { courseId }) => [viewTag(courseId), registerTag(courseId)],
     }),
   }),
   overrideExisting: false,
@@ -86,7 +91,7 @@ export const attendanceApi = baseApi.injectEndpoints({
 
 export const {
   useGetCourseAttendanceQuery,
-  useListAttendanceDaysQuery,
+  useGetAttendanceRegisterQuery,
   useMarkAttendanceMutation,
   useChangeAttendanceMarkMutation,
   useDeleteAttendanceMarkMutation,

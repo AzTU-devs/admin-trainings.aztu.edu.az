@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { AlertTriangle, BookOpen, CreditCard, EyeOff, MessageSquareText, Receipt } from "lucide-react";
+import { isEnrollmentRequest } from "@shared/types/lms";
 import { SoftEmpty } from "@shared/components/bright";
 import { Badge, StatusBadge } from "@shared/components/ui/Badge";
 import { Card } from "@shared/components/ui/Card";
@@ -111,6 +112,35 @@ function EnrollmentPhoneRow({ e }: { e: ProfileEnrollment }) {
         </div>
       </div>
       <EnrollmentDates e={e} />
+    </div>
+  );
+}
+
+/*
+ * A request to enrol — waiting for the course owner, or turned down — is not
+ * an enrolment: no place, no progress, no lessons. It gets a short table of
+ * its own instead of a row of dashes among the courses the person is on.
+ */
+const REQUEST_COLUMNS: ColumnDef<ProfileEnrollment>[] = [
+  ENROLLMENT_COLUMNS[0],
+  { header: "Status", cell: ({ row }) => <StatusBadge value={row.original.status} /> },
+  {
+    header: "Requested",
+    cell: ({ row }) => <span className="whitespace-nowrap tabular-nums text-ink-2">{formatDateTime(row.original.enrolledAt)}</span>,
+  },
+];
+
+function RequestPhoneRow({ e }: { e: ProfileEnrollment }) {
+  return (
+    <div className="space-y-2 text-sm text-ink-2">
+      <div>
+        <CourseLink course={{ id: e.courseId, title: e.courseTitle }} />
+        <p className="mt-0.5 text-[12.5px] text-ink-3">{courseTypeLabel(e.courseType)}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12.5px] text-ink-3">
+        <StatusBadge value={e.status} size="sm" />
+        <span className="tabular-nums">Requested {formatDateTime(e.enrolledAt)}</span>
+      </div>
     </div>
   );
 }
@@ -232,20 +262,37 @@ function ReviewCard({ review: r }: { review: ProfileReview }) {
 
 /** The participant side of the account: courses and progress, what they paid, and what they wrote. */
 export function LearningTab({ learner }: { learner: ProfileLearner }) {
+  const enrollments = learner.enrollments.filter((e) => !isEnrollmentRequest(e.status));
+  const requests = learner.enrollments.filter((e) => isEnrollmentRequest(e.status));
   return (
     <div className="space-y-8">
-      <ProfileSection title="Enrollments" count={learner.enrollments.length}>
-        {learner.enrollments.length === 0 ? (
+      <ProfileSection title="Enrollments" count={enrollments.length}>
+        {enrollments.length === 0 ? (
           <SoftEmpty icon={<BookOpen />} title="Not enrolled on any course." />
         ) : (
           <DataTable<ProfileEnrollment>
-            data={learner.enrollments}
+            data={enrollments}
             columns={ENROLLMENT_COLUMNS}
             getRowId={(e) => e.id}
             renderMobileRow={(e) => <EnrollmentPhoneRow e={e} />}
           />
         )}
       </ProfileSection>
+
+      {requests.length > 0 && (
+        <ProfileSection
+          title="Enrolment requests"
+          count={requests.length}
+          description="Waiting for the course owner's decision, or turned down. Neither is a place on the course."
+        >
+          <DataTable<ProfileEnrollment>
+            data={requests}
+            columns={REQUEST_COLUMNS}
+            getRowId={(e) => e.id}
+            renderMobileRow={(e) => <RequestPhoneRow e={e} />}
+          />
+        </ProfileSection>
+      )}
 
       <ProfileSection title="Orders" count={learner.orders.length}>
         {learner.orders.length === 0 ? (

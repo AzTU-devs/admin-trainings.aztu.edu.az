@@ -1,19 +1,17 @@
-import { useState } from "react";
-import { CalendarCheck, CalendarClock, CalendarX2, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, type Ref } from "react";
+import { CalendarCheck, CalendarClock, CalendarPlus, CalendarX2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@shared/components/ui/Badge";
 import { Button } from "@shared/components/ui/Button";
 import { Card } from "@shared/components/ui/Card";
 import { Input } from "@shared/components/ui/Input";
 import { Label } from "@shared/components/ui/Label";
-import { cn } from "@shared/lib/cn";
-import { MarkCount } from "@features/attendance/components/marks";
+import { dayOfWeekOfDate, formatDays } from "@shared/lib/weekdays";
 import {
   formatDay,
   isIsoDay,
   lastMarkableDay,
   shiftDay,
 } from "@features/attendance/lib/attendance";
-import type { AttendanceDaySummary } from "@features/attendance/types";
 
 interface Props {
   /** The day shown. */
@@ -22,29 +20,34 @@ interface Props {
   lastDate: string;
   /** Today in Baku. */
   today: string;
-  /** The days that have marks, newest first; undefined while they load. */
-  days: AttendanceDaySummary[] | undefined;
   onPick: (date: string) => void;
+  /** The weekdays the course meets (from the register); empty or absent when it has none set. */
+  daysOfWeek?: readonly string[];
+  /** The day's heading, focused when a day is opened from the register. */
+  headingRef?: Ref<HTMLHeadingElement>;
+  /** The date box, focused to open a day the register does not list. */
+  dateBoxRef?: Ref<HTMLInputElement>;
 }
 
-/** How many marked days show before "Show all": a term of twice-weekly sessions runs past thirty. */
-const DAYS_SHOWN = 12;
-
 /**
- * Which course day the list below is for: the day, the course's span, a date
- * box with previous / next / today, and the days already marked to jump to.
- * Days can be picked from the course's first day up to its last day or today,
- * whichever comes first — the days the API takes marks for. A marked day
- * opens wherever it falls: a course's dates can move after marks were saved,
- * and those marks must stay within reach (a super admin may correct them).
+ * Which day the list below is for: the day, the course's span, and a date
+ * box with previous / next / today. Days can be picked from the course's
+ * first day up to its last day or today, whichever comes first — the days the
+ * API takes marks for, a make-up session on another weekday included. The
+ * days already marked are opened from the register above, wherever they fall:
+ * a course's dates can move after marks were saved, and those marks must stay
+ * within reach (a super admin may correct them).
  */
-export function AttendanceDayCard({ date, firstDate, lastDate, today, days, onPick }: Props) {
+export function AttendanceDayCard({ date, firstDate, lastDate, today, onPick, daysOfWeek, headingRef, dateBoxRef }: Props) {
   const oneDay = firstDate === lastDate;
   const upcoming = today < firstDate;
   // Before the course starts there is nothing to mark, but its first day can still be looked at.
   const lastDay = upcoming ? firstDate : lastMarkableDay(lastDate, today);
   const pickable = (d: string) => d >= firstDate && d <= lastDay;
   const outside = date < firstDate || date > lastDate;
+  // Within the course's dates but not on one of its weekdays: allowed, as a make-up session.
+  const weekday = dayOfWeekOfDate(date);
+  const extraDay = !outside && !oneDay && !!daysOfWeek?.length && !!weekday && !daysOfWeek.includes(weekday);
 
   // What is typed in the date box. A date box reports partial dates while the
   // year is typed, so only a whole day in range moves the list; and whatever
@@ -77,7 +80,11 @@ export function AttendanceDayCard({ date, firstDate, lastDate, today, days, onPi
             <CalendarCheck />
           </span>
           <div className="min-w-0">
-            <h2 className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-display text-[20px] font-bold leading-tight tracking-[-0.018em] text-ink">
+            <h2
+              ref={headingRef}
+              tabIndex={-1}
+              className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-display text-[20px] font-bold leading-tight tracking-[-0.018em] text-ink focus:outline-none"
+            >
               {formatDay(date)}
               {date === today && (
                 <Badge tone="brand" size="sm">
@@ -88,7 +95,7 @@ export function AttendanceDayCard({ date, firstDate, lastDate, today, days, onPi
             <p className="mt-1 text-[13.5px] leading-relaxed text-ink-3">
               {oneDay
                 ? "A one-day course."
-                : `Course days ${formatDay(firstDate)} – ${formatDay(lastDate)}.`}
+                : `The course runs ${formatDay(firstDate)} – ${formatDay(lastDate)}.`}
             </p>
           </div>
         </div>
@@ -110,6 +117,7 @@ export function AttendanceDayCard({ date, firstDate, lastDate, today, days, onPi
                   <ChevronLeft className="size-4" />
                 </Button>
                 <Input
+                  ref={dateBoxRef}
                   id="attendance-day"
                   type="date"
                   min={firstDate}
@@ -161,6 +169,15 @@ export function AttendanceDayCard({ date, firstDate, lastDate, today, days, onPi
         </div>
       )}
 
+      {extraDay && (
+        <div className="note mt-4">
+          <CalendarPlus aria-hidden />
+          <p>
+            Not one of the course&rsquo;s days ({formatDays(daysOfWeek)}): marks on it are for a make-up session.
+          </p>
+        </div>
+      )}
+
       {outside && (
         <div className="note mt-4">
           <CalendarX2 aria-hidden />
@@ -176,69 +193,6 @@ export function AttendanceDayCard({ date, firstDate, lastDate, today, days, onPi
           </div>
         </div>
       )}
-
-      <MarkedDays days={days} selected={date} onPick={go} />
     </Card>
-  );
-}
-
-function MarkedDays({
-  days,
-  selected,
-  onPick,
-}: {
-  days: AttendanceDaySummary[] | undefined;
-  selected: string;
-  onPick: (date: string) => void;
-}) {
-  const [all, setAll] = useState(false);
-  if (!days) return null;
-  const shown = all ? days : days.slice(0, DAYS_SHOWN);
-
-  return (
-    <div className="mt-5 border-t border-line pt-4">
-      <h3 className="text-[12.5px] font-semibold text-ink-3">Marked days</h3>
-      {days.length === 0 ? (
-        <p className="mt-1.5 text-[13.5px] text-ink-3">No marks saved yet.</p>
-      ) : (
-        <>
-          <ul aria-label="Marked days" className="mt-2.5 flex flex-wrap gap-2">
-            {shown.map((d) => {
-              const current = d.date === selected;
-              return (
-                <li key={d.date}>
-                  <button
-                    type="button"
-                    aria-current={current ? "date" : undefined}
-                    onClick={() => onPick(d.date)}
-                    className={cn(
-                      "inline-flex h-9 items-center gap-2.5 rounded-full bg-surface pl-3.5 pr-3 text-[13px] font-semibold text-ink-2 transition-[background-color,box-shadow,color] duration-200",
-                      "shadow-[inset_0_0_0_1px_var(--line-2)] hover:text-ink hover:shadow-[inset_0_0_0_1px_var(--ink-3)]",
-                      current && "bg-navy-tint text-navy shadow-[inset_0_0_0_1.5px_color-mix(in_oklch,var(--navy)_55%,transparent)]",
-                    )}
-                  >
-                    <span>{formatDay(d.date, "short")}</span>
-                    {/* The counts after each mark's icon for the eye, and as words for a screen reader. */}
-                    <span aria-hidden className="flex items-center gap-2 text-[12px] font-medium tabular-nums text-ink-3">
-                      <MarkCount status="PRESENT" value={d.present} />
-                      <MarkCount status="LATE" value={d.late} />
-                      <MarkCount status="ABSENT" value={d.absent} />
-                    </span>
-                    <span className="sr-only">
-                      : {d.present} joined, {d.late} late, {d.absent} absent
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {days.length > DAYS_SHOWN && (
-            <Button type="button" variant="link" size="sm" className="mt-3" onClick={() => setAll((v) => !v)}>
-              {all ? "Show fewer days" : `Show all ${days.length} days`}
-            </Button>
-          )}
-        </>
-      )}
-    </div>
   );
 }

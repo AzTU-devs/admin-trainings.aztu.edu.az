@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { CourseEndedBadge, CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
 import {
   CourseLevelValue,
   CoursePriceValue,
@@ -24,9 +24,15 @@ const tutorColumn: ColumnDef<CourseSummaryDto> = {
   cell: ({ row }) => <TutorCell name={row.original.tutorDisplayName} />,
 };
 
+// An ended course keeps its status (published, archived), so "Ended" sits beside it.
 const statusColumn: ColumnDef<CourseSummaryDto> = {
   header: "Status",
-  cell: ({ row }) => <CourseStatusBadge status={row.original.status} />,
+  cell: ({ row }) => (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <CourseStatusBadge status={row.original.status} />
+      <CourseEndedBadge endedAt={row.original.endedAt} />
+    </span>
+  ),
 };
 
 const priceColumn: ColumnDef<CourseSummaryDto> = {

@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LockOpen, Pencil, Plus, Search, ShieldOff, Trash2, UserCog, UserPlus } from "lucide-react";
+import { Link } from "react-router";
+import { LockOpen, Pencil, Plus, Search, ShieldOff, Trash2, UserCheck, UserCog, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Button } from "@shared/components/ui/Button";
@@ -46,7 +47,8 @@ import {
   userSchema,
   type UserFormValues,
 } from "@features/users/schemas/user.schema";
-import type { AccountRole, AdminUser } from "@features/users/types";
+import { awaitsApproval, type AccountRole, type AdminUser } from "@features/users/types";
+import { ROUTES } from "@shared/constants/routes";
 import { PARTICIPANT_ROLE, ROLE_FILTERS, roleLabel } from "@features/users/lib/roles";
 import { ALL_ROLES } from "@shared/constants/roles";
 import { hueFor } from "@shared/lib/hue";
@@ -101,7 +103,8 @@ export default function UsersPage() {
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
 
-  const { isSuperAdmin } = usePermissions();
+  const { isSuperAdmin, can } = usePermissions();
+  const canApproveAccounts = can("user:approve", isSuperAdmin);
   const { data, isFetching } = useListUsersQuery({
     page,
     size: 10,
@@ -160,13 +163,29 @@ export default function UsersPage() {
             <LockOpen className="size-4" />
           </IconAction>
         )}
-        <IconAction label="Disable" onClick={async (e) => {
-          e.stopPropagation();
-          const next = u.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
-          await setStatus({ id: u.id, status: next }).unwrap();
-        }}>
-          <ShieldOff className="size-4" />
-        </IconAction>
+        {/* A sign-up waiting for (or refused) approval is decided on Account
+            approvals, which e-mails the person and records who decided: the
+            toggle here would switch it on with neither. */}
+        {awaitsApproval(u.status) ? (
+          canApproveAccounts && (
+            <IconAction label="Review sign-up" asChild>
+              <Link
+                to={u.status === "REJECTED" ? ROUTES.superAccountApprovalsRejected : ROUTES.superAccountApprovals}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <UserCheck className="size-4" />
+              </Link>
+            </IconAction>
+          )
+        ) : (
+          <IconAction label="Disable" onClick={async (e) => {
+            e.stopPropagation();
+            const next = u.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
+            await setStatus({ id: u.id, status: next }).unwrap();
+          }}>
+            <ShieldOff className="size-4" />
+          </IconAction>
+        )}
         <IconAction label="Edit" onClick={(e) => { e.stopPropagation(); openEdit(u); }}>
           <Pencil className="size-4" />
         </IconAction>
@@ -175,7 +194,7 @@ export default function UsersPage() {
         </IconAction>
       </div>
     ),
-    [setStatus, unlockUser, isSuperAdmin, openEdit],
+    [setStatus, unlockUser, isSuperAdmin, canApproveAccounts, openEdit],
   );
 
   const columns = useMemo<ColumnDef<AdminUser>[]>(

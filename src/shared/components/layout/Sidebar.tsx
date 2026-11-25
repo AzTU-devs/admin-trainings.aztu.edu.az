@@ -10,12 +10,16 @@ import { cn } from "@shared/lib/cn";
 import {
   MENU_GROUPS,
   filterMenuForRoles,
+  type MenuCounter,
   type MenuItem,
 } from "@shared/components/navigation/menu";
 import { Kicker } from "@shared/components/bright/Kicker";
 import { MQ, useMediaQuery } from "@shared/lib/useMediaQuery";
 import { useScrollFade } from "@shared/lib/useScrollFade";
 import { usePermissions } from "@features/auth/hooks/usePermissions";
+import { usePendingAccountCount } from "@features/account-approvals/hooks/usePendingAccountCount";
+import { usePendingEnrollmentRequestCount } from "@features/enrollments/hooks/useEnrollmentRequests";
+import { CountPill } from "@shared/components/data-display/CountPill";
 import { Logo } from "./Logo";
 
 /*
@@ -24,11 +28,12 @@ import { Logo } from "./Logo";
  * Section labels are kickers with the gold rule; items are 44px pills, and the
  * current page gets the navy tint plus a small gold marker.
  *
- * The super admin menu (16 items, 3 labels) is taller than a laptop window:
+ * The super admin menu (18 items, 3 labels) is taller than a laptop window:
  * on short screens (`short:`, ≤1000px) the items drop to 40px and the groups
- * close up (label 2px above its first item, 12px between groups), so the whole
- * menu fits a 1440×900 screen. Where it still overflows (a browser window
- * ~780px tall) the edge with more items past it fades over 12px — only while
+ * close up (label 2px above its first item, 12px between groups), which fitted
+ * the 16 items it had on a 1440×900 screen; the two approval queues (Account
+ * approvals, Enrolment requests) take it past that. Where it overflows the
+ * edge with more items past it fades over 12px — only while
  * more than the list's own end padding is hidden, so a last item that fits
  * (Security) never sits greyed out under a fade and reads as disabled.
  *
@@ -269,9 +274,59 @@ function SidebarLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }
                 {item.badge}
               </span>
             )}
+            {item.counter && <MenuCount counter={item.counter} collapsed={collapsed} />}
           </>
         )}
       </NavLink>
     </li>
+  );
+}
+
+/*
+ * One component per counter, so each calls only its own query hook — and only
+ * when its item is on the menu (the hooks themselves skip the request for
+ * anyone without the permission).
+ */
+function AccountApprovalsCount({ collapsed }: { collapsed: boolean }) {
+  return <CountBadge count={usePendingAccountCount()} collapsed={collapsed} />;
+}
+function EnrollmentRequestsCount({ collapsed }: { collapsed: boolean }) {
+  return <CountBadge count={usePendingEnrollmentRequestCount()} collapsed={collapsed} />;
+}
+
+const COUNTERS: Record<MenuCounter, (props: { collapsed: boolean }) => React.ReactNode> = {
+  accountApprovals: AccountApprovalsCount,
+  enrollmentRequests: EnrollmentRequestsCount,
+};
+
+function MenuCount({ counter, collapsed }: { counter: MenuCounter; collapsed: boolean }) {
+  const Count = COUNTERS[counter];
+  return <Count collapsed={collapsed} />;
+}
+
+/**
+ * Work waiting behind an item: the gold pill of the static badges with the
+ * number (99+ past that), or — collapsed, where there is no room — a gold dot
+ * on the icon. Nothing at zero or while unknown. The link's name carries the
+ * count in words ("Account approvals, 3 waiting"), the digits are hidden.
+ */
+function CountBadge({ count, collapsed }: { count: number | undefined; collapsed: boolean }) {
+  if (!count || count <= 0) return null;
+  const label = <span className="sr-only">{`, ${count.toLocaleString()} waiting`}</span>;
+  if (collapsed) {
+    return (
+      <>
+        <span aria-hidden className="absolute right-[22px] top-2 size-2 rounded-full bg-gold ring-2 ring-surface" />
+        {label}
+      </>
+    );
+  }
+  return (
+    <>
+      <span aria-hidden className="contents">
+        <CountPill count={count} />
+      </span>
+      {label}
+    </>
   );
 }

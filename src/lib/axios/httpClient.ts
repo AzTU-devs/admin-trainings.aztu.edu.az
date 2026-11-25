@@ -137,9 +137,29 @@ httpClient.interceptors.response.use(
       }
     }
 
+    await readBlobErrorBody(error);
     return Promise.reject(normalizeError(error));
   },
 );
+
+/**
+ * A request made with `responseType: "blob"` (a file download, an export) gets
+ * its error body as a Blob too, and the API's message and code inside it were
+ * lost: the user read "Request failed with status code 403". The body is read
+ * back as the JSON it is, so the error carries them like any other.
+ */
+async function readBlobErrorBody(error: AxiosError): Promise<void> {
+  const res = error.response;
+  const body: unknown = res?.data;
+  if (!res || typeof Blob === "undefined" || !(body instanceof Blob)) return;
+  // An error page from a proxy is not the API's JSON; nor is anything huge.
+  if ((body.type && !/json/i.test(body.type)) || body.size > 65_536) return;
+  try {
+    res.data = JSON.parse(await body.text());
+  } catch {
+    // Not JSON after all: the generic message stands.
+  }
+}
 
 /* ──────────────────────────────  helpers  ───────────────────────────────── */
 

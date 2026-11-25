@@ -69,14 +69,26 @@ export type TutorApprovalStatus =
   (typeof TUTOR_APPROVAL_STATUS)[keyof typeof TUTOR_APPROVAL_STATUS];
 
 export const ENROLLMENT_STATUS = {
+  /** A student's request, waiting for the course owner: no seat, no order, no access yet. */
+  PENDING_APPROVAL: "PENDING_APPROVAL",
   PENDING_PAYMENT: "PENDING_PAYMENT",
   ACTIVE: "ACTIVE",
   COMPLETED: "COMPLETED",
   CANCELLED: "CANCELLED",
   REFUNDED: "REFUNDED",
+  /** A request the course owner turned down; the student may ask again. */
+  REJECTED: "REJECTED",
 } as const;
 export type EnrollmentStatus =
   (typeof ENROLLMENT_STATUS)[keyof typeof ENROLLMENT_STATUS];
+
+/**
+ * A request to enrol rather than an enrolment: waiting for the owner's
+ * decision, or turned down. Never counted as enrolled, never a place.
+ */
+export function isEnrollmentRequest(status: string | null | undefined): boolean {
+  return status === ENROLLMENT_STATUS.PENDING_APPROVAL || status === ENROLLMENT_STATUS.REJECTED;
+}
 
 export type EnrollmentSource = "PURCHASE" | "FREE" | "ADMIN_GRANT";
 

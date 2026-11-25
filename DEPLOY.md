@@ -107,7 +107,9 @@ Shell/`--build-arg` values take precedence over `.env.production`, so the
 `--build-arg` above overrides the committed default.
 
 Remaining knobs live in [.env.production](.env.production) — upload size limits,
-token storage, feature flags. See [.env.example](.env.example) for the full list.
+token storage, feature flags, and `VITE_SITE_URL`, the public website the
+certificate links point at (`https://trainings.aztu.edu.az`; change it with the
+website's own URL). See [.env.example](.env.example) for the full list.
 
 ## TLS / reverse proxy
 

@@ -27,10 +27,11 @@ const CHOSEN: Record<AttendanceMark, string> = {
 };
 
 /** The icon's tone in a count, as in the mark's badge. */
-const COUNT_TONE: Record<AttendanceMark, string> = {
+const COUNT_TONE: Record<AttendanceStatus, string> = {
   PRESENT: "text-ok",
   LATE: "text-warn",
   ABSENT: "text-danger",
+  EXCUSED: "text-ink-3",
 };
 
 /**
@@ -38,10 +39,10 @@ const COUNT_TONE: Record<AttendanceMark, string> = {
  * counts apart without the colour, and it is the shape the badges and pickers
  * show beside the word. The caller says the words for a screen reader.
  */
-export function MarkCount({ status, value }: { status: AttendanceMark; value: number }) {
+export function MarkCount({ status, value, className }: { status: AttendanceStatus; value: number; className?: string }) {
   const Icon = MARK_ICON[status];
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className={cn("inline-flex items-center gap-1", className)}>
       <Icon aria-hidden className={cn("size-3.5", COUNT_TONE[status])} />
       {value}
     </span>

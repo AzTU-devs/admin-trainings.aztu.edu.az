@@ -321,6 +321,34 @@ describe("CalendarEventDialog", () => {
     );
   });
 
+  it("names the days an offline course meets under its dates", () => {
+    mockCourse({
+      data: {
+        ...course,
+        courseType: "OFFLINE",
+        offlineDetails: { ...course.offlineDetails, endDate: "2026-12-30", daysOfWeek: ["WEDNESDAY", "MONDAY"] },
+      },
+    });
+    mockParticipants({ data: participants });
+    renderDialog({ ...oneTimeEvent, id: `course:${COURSE_ID}:2026-11-02`, kind: "COURSE", courseType: "OFFLINE" });
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Course dates")).toBeInTheDocument();
+    expect(within(dialog).getByText("2 Nov 2026 – 30 Dec 2026, 10:00–12:00")).toBeInTheDocument();
+    expect(within(dialog).getByText("Mon, Wed")).toBeInTheDocument();
+  });
+
+  it("says no days for an offline course that has none yet", () => {
+    mockCourse({
+      data: { ...course, courseType: "OFFLINE", offlineDetails: { ...course.offlineDetails, endDate: "2026-12-30", daysOfWeek: [] } },
+    });
+    mockParticipants({ data: participants });
+    renderDialog({ ...oneTimeEvent, id: `course:${COURSE_ID}`, kind: "COURSE", courseType: "OFFLINE" });
+
+    expect(within(screen.getByRole("dialog")).getByText("2 Nov 2026 – 30 Dec 2026, 10:00–12:00")).toBeInTheDocument();
+    expect(screen.queryByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(, [A-Z][a-z]{2})*$/)).not.toBeInTheDocument();
+  });
+
   it("shows a booking that belongs to no course without loading a course", () => {
     mockCourse({});
     mockParticipants({});

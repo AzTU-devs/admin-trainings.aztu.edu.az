@@ -1,7 +1,9 @@
 import { useId } from "react";
-import { CalendarPlus, Lock, LogIn, MailCheck, ShieldAlert, Trash2 } from "lucide-react";
+import { Link } from "react-router";
+import { CalendarPlus, Hourglass, Lock, LogIn, MailCheck, ShieldAlert, Trash2, UserX } from "lucide-react";
 import { Badge, StatusBadge } from "@shared/components/ui/Badge";
 import { resolveApiUrl } from "@shared/config/env";
+import { ROUTES } from "@shared/constants/routes";
 import { cn } from "@shared/lib/cn";
 import { hueFor } from "@shared/lib/hue";
 import { ExpertPortrait } from "@features/tutors/components/ExpertPortrait";
@@ -93,6 +95,18 @@ export function ProfileHeader({ profile }: { profile: UserProfileDto }) {
           The account is kept for inspection only and can no longer sign in.
         </Notice>
       )}
+      {account.status === "PENDING_APPROVAL" && (
+        <Notice tone="warning" Icon={Hourglass} title="Waiting for approval">
+          A new İştirakçi sign-up: the account cannot sign in until a super admin approves it.{" "}
+          <ApprovalsLink to={ROUTES.superAccountApprovals}>Review it in Account approvals</ApprovalsLink>
+        </Notice>
+      )}
+      {account.status === "REJECTED" && (
+        <Notice tone="danger" Icon={UserX} title="Sign-up rejected">
+          The account cannot sign in. It can still be approved later.{" "}
+          <ApprovalsLink to={ROUTES.superAccountApprovalsRejected}>See it in Account approvals</ApprovalsLink>
+        </Notice>
+      )}
       {showLock && (
         <Notice
           tone="warning"
@@ -136,5 +150,16 @@ export function ProfileHeader({ profile }: { profile: UserProfileDto }) {
         </Fact>
       </dl>
     </div>
+  );
+}
+
+function ApprovalsLink({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="font-semibold text-navy decoration-gold decoration-2 underline-offset-4 hover:underline"
+    >
+      {children} →
+    </Link>
   );
 }

@@ -48,6 +48,8 @@ const SystemMonitoringPage = lazy(() => import("@features/system-monitoring/page
 const ApiLogsPage = lazy(() => import("@features/api-logs/pages/ApiLogsPage"));
 const SecurityPage = lazy(() => import("@features/security/pages/SecurityPage"));
 const UserProfilePage = lazy(() => import("@features/user-profile/pages/UserProfilePage"));
+const AccountApprovalsPage = lazy(() => import("@features/account-approvals/pages/AccountApprovalsPage"));
+const EnrollmentRequestsPage = lazy(() => import("@features/enrollments/pages/EnrollmentRequestsPage"));
 // FullCalendar and its styles only load with this route.
 const CalendarPage = lazy(() => import("@features/calendar/pages/CalendarPage"));
 
@@ -132,6 +134,8 @@ export default function App() {
                 <Route path={ROUTES.superSecurity} element={<SecurityPage />} />
                 <Route path={ROUTES.superUserProfile()} element={<UserProfilePage />} />
                 <Route path={ROUTES.superCalendar} element={<CalendarPage />} />
+                <Route path={ROUTES.superAccountApprovals} element={<AccountApprovalsPage />} />
+                <Route path={ROUTES.superEnrollmentRequests} element={<EnrollmentRequestsPage />} />
               </Route>
 
               {/* Shared authenticated pages */}

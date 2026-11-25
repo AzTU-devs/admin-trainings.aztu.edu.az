@@ -27,7 +27,9 @@ export const MAX_RANGE_DAYS = 62;
 export const KIND_META: Record<CalendarEventKind, { label: string; slug: string }> = {
   ONE_TIME: { label: "One-time training", slug: "one-time" },
   SESSION: { label: "Course session", slug: "session" },
-  COURSE: { label: "Course (all day)", slug: "course" },
+  // A course scheduled by itself: one bar over its dates, or — once it has
+  // course days — an entry on each of them, at its daily times when it has any.
+  COURSE: { label: "Course dates", slug: "course" },
   ROOM_BOOKING: { label: "Room booking", slug: "booking" },
 };
 

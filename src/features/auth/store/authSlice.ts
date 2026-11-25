@@ -7,6 +7,12 @@ export interface AuthUser {
   email: string;
   fullName: string;
   roles: Role[];
+  /**
+   * The user's permissions ("course:delete", …) as `GET /auth/me` lists them.
+   * Absent where the API did not send them (a user restored from storage
+   * before they were kept): actions then go by role, as they did.
+   */
+  permissions?: string[];
   avatarUrl?: string;
 }
 

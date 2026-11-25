@@ -20,6 +20,8 @@ import {
   Activity,
   Network,
   Lock,
+  UserCheck,
+  UserRoundPlus,
   type LucideIcon,
 } from "lucide-react";
 import { ROUTES } from "@shared/constants/routes";
@@ -34,7 +36,16 @@ export interface MenuItem {
   roles?: Role[];
   children?: MenuItem[];
   badge?: string;
+  /**
+   * A live count of work waiting behind this item (sign-ups to approve,
+   * enrolment requests to decide), drawn as its badge while above zero. The
+   * Sidebar asks for it only for the items it shows.
+   */
+  counter?: MenuCounter;
 }
+
+/** The live counts a menu item can carry (see `MenuItem.counter`). */
+export type MenuCounter = "accountApprovals" | "enrollmentRequests";
 
 export interface MenuGroup {
   id: string;
@@ -78,6 +89,8 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: ClipboardCheck,
         path: ROUTES.tutorEnrollments,
         roles: [ROLES.TUTOR],
+        // Requests to join the expert's own courses, decided on this page.
+        counter: "enrollmentRequests",
       },
       {
         id: "students",
@@ -137,6 +150,15 @@ export const MENU_GROUPS: MenuGroup[] = [
         roles: [ROLES.SUPER_ADMIN],
       },
       {
+        // Every course's requests; an expert decides theirs on Enrollments.
+        id: "enrollment-requests",
+        label: "Enrolment requests",
+        icon: UserRoundPlus,
+        path: ROUTES.superEnrollmentRequests,
+        roles: [ROLES.SUPER_ADMIN],
+        counter: "enrollmentRequests",
+      },
+      {
         id: "tutors",
         label: "Tutors",
         icon: GraduationCap,
@@ -170,6 +192,15 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: Tags,
         path: ROUTES.adminCategories,
         roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+      },
+      {
+        // Right before Users: the accounts waiting to become ones (user:approve, SUPER_ADMIN only).
+        id: "account-approvals",
+        label: "Account approvals",
+        icon: UserCheck,
+        path: ROUTES.superAccountApprovals,
+        roles: [ROLES.SUPER_ADMIN],
+        counter: "accountApprovals",
       },
       {
         id: "users",

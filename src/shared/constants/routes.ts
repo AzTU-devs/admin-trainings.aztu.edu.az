@@ -51,6 +51,12 @@ export const ROUTES = {
   superSecurity: "/super/security",
   /** Every training on the platform as a calendar (calendar:view). */
   superCalendar: "/super/calendar",
+  /** New İştirakçi sign-ups waiting for approval, and the rejected ones (user:approve). */
+  superAccountApprovals: "/super/account-approvals",
+  /** The Rejected tab of the above — a link target, not a route pattern. */
+  superAccountApprovalsRejected: "/super/account-approvals?tab=rejected",
+  /** Requests to enrol on any course, for the super admin (enrollment:approve). */
+  superEnrollmentRequests: "/super/enrollment-requests",
   /** One account's deep profile (expert and İştirakçi data, sessions, audit). Reached from people tables, not the menu. */
   superUserProfile: (userId: string | number = ":userId") => `/super/users/${userId}`,
 

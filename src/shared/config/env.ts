@@ -40,6 +40,19 @@ export const env = {
     baseUrl: str("VITE_API_BASE_URL", "/api"),
     timeoutMs: num("VITE_API_TIMEOUT_MS", 30_000),
   },
+  site: {
+    /**
+     * The public website's origin, without a trailing slash. Certificates are
+     * rendered, verified and turned into PDFs there, so the dashboard links to
+     * it rather than drawing them itself. The fallback is the production site
+     * in a production build and the website's `next dev` address otherwise, so
+     * a build environment that forgets the variable still links somewhere real.
+     */
+    url: str("VITE_SITE_URL", import.meta.env.PROD ? "https://trainings.aztu.edu.az" : "http://localhost:3000").replace(
+      /\/+$/,
+      "",
+    ),
+  },
   auth: {
     // sessionStorage is the fallback, not localStorage: if the variable is ever
     // missing from a build environment the access token must die with the tab

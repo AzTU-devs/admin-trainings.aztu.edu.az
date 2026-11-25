@@ -29,7 +29,8 @@ import {
 import { RichTextView } from "@shared/components/ui/RichTextView";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { ROUTES } from "@shared/constants/routes";
-import { COURSE_TYPE_LABEL } from "@shared/types/lms";
+import { formatDays } from "@shared/lib/weekdays";
+import { COURSE_TYPE, COURSE_TYPE_LABEL } from "@shared/types/lms";
 import { useGetAdminCourseByIdQuery } from "@features/courses/api/coursesApi";
 import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
 import { CoursePriceValue } from "@features/courses/components/courseCells";
@@ -271,6 +272,8 @@ function CourseDetails({ course }: { course: CourseDto }) {
   const off = course.offlineDetails;
   const topics = (course.syllabusItems ?? []).filter((t) => t.title?.trim());
   const dates = courseDates(course);
+  // The weekdays an OFFLINE course meets; an older one has none, and says nothing.
+  const days = course.courseType === COURSE_TYPE.OFFLINE ? formatDays(off?.daysOfWeek) : "";
 
   return (
     <section aria-label="Course" className="mt-5 space-y-5">
@@ -283,7 +286,10 @@ function CourseDetails({ course }: { course: CourseDto }) {
         <Stat label="Price">
           <CoursePriceValue free={course.free} price={course.price} currency={course.currency} />
         </Stat>
-        <Stat label="Dates">{dates ?? <Muted>Not set</Muted>}</Stat>
+        <Stat label="Dates">
+          {dates ?? <Muted>Not set</Muted>}
+          {days && <span className="mt-0.5 block text-[12.5px] font-medium text-ink-2">{days}</span>}
+        </Stat>
         <Stat label="Enrolled">
           <span className="tabular-nums">
             {course.enrolledCount.toLocaleString()}

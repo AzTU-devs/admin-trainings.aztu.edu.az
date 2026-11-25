@@ -1,18 +1,96 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { StatusBadge } from "@shared/components/ui/Badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/Tabs";
 import { DataTable } from "@shared/components/tables/DataTable";
+import { CountPill } from "@shared/components/data-display/CountPill";
 import { CourseCover } from "@shared/components/bright";
-import { DateCell, ProgressCell, StackedProgress } from "@features/participants/components/PersonCell";
+import { isEnrollmentRequest } from "@shared/types/lms";
+import {
+  DateCell,
+  ProgressCell,
+  StackedProgress,
+} from "@features/participants/components/PersonCell";
 import { useListMyEnrollmentsQuery } from "@features/enrollments/api/enrollmentsApi";
+import { EnrollmentRequestsTable } from "@features/enrollments/components/EnrollmentRequestsTable";
+import {
+  useCanApproveEnrollments,
+  usePendingEnrollmentRequestCount,
+} from "@features/enrollments/hooks/useEnrollmentRequests";
 import type { EnrollmentDto } from "@features/enrollments/types";
+
+type Tab = "requests" | "rejected" | "mine";
+
+/**
+ * The expert's enrolments page. With `enrollment:approve` (every expert), it
+ * opens on the requests to join the courses they own — the work waiting for
+ * them — beside the ones they turned down and, last, the courses they are
+ * enrolled in themselves. The tab is in the URL (`?tab=rejected`,
+ * `?tab=mine`), so a link can open it. Without the permission it is the
+ * expert's own enrolments, as before.
+ */
+export default function EnrollmentsListPage() {
+  const canApprove = useCanApproveEnrollments();
+  const pendingCount = usePendingEnrollmentRequestCount();
+  const [params, setParams] = useSearchParams();
+
+  if (!canApprove) {
+    return (
+      <>
+        <PageHeader
+          title="My enrollments"
+          description="Courses you're enrolled in and your progress."
+        />
+        <MyEnrollments />
+      </>
+    );
+  }
+
+  const raw = params.get("tab");
+  const tab: Tab = raw === "rejected" || raw === "mine" ? raw : "requests";
+
+  return (
+    <>
+      <PageHeader
+        title="Enrollments"
+        description="Students' requests to join your courses, and the courses you're enrolled in yourself."
+      />
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setParams(v === "requests" ? {} : { tab: v }, { replace: true })}
+      >
+        <TabsList aria-label="Enrollments" className="mb-4">
+          <TabsTrigger value="requests">
+            Requests
+            <CountPill count={pendingCount} />
+          </TabsTrigger>
+          <TabsTrigger value="rejected">Rejected requests</TabsTrigger>
+          <TabsTrigger value="mine">My enrollments</TabsTrigger>
+        </TabsList>
+        {/* Keyed by the tab: each list starts on its first page. */}
+        <TabsContent value={tab} className="mt-0">
+          {tab === "mine" ? (
+            <MyEnrollments />
+          ) : (
+            <EnrollmentRequestsTable
+              key={tab}
+              status={tab === "rejected" ? "REJECTED" : "PENDING_APPROVAL"}
+              scope="own"
+            />
+          )}
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}
 
 /**
  * Backend exposes the current user's OWN enrollments (`/portal/enrollments/mine`).
  * A tutor-facing "students enrolled in my courses" endpoint is pending — see GAP_REPORT.md.
  */
-export default function EnrollmentsListPage() {
+function MyEnrollments() {
   const [page, setPage] = useState(0);
   const { data, isFetching } = useListMyEnrollmentsQuery({ page, size: 10 });
 
@@ -26,7 +104,13 @@ export default function EnrollmentsListPage() {
       },
       {
         header: "Progress",
-        cell: ({ row }) => <ProgressCell value={row.original.progressPercent} />,
+        // A request (waiting, or turned down) has no progress to show.
+        cell: ({ row }) =>
+          isEnrollmentRequest(row.original.status) ? (
+            <span className="text-ink-3">—</span>
+          ) : (
+            <ProgressCell value={row.original.progressPercent} />
+          ),
       },
       {
         header: "Source",
@@ -41,20 +125,26 @@ export default function EnrollmentsListPage() {
   );
 
   return (
-    <>
-      <PageHeader title="My enrollments" description="Courses you're enrolled in and your progress." />
-      <DataTable<EnrollmentDto>
-        data={data?.content ?? []}
-        columns={columns}
-        isLoading={isFetching}
-        emptyTitle="No enrollments"
-        emptyDescription="Courses you enroll in will appear here."
-        pagination={data ? { page: data.page, size: data.size, totalElements: data.totalElements, totalPages: data.totalPages } : undefined}
-        onPageChange={setPage}
-        getRowId={(r) => r.id}
-        renderMobileRow={(e) => <EnrollmentPhoneRow enrollment={e} />}
-      />
-    </>
+    <DataTable<EnrollmentDto>
+      data={data?.content ?? []}
+      columns={columns}
+      isLoading={isFetching}
+      emptyTitle="No enrollments"
+      emptyDescription="Courses you enroll in will appear here."
+      pagination={
+        data
+          ? {
+              page: data.page,
+              size: data.size,
+              totalElements: data.totalElements,
+              totalPages: data.totalPages,
+            }
+          : undefined
+      }
+      onPageChange={setPage}
+      getRowId={(r) => r.id}
+      renderMobileRow={(e) => <EnrollmentPhoneRow enrollment={e} />}
+    />
   );
 }
 
@@ -86,7 +176,9 @@ function EnrollmentPhoneRow({ enrollment: e }: { enrollment: EnrollmentDto }) {
   return (
     <div className="space-y-3">
       <CourseTitle enrollment={e} />
-      <StackedProgress label="Progress" value={e.progressPercent} />
+      {!isEnrollmentRequest(e.status) && (
+        <StackedProgress label="Progress" value={e.progressPercent} />
+      )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12.5px] text-ink-3">
         <StatusBadge value={e.status} size="sm" />
         <StatusBadge value={e.source} dot={false} size="sm" />

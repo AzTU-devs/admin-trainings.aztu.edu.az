@@ -1,4 +1,4 @@
-import type { DayOfWeek } from "@features/room-requests/types";
+import { DAYS_OF_WEEK, DAY_LABEL, dateOfEpochDay, dayOfWeekOf, epochDay, formatDays, sortDays } from "@shared/lib/weekdays";
 
 /*
  * Long-term room bookings ("series"): the API's occurrence arithmetic, done
@@ -11,6 +11,9 @@ import type { DayOfWeek } from "@features/room-requests/types";
  * change, add or lose an hour in the day count).
  */
 
+// The weekday basics live in @shared/lib/weekdays (an offline course's days use them too).
+export { DAYS_OF_WEEK, DAY_LABEL, dateOfEpochDay, dayOfWeekOf, epochDay, formatDays, sortDays };
+
 /** The platform's local zone (the API's `app.timezone`). Every series date and time is in it. */
 export const PLATFORM_TIMEZONE = "Asia/Baku";
 /** INVALID_DATE_RANGE: a series may span at most this many days, both ends counted (the API's `DAYS.between + 1`). */
@@ -18,51 +21,8 @@ export const MAX_SERIES_RANGE_DAYS = 366;
 /** TOO_MANY_OCCURRENCES: more sessions than this are refused. */
 export const MAX_SERIES_OCCURRENCES = 200;
 
-/** Monday first: the Azerbaijani week, and java.time.DayOfWeek's order. */
-export const DAYS_OF_WEEK = [
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-  "SUNDAY",
-] as const satisfies readonly DayOfWeek[];
-
-export const DAY_LABEL: Record<DayOfWeek, { short: string; long: string }> = {
-  MONDAY: { short: "Mon", long: "Monday" },
-  TUESDAY: { short: "Tue", long: "Tuesday" },
-  WEDNESDAY: { short: "Wed", long: "Wednesday" },
-  THURSDAY: { short: "Thu", long: "Thursday" },
-  FRIDAY: { short: "Fri", long: "Friday" },
-  SATURDAY: { short: "Sat", long: "Saturday" },
-  SUNDAY: { short: "Sun", long: "Sunday" },
-};
-
 const DAY_MS = 86_400_000;
-const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
-
-/** Days since 1970-01-01 of a yyyy-MM-dd date, or null when it is not a real date ("2026-02-30"). */
-export function epochDay(date: string | null | undefined): number | null {
-  const m = date ? DATE_RE.exec(date) : null;
-  if (!m) return null;
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const at = new Date(Date.UTC(y, mo - 1, d));
-  // Date.UTC rolls 30 Feb over into March (and maps years below 100 to 19xx): refuse both.
-  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== mo - 1 || at.getUTCDate() !== d) return null;
-  return Math.round(at.getTime() / DAY_MS);
-}
-
-/** The yyyy-MM-dd date of an epoch day. */
-export function dateOfEpochDay(day: number): string {
-  return new Date(day * DAY_MS).toISOString().slice(0, 10);
-}
-
-/** The weekday of an epoch day (1970-01-01 was a Thursday). */
-export function dayOfWeekOf(day: number): DayOfWeek {
-  return DAYS_OF_WEEK[(((day + 3) % 7) + 7) % 7];
-}
 
 /** Minutes after midnight of `HH:mm` or `HH:mm:ss`, or null. */
 export function minutesOf(time: string | null | undefined): number | null {
@@ -98,11 +58,6 @@ export function occurrenceDates(pattern: SeriesPattern): string[] | null {
     if (wanted.has(dayOfWeekOf(day))) dates.push(dateOfEpochDay(day));
   }
   return dates;
-}
-
-/** Weekdays in the week's order (Mon … Sun), duplicates dropped — as the request sends them. */
-export function sortDays(days: readonly string[]): DayOfWeek[] {
-  return DAYS_OF_WEEK.filter((d) => days.includes(d));
 }
 
 // One formatter per zone: building an Intl.DateTimeFormat is the slow part.
@@ -197,16 +152,6 @@ export function formatDateRange(startDate: string, endDate: string): string {
 /** "10:00–12:00". */
 export function formatTimeRange(startTime: string, endTime: string): string {
   return `${hhmm(startTime)}–${hhmm(endTime)}`;
-}
-
-const WORKWEEK: readonly DayOfWeek[] = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
-
-/** "Mon, Wed"; the whole week as "Every day" and Monday to Friday as "Mon–Fri". */
-export function formatDays(days: readonly string[]): string {
-  const sorted = sortDays(days);
-  if (sorted.length === 7) return "Every day";
-  if (sorted.length === 5 && WORKWEEK.every((d) => sorted.includes(d))) return "Mon–Fri";
-  return sorted.map((d) => DAY_LABEL[d].short).join(", ");
 }
 
 /** Hours between two `HH:mm` times on one day, or null while either is missing or the end is not after the start. */

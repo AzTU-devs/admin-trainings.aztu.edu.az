@@ -36,6 +36,22 @@ describe("filterMenuForRoles", () => {
     expect(adminItems([ROLES.ADMIN])).not.toContain("training-calendar");
   });
 
+  it("shows the approval queues to a super admin only, each with its live count", () => {
+    const items = (roles: Parameters<typeof filterMenuForRoles>[1]) =>
+      filterMenuForRoles(MENU_GROUPS, roles).flatMap((g) => g.items);
+    const superItems = items([ROLES.SUPER_ADMIN]);
+    const ids = superItems.map((i) => i.id);
+    expect(ids.indexOf("account-approvals")).toBe(ids.indexOf("users") - 1);
+    expect(superItems.find((i) => i.id === "account-approvals")?.counter).toBe("accountApprovals");
+    expect(superItems.find((i) => i.id === "enrollment-requests")?.counter).toBe("enrollmentRequests");
+    for (const id of ["account-approvals", "enrollment-requests"]) {
+      expect(items([ROLES.ADMIN]).map((i) => i.id)).not.toContain(id);
+      expect(items([ROLES.TUTOR]).map((i) => i.id)).not.toContain(id);
+    }
+    // An expert's requests are counted on their Enrollments item.
+    expect(items([ROLES.TUTOR]).find((i) => i.id === "enrollments")?.counter).toBe("enrollmentRequests");
+  });
+
   it("always shows role-less items (the General group) to everyone", () => {
     expect(groupIds([ROLES.TUTOR])).toContain("general");
     expect(groupIds([ROLES.ADMIN])).toContain("general");

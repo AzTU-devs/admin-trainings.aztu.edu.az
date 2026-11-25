@@ -28,6 +28,14 @@ vi.mock("@features/courses/api/coursesApi", () => {
     useSetCourseTutorsMutation: mutation,
   };
 });
+// No store here: the permissions the admin page reads (Delete course, certificates) are not under test.
+vi.mock("@features/auth/hooks/usePermissions", () => ({
+  usePermissions: () => ({ canDeleteCourse: false, canManageCertificates: false }),
+}));
+// Nor is ending the course (courseGraduation.test.tsx): no graduation view.
+vi.mock("@features/certificates/api/certificatesApi", () => ({
+  useGetCourseGraduationQuery: () => ({ data: undefined }),
+}));
 vi.mock("@features/courses/components/CourseDetailsForm", () => ({ CourseDetailsForm: () => null }));
 vi.mock("@features/courses/components/ModulesEditor", () => ({ ModulesEditor: () => null }));
 vi.mock("@features/courses/components/CourseSummaryCard", () => ({ CourseSummaryCard: () => null }));

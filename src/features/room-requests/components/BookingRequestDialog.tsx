@@ -36,7 +36,7 @@ import {
 } from "@features/room-requests/lib/series";
 import { describeSeriesCreateError } from "@features/room-requests/lib/bookingErrors";
 import { SeriesPreview } from "@features/room-requests/components/SeriesPreview";
-import { WeekdayPicker } from "@features/room-requests/components/WeekdayPicker";
+import { WeekdayPicker } from "@shared/components/forms/WeekdayPicker";
 
 export type BookingMode = "single" | "series";
 

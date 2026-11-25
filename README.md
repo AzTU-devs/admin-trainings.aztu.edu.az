@@ -119,6 +119,15 @@ Two things about these files are deliberate rather than incidental:
   the tab. The refresh token is never in web storage at all — the API keeps it in an httpOnly
   cookie and `httpClient` refreshes against that.
 
+### Public website
+
+`VITE_SITE_URL` is the student-facing site's origin (`https://trainings.aztu.edu.az` in
+`.env.production`, `http://localhost:3000` in `.env.development`). Course certificates are
+rendered, verified and turned into PDFs there, so a course page's Certificates section only
+links to `<VITE_SITE_URL>/az/certificates/<code>` and its `/pdf`. Missing from a build, it
+falls back to the production site in a production build and to `http://localhost:3000`
+otherwise. Links are plain navigations, so the CSP needs no entry for it.
+
 ### Upload ceilings
 
 `VITE_UPLOAD_MAX_IMAGE_MB` (200), `VITE_UPLOAD_MAX_DOCUMENT_MB` (200) and `VITE_UPLOAD_MAX_VIDEO_MB` (512) are **client-side

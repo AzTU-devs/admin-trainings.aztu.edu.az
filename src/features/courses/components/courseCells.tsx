@@ -10,7 +10,7 @@ import {
   type CourseStatus,
   type CourseType,
 } from "@shared/types/lms";
-import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { CourseEndedBadge, CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
 import { COURSE_TYPE_ICON } from "@features/courses/lib/courseType";
 
 /*
@@ -179,12 +179,14 @@ export function CourseRowMeta({
     price: number;
     currency: string;
     tutorDisplayName?: string | null;
+    endedAt?: string | null;
   };
   showTutor?: boolean;
 }) {
   return (
     <>
       <CourseStatusBadge status={course.status} />
+      <CourseEndedBadge endedAt={course.endedAt} />
       <CourseTypeValue type={course.courseType} />
       <CourseLevelValue level={course.level} />
       <span>

@@ -1,6 +1,7 @@
-import { CalendarClock, CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarClock, CalendarDays, MapPin, Repeat, Users } from "lucide-react";
 import { RichTextView } from "@shared/components/ui/RichTextView";
 import { isRichTextEmpty } from "@shared/lib/richText";
+import { formatDays } from "@shared/lib/weekdays";
 import { COURSE_TYPE, COURSE_TYPE_LABEL, isInPerson } from "@shared/types/lms";
 import type { CourseDto } from "@features/courses/types";
 
@@ -13,6 +14,8 @@ import type { CourseDto } from "@features/courses/types";
 export function CourseContentPreview({ course }: { course: CourseDto }) {
   const items = course.syllabusItems ?? [];
   const off = course.offlineDetails;
+  // Only an OFFLINE course has days; an older one has none yet, and says nothing.
+  const days = course.courseType === COURSE_TYPE.OFFLINE ? formatDays(off?.daysOfWeek) : "";
 
   return (
     <div className="space-y-5">
@@ -21,6 +24,11 @@ export function CourseContentPreview({ course }: { course: CourseDto }) {
           <Fact icon={course.courseType === COURSE_TYPE.ONE_TIME ? <CalendarClock /> : <CalendarDays />} label={COURSE_TYPE_LABEL[course.courseType]}>
             {scheduleText(course)}
           </Fact>
+          {days && (
+            <Fact icon={<Repeat />} label="Course days">
+              {days}
+            </Fact>
+          )}
           {off.studentLimit ? (
             <Fact icon={<Users />} label="Seats">
               {off.enrolledCount ?? 0} / {off.studentLimit} taken

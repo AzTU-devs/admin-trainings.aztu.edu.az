@@ -3,6 +3,7 @@ import type { ApiPage, PageRequest } from "@shared/types/api";
 import type { BookingDecision, CourseStatus, CourseType, UUID } from "@shared/types/lms";
 import type {
   AdminCreateCourseRequest,
+  CourseDeletionImpact,
   CourseDto,
   CourseSummaryDto,
   CreateCourseRequest,
@@ -131,6 +132,26 @@ export const coursesApi = baseApi.injectEndpoints({
       invalidatesTags: (res, _e, arg) => adminCourseTags(arg.id, res),
     }),
 
+    /* Super admin: delete a course for good (`course:delete`). */
+    getCourseDeletionImpact: build.query<CourseDeletionImpact, UUID>({
+      query: (id) => ({ url: `/super/courses/${id}/deletion-impact`, method: "GET" }),
+      // Counted afresh each time the confirm opens: enrolments come and go.
+      keepUnusedDataFor: 0,
+    }),
+    /**
+     * Backend `DELETE /api/super/courses/{courseId}` (204). The course leaves
+     * every list, page and calendar; its enrolments are cancelled and its room
+     * bookings released. So every cache that may show any of them is
+     * refreshed — also on a 404, which means it was deleted already.
+     */
+    deleteCourse: build.mutation<void, UUID>({
+      query: (id) => ({ url: `/super/courses/${id}`, method: "DELETE" }),
+      invalidatesTags: (_r, error) =>
+        error && error.status !== 404
+          ? []
+          : ["Course", "Enrollment", "Student", "Attendance", "Calendar", "RoomRequest", "Room", "Analytics"],
+    }),
+
     /* Admin moderation (single-course decision). */
     decideCourse: build.mutation<CourseDto, { id: UUID; decision: BookingDecision; note?: string }>({
       query: ({ id, ...body }) => ({ url: `/admin/courses/${id}/decision`, method: "POST", data: body }),
@@ -168,4 +189,6 @@ export const {
   useSubmitForReviewMutation,
   useArchiveCourseMutation,
   useDecideCourseMutation,
+  useGetCourseDeletionImpactQuery,
+  useDeleteCourseMutation,
 } = coursesApi;

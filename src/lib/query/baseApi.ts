@@ -68,6 +68,9 @@ export const TAGS = [
   "Me",
   "Security",
   "Attendance",
+  // A course's graduation view: who has ended it, its students and their
+  // certificates, and the names printed on them.
+  "Certificate",
   // The super admin's calendar (`GET /api/admin/calendar`). Bookings and
   // courses live in other features; every write that changes what the
   // calendar shows invalidates this, so an open or cached range refetches.

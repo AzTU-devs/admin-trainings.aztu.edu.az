@@ -410,6 +410,74 @@ describe("UserProfilePage", () => {
     expect(within(screen.getByRole("tabpanel")).getByText("ORD-2026-000123")).toBeInTheDocument();
   });
 
+  it("says a sign-up waits for approval, and keeps enrolment requests apart from enrolments", async () => {
+    const [enrolled] = expertAndParticipant.learner.enrollments;
+    mockQuery({
+      data: {
+        ...participantOnly,
+        account: { ...participantOnly.account, status: "PENDING_APPROVAL" },
+        learner: {
+          ...participantOnly.learner,
+          enrollments: [
+            enrolled,
+            {
+              ...enrolled,
+              id: "e0000000-0000-4000-8000-000000000002",
+              courseId: ONE_TIME_COURSE,
+              courseTitle: "Robotics day",
+              status: "PENDING_APPROVAL",
+              progressPercent: 0,
+              enrolledAt: "2026-10-01T09:00:00Z",
+            },
+            {
+              ...enrolled,
+              id: "e0000000-0000-4000-8000-000000000003",
+              courseId: "77777777-8888-4999-aaaa-bbbbbbbbbbbb",
+              courseTitle: "Data basics",
+              status: "REJECTED",
+              progressPercent: 0,
+            },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderAt(PARTICIPANT_ID);
+
+    const hero = screen.getByRole("region", { name: "Murad Hüseynov" });
+    expect(within(hero).getByText("Pending approval")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for approval")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Review it in Account approvals/ })).toHaveAttribute(
+      "href",
+      "/super/account-approvals",
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Learning" }));
+    const panel = screen.getByRole("tabpanel");
+    const enrolments = within(panel).getByRole("region", { name: /^Enrollments/ });
+    expect(within(enrolments).getByText("Advanced Excel")).toBeInTheDocument();
+    expect(within(enrolments).queryByText("Robotics day")).not.toBeInTheDocument();
+    expect(within(enrolments).getByRole("heading", { name: /^Enrollments\s*1$/ })).toBeInTheDocument();
+
+    const requests = within(panel).getByRole("region", { name: /^Enrolment requests/ });
+    expect(within(requests).getByRole("heading", { name: /^Enrolment requests\s*2$/ })).toBeInTheDocument();
+    expect(within(requests).getByText("Robotics day")).toBeInTheDocument();
+    expect(within(requests).getByText("Pending approval")).toBeInTheDocument();
+    expect(within(requests).getByText("Data basics")).toBeInTheDocument();
+    expect(within(requests).getByText("Rejected")).toBeInTheDocument();
+  });
+
+  it("says a sign-up was rejected, linking to the rejected ones", () => {
+    mockQuery({ data: { ...participantOnly, account: { ...participantOnly.account, status: "REJECTED" } } });
+    renderAt(PARTICIPANT_ID);
+
+    expect(screen.getByText("Sign-up rejected")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /See it in Account approvals/ })).toHaveAttribute(
+      "href",
+      "/super/account-approvals?tab=rejected",
+    );
+  });
+
   it("leaves out every tab a new account has nothing for", () => {
     mockQuery({
       data: {

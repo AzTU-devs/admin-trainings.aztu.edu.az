@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams } from "react-router";
 import { SearchX, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -7,12 +8,19 @@ import { Button } from "@shared/components/ui/Button";
 import { Spinner } from "@shared/components/ui/Spinner";
 import { EmptyState } from "@shared/components/feedback/EmptyState";
 import { CourseDetailsForm } from "@features/courses/components/CourseDetailsForm";
-import { CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
+import { CourseEndedBadge, CourseStatusBadge } from "@features/courses/components/CourseStatusBadge";
 import { ModulesEditor } from "@features/courses/components/ModulesEditor";
 import { CourseSummaryCard } from "@features/courses/components/CourseSummaryCard";
 import { courseHue, useCourseCategories } from "@features/courses/hooks/useCourseCategories";
 import { courseCrumb } from "@features/courses/lib/courseCrumb";
 import { CourseAttendanceButton } from "@features/attendance/components/CourseAttendanceButton";
+import {
+  CourseCertificatesCard,
+  CourseEndedNotice,
+  EndCourseAction,
+  hasCertificatesSection,
+  useCourseGraduation,
+} from "@features/certificates";
 import {
   useGetCourseBySlugQuery,
   useSubmitForReviewMutation,
@@ -20,6 +28,7 @@ import {
 } from "@features/courses/api/coursesApi";
 import { COURSE_STATUS } from "@shared/types/lms";
 import { ROUTES } from "@shared/constants/routes";
+import type { NormalizedError } from "@lib/axios/httpClient";
 
 export default function CourseEditPage() {
   // Route param carries the course slug (the only detail lookup the backend exposes).
@@ -32,11 +41,16 @@ export default function CourseEditPage() {
   const [submitForReview, { isLoading: submitting }] = useSubmitForReviewMutation();
   // Called before the early returns (hooks rule); empty until the course loads.
   const categories = useCourseCategories(course?.categoryIds);
+  // Ending the course and its certificates, for the experts the API lets end it.
+  const graduation = useCourseGraduation(course);
+  const [tab, setTab] = useState("details");
 
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
   if (error || !course) return <EmptyState tone="danger" Icon={SearchX} title="Course not found." />;
 
   const canSubmit = course.status === COURSE_STATUS.DRAFT || course.status === COURSE_STATUS.REJECTED;
+  const showCertificates = hasCertificatesSection(graduation);
+  const activeTab = tab === "certificates" && !showCertificates ? "details" : tab;
 
   return (
     <>
@@ -48,7 +62,9 @@ export default function CourseEditPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <CourseStatusBadge status={course.status} />
+            <CourseEndedBadge endedAt={graduation ? graduation.endedAt : course.endedAt} />
             <CourseAttendanceButton courseType={course.courseType} to={ROUTES.tutorCourseAttendance(course.slug)} />
+            <EndCourseAction view={graduation} />
             <Button
               variant="gold"
               leftIcon={<Send className="size-4" />}
@@ -58,8 +74,14 @@ export default function CourseEditPage() {
                 try {
                   await submitForReview(course.id).unwrap();
                   toast.success("Submitted for review");
-                } catch {
-                  toast.error("Could not submit");
+                } catch (e) {
+                  const err = e as NormalizedError;
+                  // A draft from before course days were asked for: the fix is in the form below.
+                  toast.error(
+                    err.code === "OFFLINE_DAYS_REQUIRED"
+                      ? "Pick the course days under Offline schedule and update the course, then submit it."
+                      : err.message || "Could not submit",
+                  );
                 }
               }}
             >
@@ -69,15 +91,18 @@ export default function CourseEditPage() {
         }
       />
 
+      <CourseEndedNotice view={graduation} onShowCertificates={() => setTab("certificates")} className="mb-6" />
+
       {/* Two columns on a wide screen: the editor, and the course's cover and
           facts in a sticky side card (above the editor on narrower screens). */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
         <CourseSummaryCard course={course} className="xl:sticky xl:top-[92px] xl:col-start-2 xl:row-start-1" />
 
-        <Tabs defaultValue="details" className="min-w-0 xl:col-start-1 xl:row-start-1">
+        <Tabs value={activeTab} onValueChange={setTab} className="min-w-0 xl:col-start-1 xl:row-start-1">
           <TabsList>
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="modules">Modules &amp; lessons</TabsTrigger>
+            {showCertificates && <TabsTrigger value="certificates">Certificates</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="details">
@@ -97,6 +122,12 @@ export default function CourseEditPage() {
           <TabsContent value="modules">
             <ModulesEditor courseId={course.id} hue={courseHue(categories)} />
           </TabsContent>
+
+          {showCertificates && (
+            <TabsContent value="certificates">
+              <CourseCertificatesCard view={graduation} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </>
